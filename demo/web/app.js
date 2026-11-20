@@ -857,10 +857,14 @@ async function poll() {
     if (first || (s.presets && s.presets.length !== state.presets.length)) initPresets(s);
     if (first) initModels(s);
     bootOverlay(s);
-    if (s.phase !== "ready" && s.phase !== "error") setTimeout(poll, 800);
-    else if (s.phase === "ready" && !state.loadedSide) { state.loadedSide = true; loadPlainTicker(); }
+    if (s.phase !== "ready") { setTimeout(poll, s.phase === "error" ? 5000 : 800); return; }
+    if (!state.loadedSide) { state.loadedSide = true; loadPlainTicker(); }
+    setTimeout(poll, 20000); // heartbeat: a tab left open for days reconnects after a server restart
   } catch (e) {
-    setTimeout(poll, 1500);
+    const st = $("#status");
+    st.className = "status error";
+    $("span", st).textContent = "重新连接中";
+    setTimeout(poll, 3000);
   }
 }
 function bootOverlay(s) {

@@ -88,6 +88,16 @@ class Engine:
         for device in self.devices.values():
             await device.__aexit__(None, None, None)
 
+    def refresh_tickets(self):
+        """Pick up tickets renewed on disk (they are valid for one day)."""
+        from nacl.signing import SigningKey
+
+        from hpis.provision import read_config
+
+        for device in self.devices.values():
+            cfg = read_config(device.folder)
+            device.ticket, device.holder = cfg["ticket"], SigningKey(cfg["holder"])
+
     # ------------------------------------------------------------------ shared
     def plan(self, question: str) -> dict:
         return planner.plan_question(question, self.mailbox.presets, self.mailbox.bible)

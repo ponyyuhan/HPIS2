@@ -82,12 +82,43 @@ async def startup(app):
             await engine.warmup()
             state["engine"] = engine
             state["phase"] = "ready"
+            state["keepalive"] = asyncio.create_task(keepalive(state))
         except Exception as exc:
             state["phase"] = "error"
             state["error"] = f"{type(exc).__name__}: {exc}"
             traceback.print_exc()
 
     state["boot"] = asyncio.create_task(boot())
+
+
+TICKET_RENEW_SECONDS = 6 * 3600
+
+
+async def keepalive(state):
+    """Long-running deployments: renew the one-day anonymous tickets and watch the workers."""
+    from hpis.provision import renew
+
+    last_renew = time.monotonic()
+    while True:
+        await asyncio.sleep(5)
+        cluster, engine = state.get("cluster"), state.get("engine")
+        if cluster is None or engine is None:
+            continue
+        dead = [p for p in cluster.procs if p.returncode is not None]
+        if dead:
+            # A crashed HPIS/HPIC/cloud worker would leave the page half broken. Exit so
+            # systemd (or the restart loop) brings the whole demo back cleanly.
+            print(f"worker exited with {dead[0].returncode}; restarting demo", flush=True)
+            os._exit(3)
+        if time.monotonic() - last_renew >= TICKET_RENEW_SECONDS:
+            try:
+                for name in cluster.deployments:
+                    renew(deploy_root(name), "default")
+                engine.refresh_tickets()
+                last_renew = time.monotonic()
+                print("anonymous tickets renewed", flush=True)
+            except Exception:
+                traceback.print_exc()
 
 
 async def cleanup(app):

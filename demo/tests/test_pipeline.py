@@ -115,6 +115,17 @@ class PipelineTest(unittest.TestCase):
             events = []
             async for ev in eng.run("过去三个月瀚海物流的事项有哪些？", "qwen"):
                 events.append(ev)
+            # Long-running deployments renew the one-day tickets; queries must keep working.
+            from hpis.provision import renew
+
+            old = {k: d.ticket for k, d in eng.devices.items()}
+            for name in clu.deployments:
+                renew(cluster.deploy_root(name), "default")
+            eng.refresh_tickets()
+            self.assertTrue(all(eng.devices[k].ticket != old[k] for k in old))
+            again = [ev async for ev in eng.run("过去三个月瀚海物流的事项有哪些？", "qwen", lanes=("v2",))]
+            self.assertFalse([e for e in again if e["type"] == "error"])
+            self.assertTrue(next(e for e in again if e["type"] == "verify")["identical"])
             await eng.close()
         finally:
             await clu.stop()

@@ -19,7 +19,7 @@
 #   HPIS_GPU_MEM_UTIL   fraction of GPU memory for this server [0.90]
 #   HPIS_VLLM_IMAGE     Docker image [auto: v0.34.0 if driver >= 580, else v0.32.0-cu129]
 #   HF_HOME             weights cache [~/.cache/huggingface]
-#   HF_TOKEN, HF_ENDPOINT, VLLM_API_KEY   passed through when set
+#   HF_TOKEN, HF_ENDPOINT, VLLM_API_KEY, HTTP(S)_PROXY, NO_PROXY   passed through when set
 set -euo pipefail
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
@@ -121,7 +121,7 @@ else
 fi
 cmd+=(--gpus "device=$gpu" --ipc=host -p "$host:$port:8000"
       -e VLLM_NO_USAGE_STATS=1 -e DO_NOT_TRACK=1)
-for var in HF_TOKEN HF_ENDPOINT VLLM_API_KEY; do
+for var in HF_TOKEN HF_ENDPOINT VLLM_API_KEY HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy; do
   if [[ -n ${!var:-} ]]; then cmd+=(-e "$var"); fi
 done
 if [[ -n ${HPIS_MODEL_DIR:-} ]]; then
