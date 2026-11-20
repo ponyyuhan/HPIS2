@@ -48,6 +48,7 @@ import sys
 import time
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -1056,6 +1057,170 @@ async def warm_all(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]
     return [await warm(name, env=env) for name in PROFILES]
 
 
+# ------------------------------------------------------------- find Ollama
+
+
+def _proc_addr(hexaddr: str) -> str:
+    """Address in /proc/net/tcp{,6} notation -> host to connect to."""
+    raw = bytes.fromhex(hexaddr)
+    if len(raw) == 4:
+        ip: ipaddress.IPv4Address | ipaddress.IPv6Address = ipaddress.IPv4Address(raw[::-1])
+    else:
+        ip = ipaddress.IPv6Address(b"".join(raw[i : i + 4][::-1] for i in range(0, 16, 4)))
+        ip = ip.ipv4_mapped or ip
+    if ip.is_unspecified:
+        return "127.0.0.1" if ip.version == 4 else "::1"
+    return str(ip)
+
+
+def _listeners(proc: Path = Path("/proc")) -> dict[tuple[str, int], int]:
+    """{(host, port): owner uid} of TCP sockets listening on this machine (Linux; {} elsewhere)."""
+    found: dict[tuple[str, int], int] = {}
+    for name in ("tcp", "tcp6"):
+        try:
+            lines = (proc / "net" / name).read_text().splitlines()[1:]
+        except OSError:
+            continue
+        for line in lines:
+            fields = line.split()
+            if len(fields) < 8 or fields[3] != "0A":  # 0A = LISTEN
+                continue
+            addr, _, port = fields[1].partition(":")
+            try:
+                found.setdefault((_proc_addr(addr), int(port, 16)), int(fields[7]))
+            except ValueError:
+                continue
+    return found
+
+
+def _ollama_uids(proc: Path = Path("/proc")) -> set[int]:
+    """Accounts running `ollama serve` (every user's processes are listed in /proc)."""
+    uids: set[int] = set()
+    for entry in proc.glob("[0-9]*"):
+        try:
+            argv = (entry / "cmdline").read_bytes().split(b"\0")
+            if len(argv) < 2 or os.path.basename(argv[0].decode(errors="replace")) != "ollama" or argv[1] != b"serve":
+                continue
+            for line in (entry / "status").read_text().splitlines():
+                if line.startswith("Uid:"):
+                    uids.add(int(line.split()[1]))
+                    break
+        except (OSError, ValueError, IndexError):
+            continue
+    return uids
+
+
+def _host_port(value: str) -> tuple[str, int] | None:
+    """OLLAMA_HOST / URL forms (0.0.0.0, :11500, host:port, http://host:port) -> (host, port)."""
+    value = value.strip()
+    if not value:
+        return None
+    parts = urlsplit(value if "://" in value else "http://" + value)
+    try:
+        port = parts.port or 11434
+    except ValueError:
+        return None
+    host = parts.hostname or "127.0.0.1"
+    return ("127.0.0.1" if host in ("0.0.0.0", "::") else host), port
+
+
+def _owner(uid: int | None) -> str | None:
+    if uid is None:
+        return None
+    try:
+        import pwd
+
+        return pwd.getpwuid(uid).pw_name
+    except (ImportError, KeyError):
+        return str(uid)
+
+
+def _models_dir(modelfile: str) -> str | None:
+    """A server's OLLAMA_MODELS, from the FROM line of its modelfile (blob path)."""
+    for line in modelfile.splitlines():
+        if line.startswith("FROM ") and "/blobs/" in line:
+            return line[5:].strip().rsplit("/blobs/", 1)[0]
+    return None
+
+
+async def find_ollama(env: Mapping[str, str] | None = None, *, proc: Path = Path("/proc")) -> list[dict[str, Any]]:
+    """Every Ollama server on this machine: address, account, version, models and model folder.
+
+    ``ollama list`` only asks the server in OLLAMA_HOST (default 127.0.0.1:11434),
+    so models served by a colleague's own Ollama on another port do not show up.
+    First only sockets of accounts that run ``ollama serve`` are asked, plus
+    OLLAMA_HOST and the configured URL; if none of them has models, every other
+    listening port >= 1024 is asked too.
+    """
+    env = os.environ if env is None else env
+    listeners = _listeners(proc)
+    uids = _ollama_uids(proc) if listeners else set()
+    if listeners:
+        wanted = {key: uid for key, uid in listeners.items() if (uid in uids if uids else key[1] >= 1024)}
+    else:  # no /proc/net: try the usual ports
+        wanted = {("127.0.0.1", port): None for port in range(11434, 11444)}
+    for raw in (env.get("OLLAMA_HOST", ""), env.get("HPIS_LLM_OLLAMA_URL", ""), OLLAMA_URL):
+        key = _host_port(raw)
+        if key:
+            wanted.setdefault(key, listeners.get(key))
+
+    async def look(session: aiohttp.ClientSession, host: str, port: int, uid: int | None) -> dict[str, Any] | None:
+        base = f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
+        quick, slow = aiohttp.ClientTimeout(total=2), aiohttp.ClientTimeout(total=10)
+        try:
+            async with session.get(base + "/api/version", timeout=quick) as resp:
+                info = await resp.json(content_type=None) if resp.status == 200 else None
+            if not isinstance(info, Mapping) or not info.get("version"):
+                return None
+            async with session.get(base + "/api/tags", timeout=slow) as resp:
+                tags = await resp.json(content_type=None)
+            rows = tags.get("models") if isinstance(tags, Mapping) else None
+            models = [str(r.get("name")) for r in rows or [] if isinstance(r, Mapping)]
+            folder = None
+            if models:
+                ask = {"model": models[0], "name": models[0]}
+                async with session.post(base + "/api/show", json=ask, timeout=slow) as resp:
+                    shown = await resp.json(content_type=None) if resp.status == 200 else None
+                if isinstance(shown, Mapping):
+                    folder = _models_dir(str(shown.get("modelfile") or ""))
+        except (asyncio.TimeoutError, aiohttp.ClientError, ValueError):
+            return None
+        readable = None
+        if folder:
+            readable = all(os.access(os.path.join(folder, d), os.R_OK | os.X_OK) for d in ("manifests", "blobs"))
+        return {
+            "url": base,
+            "version": str(info["version"]),
+            "owner": _owner(uid),
+            "models": models,
+            "models_dir": folder,
+            "readable": readable,
+        }
+
+    async with aiohttp.ClientSession(trust_env=False) as session:
+        found = await asyncio.gather(*(look(session, h, p, uid) for (h, p), uid in wanted.items()))
+        if not any(f and f["models"] for f in found):
+            # /proc may hide other accounts' processes (hidepid): ask every other port too.
+            rest = {k: uid for k, uid in listeners.items() if k[1] >= 1024 and k not in wanted}
+            found += await asyncio.gather(*(look(session, h, p, uid) for (h, p), uid in rest.items()))
+    unique = {f["url"]: f for f in found if f}
+    return sorted(unique.values(), key=lambda f: (not f["models"], f["url"]))
+
+
+def describe_ollama(servers: list[dict[str, Any]]) -> list[str]:
+    if not servers:
+        return ["本机没有找到正在运行的 Ollama。"]
+    lines = ["本机的 Ollama："]
+    for s in servers:
+        owner = f" · 账号 {s['owner']}" if s.get("owner") else ""
+        models = "、".join(s["models"]) if s["models"] else "没有模型"
+        lines.append(f"  {s['url']} · Ollama {s['version']}{owner} · {models}")
+        if s.get("models_dir"):
+            access = "你的账号可以读取" if s.get("readable") else "你的账号无权读取"
+            lines.append(f"      模型文件 {s['models_dir']} · {access}")
+    return lines
+
+
 # ------------------------------------------------------------------- check
 
 _CHECK_SYSTEM = "你是个人邮件问答助手。只依据给出的编号证据回答，每个事实后标注来源编号如[1]。不写推理过程，回答不超过60字。"
@@ -1146,6 +1311,7 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
        token would be late for a reason that has nothing to do with HPIS.
     """
     failures: set[str] = set()
+    servers: list[dict[str, Any]] | None = None
     for name in profiles or list(PROFILES):
         try:
             ep = resolve_endpoint(name, env)
@@ -1161,6 +1327,13 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
             if not loaded["ok"]:
                 print(f"  加载     失败：{loaded['message']}")
                 failures.add("load")
+                if "not found" in str(loaded.get("message")):
+                    servers = await find_ollama(env) if servers is None else servers
+                    for s in servers:
+                        if any(_same_model(m, ep.model, True) for m in s["models"]):
+                            owner = f"（账号 {s['owner']} 的 Ollama）" if s.get("owner") else ""
+                            print(f"           这个模型在 {s['url']}{owner} 上，改用它：")
+                            print(f"           export HPIS_LLM_OLLAMA_URL={s['url']}")
                 continue
             print(f"  加载     {loaded['ms'] / 1000:.1f} s")
 
@@ -1217,7 +1390,8 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         "按 H200部署步骤.md 第 4 步用 --ollama 为演示单独起一个 Ollama。",
         "context": "上下文太短，长邮件会被截断。--ollama 起的演示专用 Ollama 固定使用 16k 上下文。",
         "thinking": "模型没有关闭思考。Ollama 需要 0.9 或更新版本（ollama --version）。",
-        "load": "模型加载失败：核对 HPIS_LLM_QWEN_MODEL / HPIS_LLM_GEMMA_MODEL 与 ollama list 的 NAME 是否一致。",
+        "load": "模型不在 HPIS_LLM_OLLAMA_URL 指向的 Ollama 上（默认 127.0.0.1:11434）。"
+        "按上面的 export 改地址后重新检查；也可以运行 .venv-demo/bin/python -m demo.llm --find-ollama 查看本机所有 Ollama。",
     }
     for key in ("load", "thinking", "context", "parallel"):
         if key in failures:
@@ -1233,10 +1407,14 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--probe", action="store_true", help="only call GET /models")
     parser.add_argument("--check", action="store_true", help="check what the live demo needs from the model servers")
     parser.add_argument("--warm", action="store_true", help="load the Ollama models now")
+    parser.add_argument("--find-ollama", action="store_true", help="list every Ollama on this machine")
     args = parser.parse_args(argv)
     profile = args.profile or "qwen"
 
     async def run() -> int:
+        if args.find_ollama:
+            print("\n".join(describe_ollama(await find_ollama())))
+            return 0
         if args.check:
             return await check([args.profile] if args.profile else None)
         if args.warm:

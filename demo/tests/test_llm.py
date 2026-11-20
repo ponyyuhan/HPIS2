@@ -11,7 +11,9 @@ import asyncio
 import contextlib
 import io
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import ClassVar
@@ -541,8 +543,16 @@ class FakeOllama:
 
     MODELS = ("qwen3.6:27b", "gemma4:31b")
 
-    def __init__(self, parallel: int = 1, context: int = 100_000, refuse_think: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        parallel: int = 1,
+        context: int = 100_000,
+        refuse_think: tuple[str, ...] = (),
+        models: tuple[str, ...] = MODELS,
+        folder: str = "/srv/ollama/models",
+    ) -> None:
         self.parallel, self.context, self.refuse_think = parallel, context, refuse_think
+        self.models, self.folder = models, folder
         self.requests: list[dict] = []
         self.slots: dict[str, asyncio.Semaphore] = {}
 
@@ -551,26 +561,34 @@ class FakeOllama:
         app.router.add_post("/api/chat", self.chat)
         app.router.add_get("/api/tags", self.tags)
         app.router.add_get("/api/version", self.version)
+        app.router.add_post("/api/show", self.show)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         site = web.TCPSite(self.runner, "127.0.0.1", 0)
         await site.start()
-        return f"http://127.0.0.1:{self.runner.addresses[0][1]}"
+        self.port = self.runner.addresses[0][1]
+        return f"http://127.0.0.1:{self.port}"
 
     async def stop(self) -> None:
         await self.runner.cleanup()
 
     async def tags(self, request: web.Request) -> web.Response:
-        return web.json_response({"models": [{"name": m, "model": m} for m in self.MODELS]})
+        return web.json_response({"models": [{"name": m, "model": m} for m in self.models]})
 
     async def version(self, request: web.Request) -> web.Response:
         return web.json_response({"version": "0.40.16"})
+
+    async def show(self, request: web.Request) -> web.Response:
+        body = await request.json()
+        if body.get("model") not in self.models:
+            return web.json_response({"error": "not found"}, status=404)
+        return web.json_response({"modelfile": f"# Modelfile\nFROM {self.folder}/blobs/sha256-abc\nTEMPLATE x\n"})
 
     async def chat(self, request: web.Request) -> web.StreamResponse:
         body = await request.json()
         self.requests.append(body)
         model = body["model"]
-        if model not in self.MODELS:
+        if model not in self.models:
             return web.json_response({"error": f"model '{model}' not found"}, status=404)
         if "think" in body and model in self.refuse_think:
             return web.json_response({"error": f'"{model}" does not support thinking'}, status=400)
@@ -662,6 +680,87 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("并行     通过", report)
         self.assertIn("思考     已关闭", report)
         self.assertTrue(report.rstrip().endswith("CHECK PASS"))
+
+    def fake_proc(self, root: Path, ports: list[int]) -> Path:
+        """/proc with an `ollama serve` process and listening sockets owned by it."""
+        uid = os.getuid()
+        (root / "net").mkdir(parents=True)
+        rows = ["  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode"]
+        for i, port in enumerate(ports):
+            rows.append(f"   {i}: 0100007F:{port:04X} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 {uid} 0 1 1")
+        rows.append(f"   9: 0100007F:{1:04X} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 0 0 1 1")  # root, port 1
+        (root / "net" / "tcp").write_text("\n".join(rows) + "\n")
+        (root / "4242").mkdir()
+        (root / "4242" / "cmdline").write_bytes(b"/usr/local/bin/ollama\0serve\0")
+        (root / "4242" / "status").write_text(f"Name:\tollama\nUid:\t{uid}\t{uid}\t{uid}\t{uid}\n")
+        return root
+
+    async def test_find_ollama_lists_every_server_with_its_models(self) -> None:
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        folder = tmp / "colleague" / ".ollama" / "models"
+        for sub_dir in ("manifests", "blobs"):
+            (folder / sub_dir).mkdir(parents=True)
+        empty = FakeOllama(models=())
+        await empty.start()
+        self.addAsyncCleanup(empty.stop)
+        env = await self.serve(folder=str(folder))
+        proc = self.fake_proc(tmp / "proc", [empty.port, self.server.port])
+        servers = await llm.find_ollama({}, proc=proc)
+        by_port = {int(s["url"].rsplit(":", 1)[1]): s for s in servers}
+        self.assertEqual(set(by_port), {empty.port, self.server.port})
+        mine = by_port[self.server.port]
+        self.assertEqual(mine["models"], ["qwen3.6:27b", "gemma4:31b"])
+        self.assertEqual((mine["models_dir"], mine["readable"]), (str(folder), True))
+        self.assertEqual(servers[0]["url"], mine["url"])  # servers with models first
+        self.assertEqual(by_port[empty.port]["models"], [])
+        text = "\n".join(llm.describe_ollama(servers))
+        self.assertIn("没有模型", text)
+        self.assertIn("你的账号可以读取", text)
+        self.assertEqual(llm.describe_ollama([]), ["本机没有找到正在运行的 Ollama。"])
+        del env
+
+    async def test_find_ollama_when_processes_are_hidden(self) -> None:
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        await self.serve()
+        proc = self.fake_proc(tmp / "proc", [])  # our own `ollama serve` is visible, the colleague's is not
+        rows = (proc / "net" / "tcp").read_text().rstrip("\n").split("\n")
+        rows.append(f"   7: 0100007F:{self.server.port:04X} 00000000:0000 0A 00000000:00000000 00:00000000 00000000 54321 0 1 1")
+        (proc / "net" / "tcp").write_text("\n".join(rows) + "\n")
+        servers = await llm.find_ollama({}, proc=proc)
+        self.assertEqual([s["url"] for s in servers if s["models"]], [f"http://127.0.0.1:{self.server.port}"])
+
+    async def test_check_says_where_a_missing_model_is(self) -> None:
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        empty = FakeOllama(models=())
+        empty_url = await empty.start()
+        self.addAsyncCleanup(empty.stop)
+        await self.serve()
+        proc = self.fake_proc(tmp / "proc", [empty.port, self.server.port])
+        env = {"HPIS_LLM_BACKEND": "ollama", "HPIS_LLM_OLLAMA_URL": empty_url}
+        real_find = llm.find_ollama
+
+        async def find(env=None, **_):
+            return await real_find(env, proc=proc)
+
+        llm.find_ollama = find
+        self.addCleanup(setattr, llm, "find_ollama", real_find)
+        code, report = await self.run_check(env)
+        self.assertEqual(code, 1)
+        self.assertIn("not found", report)
+        self.assertIn(f"这个模型在 http://127.0.0.1:{self.server.port}", report)
+        self.assertIn("--find-ollama", report)
+
+    def test_proc_addresses(self) -> None:
+        self.assertEqual(llm._proc_addr("0100007F"), "127.0.0.1")
+        self.assertEqual(llm._proc_addr("00000000"), "127.0.0.1")
+        self.assertEqual(llm._proc_addr("0A00000A"), "10.0.0.10")
+        self.assertEqual(llm._proc_addr("00000000000000000000000001000000"), "::1")
+        self.assertEqual(llm._proc_addr("00000000000000000000000000000000"), "::1")
+        self.assertEqual(llm._proc_addr("0000000000000000FFFF00000100007F"), "127.0.0.1")
+        self.assertEqual(llm._host_port("0.0.0.0:11500"), ("127.0.0.1", 11500))
+        self.assertEqual(llm._host_port("http://10.1.2.3"), ("10.1.2.3", 11434))
+        self.assertEqual(llm._host_port(":11435"), ("127.0.0.1", 11435))
+        self.assertIsNone(llm._host_port(""))
 
     async def test_check_catches_queueing_and_a_short_context(self) -> None:
         code, report = await self.run_check(await self.serve(parallel=1, context=4000))
