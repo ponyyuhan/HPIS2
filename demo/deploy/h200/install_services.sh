@@ -35,6 +35,8 @@ repo=$(cd "$here/../../.." && pwd)
 units=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user
 envfile=${XDG_CONFIG_HOME:-$HOME/.config}/hpis2/demo.env
 mirror_base=${XDG_DATA_HOME:-$HOME/.local/share}/hpis2/ollama
+# shellcheck source=ollama_wait.sh
+. "$here/ollama_wait.sh"  # hpis2_state_dir (Ollama log files), hpis2_wait_ollama, hpis2_explain_ollama
 native=false lan=false ollama=false uninstall=false
 for opt in "$@"; do
   case "$opt" in
@@ -151,7 +153,9 @@ if $ollama; then
   oport=${HPIS_OLLAMA_PORT:-$(next_free 11535)}
   pport=$(next_free $((oport + 1)))
   ctx=16384
+  mkdir -p "$hpis2_state_dir"
   ollama_unit() {  # $1 unit name, $2 port, $3 lane, $4 model folder
+    : > "$hpis2_state_dir/$1.log"  # a fresh log for this install
     {
       echo "[Unit]"
       echo "Description=HPIS 2.0 demo: Ollama for the $3 lane"
@@ -166,6 +170,8 @@ if $ollama; then
       echo "Environment=\"CUDA_DEVICE_ORDER=PCI_BUS_ID\""  # GPU numbers as nvidia-smi shows them
       echo "Environment=\"CUDA_VISIBLE_DEVICES=$HPIS_OLLAMA_GPU\""
       echo "ExecStart=$ollama_bin serve"
+      echo "StandardOutput=append:$hpis2_state_dir/$1.log"
+      echo "StandardError=append:$hpis2_state_dir/$1.log"
       echo "Restart=always"
       echo "RestartSec=5"
       echo "[Install]"
@@ -286,6 +292,7 @@ echo "status:    systemctl --user status ${services[*]}"
 echo "logs:      journalctl --user -u hpis2-demo -f"
 if $ollama; then
   echo "ollama:    HPIS 2.0 lane on port $oport, plaintext lane on port $pport, GPU $HPIS_OLLAMA_GPU, models from $models"
+  echo "           $ollama_bin ($("$ollama_bin" -v 2>&1 | sed -n 's/.*version is //p' | tail -n1)); logs in $hpis2_state_dir"
 fi
 echo "settings:  $envfile"
 echo "check:     $here/check.sh"
@@ -293,4 +300,14 @@ if $lan; then
   echo "page:      http://$(hostname -I 2>/dev/null | awk '{print $1}'):$port   (anyone on the intranet can open it)"
 else
   echo "page:      http://127.0.0.1:$port on this server; from a laptop: ssh -NT -L $port:127.0.0.1:$port <server>"
+fi
+
+if $ollama; then
+  echo
+  if hpis2_wait_ollama 60 "$HPIS_LLM_OLLAMA_URL" "$HPIS_LLM_PLAIN_OLLAMA_URL"; then
+    echo "两个演示专用的 Ollama 已启动。下一步：$here/check.sh"
+  else
+    hpis2_explain_ollama
+    exit 1
+  fi
 fi
