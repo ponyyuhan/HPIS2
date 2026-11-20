@@ -85,12 +85,13 @@ port_busy() {  # is something listening on TCP port $1, on any address?
   fi
 }
 
-has_models() {  # does the Ollama models folder $1 hold the configured model tags?
-  local dir=$1 m name tag
+has_models() {  # does the Ollama models folder $1 hold the configured models, readable by us?
+  local dir=$1 m name tag manifest
   [[ -d $dir/manifests && -r $dir/blobs ]] || return 1
   for m in ${HPIS_LLM_QWEN_MODEL:-} ${HPIS_LLM_GEMMA_MODEL:-}; do
     if [[ ${m##*/} == *:* ]]; then name=${m%:*} tag=${m##*:}; else name=$m tag=latest; fi
-    [[ -n $(find "$dir/manifests" -path "*/$name/$tag" -print -quit 2>/dev/null) ]] || return 1
+    manifest=$(find "$dir/manifests" -path "*/$name/$tag" -print -quit 2>/dev/null)
+    [[ -n $manifest && -r $manifest ]] || return 1
   done
 }
 
@@ -106,15 +107,16 @@ if $ollama; then
     done
   fi
   if [[ -z $models ]]; then
-    # For example a colleague's Ollama: ask the running servers where their files are.
-    models=$(HPIS_LLM_BACKEND=ollama "$repo/.venv-demo/bin/python" -m demo.llm --models-dir 2>/dev/null || true)
+    # For example a colleague's Ollama: ask the running servers where their files are
+    # (from the repository root, where the demo package is importable).
+    models=$(cd "$repo" && HPIS_LLM_BACKEND=ollama .venv-demo/bin/python -m demo.llm --models-dir) || models=""
   fi
-  [[ -n $models ]] && has_models "$models" || {
-    echo "cannot read the models ${HPIS_LLM_QWEN_MODEL:-} ${HPIS_LLM_GEMMA_MODEL:-} in an Ollama models folder." >&2
-    echo "Check the names with: $repo/.venv-demo/bin/python -m demo.llm --find-ollama" >&2
-    echo "or set HPIS_OLLAMA_MODELS to the model folder it shows (it must be readable by $USER)." >&2
+  if [[ -z $models ]] || ! has_models "$models"; then
+    echo "cannot find ${HPIS_LLM_QWEN_MODEL:-?} and ${HPIS_LLM_GEMMA_MODEL:-?} in a model folder readable by $USER${models:+ (looked in $models)}." >&2
+    echo "Check the names with: cd $repo && .venv-demo/bin/python -m demo.llm --find-ollama" >&2
+    echo "then set HPIS_OLLAMA_MODELS to the model folder it shows." >&2
     exit 1
-  }
+  fi
   for u in hpis2-ollama hpis2-ollama-plain; do  # a reinstall keeps its ports
     systemctl --user stop "$u.service" 2>/dev/null || true
   done

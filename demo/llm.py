@@ -1185,12 +1185,18 @@ def _owner(uid: int | None) -> str | None:
         return str(uid)
 
 
-def _models_dir(modelfile: str) -> str | None:
-    """A server's OLLAMA_MODELS, from the FROM line of its modelfile (blob path)."""
+def _model_blob(modelfile: str) -> str | None:
+    """The weights file a server loads, from the FROM line of its modelfile."""
     for line in modelfile.splitlines():
         if line.startswith("FROM ") and "/blobs/" in line:
-            return line[5:].strip().rsplit("/blobs/", 1)[0]
+            return line[5:].strip()
     return None
+
+
+def _models_dir(modelfile: str) -> str | None:
+    """A server's OLLAMA_MODELS folder (the parent of its blobs folder)."""
+    blob = _model_blob(modelfile)
+    return blob.rsplit("/blobs/", 1)[0] if blob else None
 
 
 async def find_ollama(env: Mapping[str, str] | None = None, *, proc: Path = Path("/proc")) -> list[dict[str, Any]]:
@@ -1227,18 +1233,20 @@ async def find_ollama(env: Mapping[str, str] | None = None, *, proc: Path = Path
             rows = [r for r in (tags.get("models") if isinstance(tags, Mapping) else None) or [] if isinstance(r, Mapping)]
             models = [str(r.get("name")) for r in rows]
             sizes = {str(r.get("name")): int(r.get("size") or 0) for r in rows}
-            folder = None
+            folder = blob = None
             if models:
                 ask = {"model": models[0], "name": models[0]}
                 async with session.post(base + "/api/show", json=ask, timeout=slow) as resp:
                     shown = await resp.json(content_type=None) if resp.status == 200 else None
                 if isinstance(shown, Mapping):
+                    blob = _model_blob(str(shown.get("modelfile") or ""))
                     folder = _models_dir(str(shown.get("modelfile") or ""))
         except (asyncio.TimeoutError, aiohttp.ClientError, ValueError):
             return None
         readable = None
         if folder:
             readable = all(os.access(os.path.join(folder, d), os.R_OK | os.X_OK) for d in ("manifests", "blobs"))
+            readable = readable and bool(blob) and os.access(blob, os.R_OK)  # the weights themselves
         return {
             "url": base,
             "version": str(info["version"]),

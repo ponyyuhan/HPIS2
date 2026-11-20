@@ -700,6 +700,7 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         folder = tmp / "colleague" / ".ollama" / "models"
         for sub_dir in ("manifests", "blobs"):
             (folder / sub_dir).mkdir(parents=True)
+        (folder / "blobs" / "sha256-abc").write_bytes(b"weights")
         empty = FakeOllama(models=())
         await empty.start()
         self.addAsyncCleanup(empty.stop)
@@ -717,6 +718,11 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("没有模型", text)
         self.assertIn("你的账号可以读取", text)
         self.assertEqual(llm.describe_ollama([]), ["本机没有找到正在运行的 Ollama。"])
+        (folder / "blobs" / "sha256-abc").chmod(0)  # the folders are open, the weights are not
+        self.addCleanup((folder / "blobs" / "sha256-abc").chmod, 0o644)
+        mine = next(s for s in await llm.find_ollama({}, proc=proc) if s["models"])
+        self.assertFalse(mine["readable"])
+        self.assertIn("你的账号无权读取", "\n".join(llm.describe_ollama([mine])))
         del env
 
     async def test_find_ollama_when_processes_are_hidden(self) -> None:
@@ -778,6 +784,7 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         folder = tmp / "models"
         for sub_dir in ("manifests", "blobs"):
             (folder / sub_dir).mkdir(parents=True)
+        (folder / "blobs" / "sha256-abc").write_bytes(b"weights")
         await self.serve(folder=str(folder))
         proc = self.fake_proc(tmp / "proc", [self.server.port])
         real_find = llm.find_ollama
