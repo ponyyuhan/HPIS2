@@ -261,7 +261,7 @@ mkdir -p "$(dirname "$envfile")"
   for var in HPIS_LLM_OLLAMA_URL HPIS_LLM_PLAIN_OLLAMA_URL HPIS_LLM_OLLAMA_KEEP_ALIVE HPIS_LLM_OLLAMA_NUM_CTX \
     HPIS_LLM_QWEN_MODEL HPIS_LLM_GEMMA_MODEL HPIS_LLM_QWEN_BASE_URL HPIS_LLM_GEMMA_BASE_URL \
     HPIS_LLM_QWEN_LABEL HPIS_LLM_GEMMA_LABEL VLLM_API_KEY HPIS_LLM_QWEN_API_KEY HPIS_LLM_GEMMA_API_KEY \
-    HPIS_DEMO_RUNTIME; do
+    HPIS_DEMO_RUNTIME HPIS_DEMO_HTTPS_PORT; do
     if [[ -n ${!var:-} ]]; then printf '%s="%s"\n' "$var" "${!var}"; fi
   done
 } > "$envfile"
@@ -313,6 +313,7 @@ echo "settings:  $envfile"
 echo "check:     $here/check.sh"
 if $lan; then
   echo "page:      http://$(hostname -I 2>/dev/null | awk '{print $1}'):$port   (anyone on the intranet can open it)"
+  echo "record:    https://$(hostname -I 2>/dev/null | awk '{print $1}'):${HPIS_DEMO_HTTPS_PORT:-8781}   (the same page; open it here to record a video)"
 else
   echo "page:      http://127.0.0.1:$port on this server; from a laptop: ssh -NT -L $port:127.0.0.1:$port <server>"
 fi

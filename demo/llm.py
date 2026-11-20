@@ -1078,7 +1078,7 @@ def _lane_endpoints(name: str, env: Mapping[str, str] | None = None) -> list[tup
     plain = resolve_endpoint(name, lane_env("plain", env))
     if (plain.base_url, plain.model) == (hpis.base_url, hpis.model):
         return [("", hpis)]
-    return [("HPIS 2.0 通道", hpis), ("明文通道", plain)]
+    return [("端侧+HPIC+HPIS", hpis), ("端侧直传普通云", plain)]
 
 
 async def warm_all(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:

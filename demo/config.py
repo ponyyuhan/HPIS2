@@ -82,3 +82,6 @@ INGEST_BATCH = 400
 
 DEFAULT_MODEL = os.environ.get("HPIS_DEMO_MODEL", "qwen")
 WEB_PORT = int(os.environ.get("HPIS_DEMO_PORT", "8780"))
+# Browsers record a page (screen capture) only over https or on localhost, so the demo
+# also serves https here; 0 turns it off.
+WEB_HTTPS_PORT = int(os.environ.get("HPIS_DEMO_HTTPS_PORT", "8781"))

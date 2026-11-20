@@ -1,10 +1,12 @@
-"""Web server for the HPIS 2.0 demo: static UI + JSON/NDJSON API."""
+"""Web server for the demo (面向个人敏感数据的智能问答): static UI + JSON/NDJSON API."""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
+import signal
 import sqlite3
 import time
 import traceback
@@ -162,6 +164,7 @@ async def status(request):
         "phase": state.get("phase"),
         "progress": state.get("progress"),
         "error": state.get("error"),
+        "httpsPort": state.get("https_port"),
         "models": model_options(),
         "defaultModel": config.DEFAULT_MODEL,
         "network": config.Network().describe(),
@@ -354,11 +357,98 @@ def make_app():
     return app
 
 
+def https_context(folder):
+    """TLS for the recording address.
+
+    Browsers let a page record itself (getDisplayMedia) only over https or on
+    localhost, and the demo page is opened from other computers by IP.  The
+    certificate is self-signed, made once and kept in the runtime folder, so
+    the first visit shows a warning to click through.
+    """
+    import ssl
+
+    cert, key = folder / "cert.pem", folder / "key.pem"
+    if not (cert.exists() and key.exists()):
+        import datetime
+        import ipaddress
+        import socket
+
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+
+        folder.mkdir(parents=True, exist_ok=True)
+        ips = {"127.0.0.1"}
+        with contextlib.suppress(OSError), socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))  # picks the outgoing interface; sends nothing
+            ips.add(probe.getsockname()[0])
+        with contextlib.suppress(OSError):
+            ips.update(info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None))
+        alt = [x509.DNSName(n) for n in sorted({"localhost", socket.gethostname()})]
+        for ip in sorted(ips):
+            with contextlib.suppress(ValueError):
+                alt.append(x509.IPAddress(ipaddress.ip_address(ip.split("%")[0])))
+        pkey = ec.generate_private_key(ec.SECP256R1())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "HPIS demo (self-signed)")])
+        now = datetime.datetime.now(datetime.timezone.utc)
+        crt = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(pkey.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=3650))
+            .add_extension(x509.SubjectAlternativeName(alt), critical=False)
+            .sign(pkey, hashes.SHA256())
+        )
+        key.write_bytes(
+            pkey.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        )
+        key.chmod(0o600)
+        cert.write_bytes(crt.public_bytes(serialization.Encoding.PEM))
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ctx.load_cert_chain(cert, key)
+    return ctx
+
+
+async def serve(host, port, https_port):
+    """The page on http, plus the same page on https for recording; stops on SIGINT/SIGTERM."""
+    app = make_app()
+    runner = web.AppRunner(app, access_log=None)
+    await runner.setup()
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError, RuntimeError):  # not on Windows
+            loop.add_signal_handler(sig, stop.set)
+    try:
+        await web.TCPSite(runner, host, port).start()
+        print(f"demo → http://{host}:{port}/", flush=True)
+        if https_port:
+            try:
+                ctx = await loop.run_in_executor(None, https_context, config.RUNTIME / "https")
+                await web.TCPSite(runner, host, https_port, ssl_context=ctx).start()
+                app[STATE]["https_port"] = https_port
+                shown = "<this host>" if host in ("0.0.0.0", "::") else host
+                print(f"recording address → https://{shown}:{https_port}/", flush=True)
+            except (OSError, ValueError, ImportError) as exc:
+                print(f"https on port {https_port} not started ({exc}); in-page recording needs it", flush=True)
+        await stop.wait()
+    finally:
+        await runner.cleanup()
+
+
 def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(description="HPIS 2.0 密态智能问答演示")
+    parser = argparse.ArgumentParser(description="面向个人敏感数据的智能问答 演示")
     parser.add_argument("--port", type=int, default=config.WEB_PORT)
+    parser.add_argument(
+        "--https-port", type=int, default=config.WEB_HTTPS_PORT,
+        help="also serve the page over https here, so it can be recorded from another computer (0: off)",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--open", action="store_true", help="open the browser")
     args = parser.parse_args(argv)
@@ -367,8 +457,8 @@ def main(argv=None):
         import threading
 
         threading.Timer(1.5, webbrowser.open, args=(f"http://{args.host}:{args.port}/",)).start()
-    print(f"HPIS 2.0 demo → http://{args.host}:{args.port}/", flush=True)
-    web.run_app(make_app(), host=args.host, port=args.port, access_log=None, print=None)
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(serve(args.host, args.port, args.https_port))
 
 
 if __name__ == "__main__":

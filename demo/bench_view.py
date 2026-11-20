@@ -99,7 +99,7 @@ def _rollup_view(data: dict) -> dict:
                     r["label"] = v
                     break
             if r["label"].startswith("无密文索引"):
-                r["color"] = "linear-gradient(90deg,#ff9b4a,#ffc38a)"
+                r["color"] = "linear-gradient(90deg,#d2691e,#f0a868)"
             rows.append(r)
         view["io"] = {"title": "每次查询读出的数据量", "desc": "", "rows": rows}
     bullets = []
@@ -196,10 +196,10 @@ def build_view(data: dict | None) -> dict:
                 {
                     "label": "无密文索引：读取该 AID 全部数据",
                     "bytes": full["body_bytes"],
-                    "color": "linear-gradient(90deg,#ff9b4a,#ffc38a)",
+                    "color": "linear-gradient(90deg,#d2691e,#f0a868)",
                 }
             )
-        for key, label in (("2.0_vector", "HPIS 2.0 向量 Top-10"), ("2.0_word", "HPIS 2.0 关键词（10 条）"), ("2.0_field", "HPIS 2.0 精确字段（1 条）")):
+        for key, label in (("2.0_vector", "密文索引：向量 Top-10"), ("2.0_word", "密文索引：关键词（10 条）"), ("2.0_field", "密文索引：精确字段（1 条）")):
             if io.get(key):
                 rows_io.append({"label": label, "bytes": io[key]["body_bytes"]})
         if rows_io:

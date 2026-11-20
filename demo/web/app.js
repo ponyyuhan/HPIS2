@@ -1,4 +1,4 @@
-// HPIS 2.0 demo — front-end
+// 面向个人敏感数据的智能问答 — front-end
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const NS = "http://www.w3.org/2000/svg";
@@ -59,7 +59,7 @@ function ambient() {
       d.y += d.v * devicePixelRatio * 2;
       if (d.y > h) { d.y = -20; d.x = Math.random() * w; }
       if (Math.random() < 0.02) d.g = glyphs[(Math.random() * 16) | 0];
-      ctx.fillStyle = `rgba(63,240,200,${0.05 + d.a * 0.12})`;
+      ctx.fillStyle = `rgba(12,154,128,${0.035 + d.a * 0.08})`;
       ctx.fillText(d.g, d.x, d.y);
     }
   }
@@ -104,7 +104,7 @@ const LANES = {
     links: [["edge", "dev", "hpic", "推理请求"], ["cloudl", "hpic", "hpis", "全量数据密文"]],
   },
   v2: {
-    title: "HPIS 2.0", en: "Encrypted search", icon: "shield-check",
+    title: "端侧+HPIC+HPIS", en: "Encrypted search", icon: "shield-check",
     desc: "SSE 在密文索引上精确筛选，向量在可信计算区内精确排序，只取回命中的几封密文",
     stages: [["request", "密封请求"], ["search", "密态检索"], ["decrypt", "按需解密"], ["generate", "模型生成"]],
     nodes: [["dev", 56, "smartphone", "终端", "掌控密钥"], ["hpic", 290, "cpu", "HPIC", "可信计算"], ["hpis", 512, "database", "HPIS", "SSE + 密态向量"]],
@@ -747,7 +747,7 @@ async function loadBench() {
     const mx = Math.log10(Math.max(...io.rows.map((r) => r.bytes)) + 1);
     const top = Math.max(...io.rows.map((r) => r.bytes));
     html += `<div class="bcard bcard--wide card"><h4>${esc(io.title || "每次查询读出的数据量")}<span class="tag">对数刻度</span></h4>${io.desc ? `<p class="desc">${esc(io.desc)}</p>` : ""}<div class="io">${io.rows
-      .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "linear-gradient(90deg,#3ff0c8,#48b8ff)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
+      .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "linear-gradient(90deg,#0c9a80,#2f6fd1)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
       .join("")}</div></div>`;
   }
   for (const n of data.notes || []) {
@@ -772,35 +772,35 @@ function renderArch() {
 `;
 }
 function archSvg() {
-  const box = (x, y, w, h, stroke = "rgba(255,255,255,.14)", fill = "rgba(255,255,255,.03)") =>
+  const box = (x, y, w, h, stroke = "rgba(74,56,24,.16)", fill = "rgba(255,255,255,.78)") =>
     `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="20" fill="${fill}" stroke="${stroke}"/>`;
   const chip = (x, y, w, text, kind = "") => {
     const st = {
-      "": ["rgba(255,255,255,.04)", "rgba(255,255,255,.14)", "#eaf0fb", 400],
-      new: ["rgba(63,240,200,.10)", "rgba(63,240,200,.55)", "#9ff6e2", 700],
-      model: ["rgba(155,140,255,.10)", "rgba(155,140,255,.45)", "#d5ceff", 600],
-      key: ["rgba(72,184,255,.08)", "rgba(72,184,255,.4)", "#bfe3ff", 600],
+      "": ["#ffffff", "rgba(74,56,24,.18)", "#1d2330", 400],
+      new: ["rgba(11,143,120,.08)", "rgba(11,143,120,.5)", "#0a6f5d", 700],
+      model: ["rgba(108,92,224,.08)", "rgba(108,92,224,.45)", "#5443c4", 600],
+      key: ["rgba(47,111,209,.07)", "rgba(47,111,209,.4)", "#2160b5", 600],
     }[kind];
     return `<rect x="${x}" y="${y}" width="${w}" height="34" rx="9" fill="${st[0]}" stroke="${st[1]}"/><text x="${x + w / 2}" y="${y + 22}" text-anchor="middle" fill="${st[2]}" font-weight="${st[3]}" font-size="13.5">${text}</text>`;
   };
   const cyl = (cx, y, label) =>
-    `<g fill="rgba(255,255,255,.04)" stroke="rgba(255,255,255,.18)"><path d="M${cx - 38} ${y}v46a38 10 0 0 0 76 0v-46"/><ellipse cx="${cx}" cy="${y}" rx="38" ry="10"/></g><text x="${cx}" y="${y + 33}" text-anchor="middle" fill="#eaf0fb" font-size="12.5">${label}</text>`;
+    `<g fill="#ffffff" stroke="rgba(74,56,24,.22)"><path d="M${cx - 38} ${y}v46a38 10 0 0 0 76 0v-46"/><ellipse cx="${cx}" cy="${y}" rx="38" ry="10"/></g><text x="${cx}" y="${y + 33}" text-anchor="middle" fill="#1d2330" font-size="12.5">${label}</text>`;
   const flow = (d, label, lx, ly, anchor = "middle", delay = 0) =>
     `<path d="${d}" class="arch-flow" style="animation-delay:${delay}s" marker-end="url(#ah)"/><text x="${lx}" y="${ly}" text-anchor="${anchor}" class="arch-label">${label}</text>`;
   return `<svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif">
   <defs>
-    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#48b8ff"/></marker>
-    <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(63,240,200,.10)"/><stop offset="1" stop-color="rgba(63,240,200,.02)"/></linearGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2f6fd1"/></marker>
+    <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(11,143,120,.10)"/><stop offset="1" stop-color="rgba(11,143,120,.03)"/></linearGradient>
   </defs>
   <style>
-    .arch-flow{fill:none;stroke:#48b8ff;stroke-width:2.4;stroke-dasharray:7 7;animation:archdash 1.2s linear infinite}
-    .arch-label{fill:#cfe6ff;font-size:13px;font-weight:600}
-    .arch-sub{fill:#93a0bb;font-size:12.5px}
-    .arch-h{fill:#eaf0fb;font-size:19px;font-weight:700}
+    .arch-flow{fill:none;stroke:#2f6fd1;stroke-width:2.4;stroke-dasharray:7 7;animation:archdash 1.2s linear infinite}
+    .arch-label{fill:#2160b5;font-size:13px;font-weight:600}
+    .arch-sub{fill:#6b6860;font-size:12.5px}
+    .arch-h{fill:#1d2330;font-size:19px;font-weight:700}
     @keyframes archdash{to{stroke-dashoffset:-28}}
   </style>
-  <line x1="20" y1="300" x2="980" y2="300" stroke="rgba(255,255,255,.18)" stroke-dasharray="4 6"/>
-  <text x="26" y="290" fill="#5d6884" font-size="13" font-weight="700">云</text><text x="26" y="324" fill="#5d6884" font-size="13" font-weight="700">端</text>
+  <line x1="20" y1="300" x2="980" y2="300" stroke="rgba(74,56,24,.2)" stroke-dasharray="4 6"/>
+  <text x="26" y="290" fill="#a59f92" font-size="13" font-weight="700">云</text><text x="26" y="324" fill="#a59f92" font-size="13" font-weight="700">端</text>
 
   ${box(50, 40, 200, 150)}
   <text x="70" y="74" class="arch-h">终端云认证服务</text>
@@ -875,7 +875,7 @@ function bootOverlay(s) {
   const titles = { unpacking: "首次运行：解压邮箱与向量数据", building: "首次运行：在本机加密预置邮箱", "starting-services": "启动 HPIS / HPIC / 普通云服务", warming: "预热密态索引", error: "启动失败" };
   $("#boot-title").textContent = titles[s.phase] || "正在启动密态服务…";
   if (s.phase === "error") $("#boot-sub").textContent = s.error || "";
-  const bars = [["tee", "HPIS 2.0 密态租户（AES-GCM + HMAC + 向量密文）"], ["plain", "明文对照租户"], ["upload", "普通云上传批次"]];
+  const bars = [["tee", "HPIS 密态租户（AES-GCM + HMAC + 向量密文）"], ["plain", "明文对照租户"], ["upload", "普通云上传批次"]];
   $("#boot-bars").innerHTML = s.phase === "building" ? bars.map(([k, l]) => {
     const n = (s.progress || {})[k] || 0;
     return `<div class="bootbar"><label><span>${l}</span><span class="num">${intText(n)} / ${intText(total)}</span></label><div><i style="width:${Math.min(100, (n / total) * 100)}%"></i></div></div>`;
@@ -910,6 +910,123 @@ async function loadPlainTicker() {
   } catch {}
 }
 
+// ------------------------------------------------------------------ recording
+// Records this tab to a video file with the browser's own screen capture. Browsers allow
+// that only on a secure page (https or 127.0.0.1), so the demo also serves an https port.
+const rec = { recorder: null, stream: null, chunks: [], t0: 0, timer: 0, mime: "" };
+function toast(html, ms = 6000) {
+  const t = $("#toast");
+  t.innerHTML = html;
+  t.classList.add("on");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("on"), ms);
+}
+function recMime() {
+  const types = ["video/mp4;codecs=avc1.640033", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+  return window.MediaRecorder ? types.find((t) => MediaRecorder.isTypeSupported(t)) || "" : "";
+}
+function recHelp() {
+  const port = state.status?.httpsPort;
+  const secureUrl = port ? `https://${location.hostname}:${port}/` : "";
+  const alt = `<p class="alt">也可以用 Windows 自带的录屏：<kbd>Win</kbd> + <kbd>Alt</kbd> + <kbd>R</kbd>（Xbox Game Bar，录制当前窗口），或 <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>R</kbd>（截图工具录屏）。</p>`;
+  let body;
+  if (window.isSecureContext) {
+    body = `<p class="muted">这个浏览器不支持网页录屏，请用新版 Chrome 或 Edge 打开本页。</p>${alt}`;
+  } else if (secureUrl) {
+    body = `<p class="muted">浏览器只允许在安全地址（https）上录制网页。当前地址 <b>${esc(location.origin)}</b> 不是，请换到录制地址：</p>
+    <a class="btn btn--primary" href="${secureUrl}">${ICON("external-link")}打开录制地址 ${esc(secureUrl)}</a>
+    <ol><li>第一次打开会提示“您的连接不是私密连接”：点 <b>高级</b> → <b>继续前往</b>（证书由演示服务自己签发）。</li>
+    <li>在新页面右上角点 <b>录制视频</b>，选择 <b>此标签页</b> → <b>共享</b>，倒数 3 秒后开始录制。</li>
+    <li>演示结束点 <b>停止录制</b>，视频自动保存到“下载”文件夹。</li></ol>${alt}`;
+  } else {
+    body = `<p class="muted">浏览器只允许在安全地址（https）上录制网页，而演示服务没有开启 https 录制地址。</p>${alt}`;
+  }
+  $("#recpop-body").innerHTML = body;
+  $("#recpop").hidden = false;
+}
+function countdown(n) {
+  return new Promise((resolve) => {
+    const box = $("#countdown");
+    const num = $("#countdown-n");
+    box.hidden = false;
+    const step = (k) => {
+      if (k === 0) { box.hidden = true; setTimeout(resolve, 250); return; }
+      num.textContent = k;
+      num.style.animation = "none";
+      void num.offsetWidth;  // restart the pop animation
+      num.style.animation = "";
+      setTimeout(() => step(k - 1), 1000);
+    };
+    step(n);
+  });
+}
+async function startRecording() {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getDisplayMedia || !window.MediaRecorder) { recHelp(); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 }, width: { max: 3840 }, height: { max: 2160 } },
+      audio: false,
+      preferCurrentTab: true,
+      selfBrowserSurface: "include",
+      surfaceSwitching: "exclude",
+      monitorTypeSurfaces: "exclude",
+    });
+  } catch {
+    return;  // the share picker was cancelled
+  }
+  await countdown(3);  // the countdown itself is not in the video
+  rec.mime = recMime();
+  rec.chunks = [];
+  rec.stream = stream;
+  rec.recorder = new MediaRecorder(stream, { mimeType: rec.mime || undefined, videoBitsPerSecond: 12000000 });
+  rec.recorder.ondataavailable = (e) => { if (e.data.size) rec.chunks.push(e.data); };
+  rec.recorder.onstop = saveRecording;
+  stream.getVideoTracks()[0].addEventListener("ended", stopRecording);  // 「停止共享」 in the browser bar
+  rec.recorder.start(1000);
+  rec.t0 = performance.now();
+  $("#rec-btn").classList.add("on");
+  const show = () => {
+    const sec = Math.floor((performance.now() - rec.t0) / 1000);
+    $("#rec-label").textContent = `停止录制 ${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+  };
+  show();
+  rec.timer = setInterval(show, 500);
+}
+function stopRecording() {
+  clearInterval(rec.timer);
+  if (rec.recorder && rec.recorder.state !== "inactive") rec.recorder.stop();
+  rec.stream?.getTracks().forEach((t) => t.stop());
+  $("#rec-btn").classList.remove("on");
+  $("#rec-label").textContent = "录制视频";
+}
+function saveRecording() {
+  const type = (rec.mime || "video/webm").split(";")[0];
+  const blob = new Blob(rec.chunks, { type });
+  rec.chunks = [];
+  rec.recorder = null;
+  rec.stream = null;
+  if (!blob.size) return;
+  const d = new Date();
+  const p2 = (n) => String(n).padStart(2, "0");
+  const name = `面向个人敏感数据的智能问答-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.${type.includes("mp4") ? "mp4" : "webm"}`;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  toast(`${ICON("download")}<span>视频已保存到“下载”文件夹：${esc(name)}（${bytesText(blob.size)}）</span>`, 8000);
+}
+function initRecording() {
+  $("#rec-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (rec.recorder) stopRecording(); else startRecording();
+  });
+  document.addEventListener("click", (e) => { if (!$("#recpop").contains(e.target)) $("#recpop").hidden = true; });
+}
+
 // ------------------------------------------------------------------ wiring
 function initNet() {
   const sync = () => {
@@ -940,6 +1057,7 @@ function init() {
   ambient();
   initTabs();
   initNet();
+  initRecording();
   buildLanes();
   renderArch();
   $("#enter").addEventListener("click", () => $("#cover").classList.add("off"));
