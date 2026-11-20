@@ -1,6 +1,6 @@
 # HPIS 2.0 密态检索
 
-> **2026-11-20 新交付**：领导演示 [`demo/`](demo/README.md)、Linux 验收 [`acceptance/`](acceptance/README.md)、H200 模型部署 [`demo/deploy/h200/`](demo/deploy/h200/README.md)，总览见 [HPIS2交付说明.md](HPIS2交付说明.md)。以下为此前版本的说明。
+> **2026-11-20 新交付**：领导演示 [`demo/`](demo/README.md)、Linux 验收 [`acceptance/`](acceptance/README.md)、H200 模型部署 [`demo/deploy/h200/`](demo/deploy/h200/README.md)，总览见 [HPIS2交付说明.md](HPIS2交付说明.md)，H200 逐步部署见 [H200部署步骤.md](H200部署步骤.md)。以下为此前版本的说明。
 
 终端为每个匿名标识 AID 建立独立索引。HPIS 在该 AID 内选出结果，只把命中的加密正文交给获授权的 HPIC 解密。这个 Linux 项目提供可运行的端侧 Python SDK、独立 HPIS/HPIC 服务、旧版 C1–C4 接入和验收基准。
 
