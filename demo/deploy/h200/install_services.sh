@@ -106,8 +106,20 @@ has_models() {  # does the Ollama models folder $1 hold the configured models, r
 }
 
 if $ollama; then
-  ollama_bin=${HPIS_OLLAMA_BIN:-$(command -v ollama || true)}
-  [[ -x $ollama_bin ]] || { echo "ollama is not on PATH (or set HPIS_OLLAMA_BIN)" >&2; exit 1; }
+  # The snap's `ollama` command is a launcher that takes the address and model folder from
+  # `snap set ollama ...` and ignores OLLAMA_HOST / OLLAMA_MODELS, so both demo servers would
+  # try the snap's own port. Use a real ollama binary; the snap carries one in $SNAP/bin.
+  is_snap_launcher() { [[ $1 == /snap/bin/* || $(readlink -f "$1" 2>/dev/null) == */usr/bin/snap ]]; }
+  ollama_bin=""
+  for c in ${HPIS_OLLAMA_BIN:-} "$(command -v ollama 2>/dev/null || true)" \
+           /snap/ollama/current/bin/ollama /usr/local/bin/ollama /usr/bin/ollama; do
+    if [[ -n $c && -x $c ]] && ! is_snap_launcher "$c"; then ollama_bin=$c; break; fi
+  done
+  [[ -n $ollama_bin ]] || {
+    echo "no usable ollama binary: the snap launcher /snap/bin/ollama ignores OLLAMA_HOST; set HPIS_OLLAMA_BIN" >&2; exit 1; }
+  if [[ -n ${HPIS_OLLAMA_BIN:-} && $ollama_bin != "$HPIS_OLLAMA_BIN" ]]; then
+    echo "HPIS_OLLAMA_BIN=$HPIS_OLLAMA_BIN is the snap launcher, which ignores OLLAMA_HOST; using $ollama_bin" >&2
+  fi
   [[ -n ${HPIS_OLLAMA_GPU:-} ]] || { echo "set HPIS_OLLAMA_GPU to a free GPU from nvidia-smi, e.g. HPIS_OLLAMA_GPU=0" >&2; exit 1; }
   [[ -n ${HPIS_LLM_QWEN_MODEL:-} && -n ${HPIS_LLM_GEMMA_MODEL:-} ]] || {
     echo "export HPIS_LLM_QWEN_MODEL and HPIS_LLM_GEMMA_MODEL first (H200部署步骤.md step 4)" >&2; exit 1; }
@@ -169,6 +181,9 @@ if $ollama; then
       echo "Environment=\"OLLAMA_NOPRUNE=1\""
       echo "Environment=\"CUDA_DEVICE_ORDER=PCI_BUS_ID\""  # GPU numbers as nvidia-smi shows them
       echo "Environment=\"CUDA_VISIBLE_DEVICES=$HPIS_OLLAMA_GPU\""
+      if [[ -d $(dirname "$ollama_bin")/../lib/ollama ]]; then  # as the snap's launcher would set it
+        echo "Environment=\"LD_LIBRARY_PATH=$(dirname "$ollama_bin")/../lib/ollama\""
+      fi
       echo "ExecStart=$ollama_bin serve"
       echo "StandardOutput=append:$hpis2_state_dir/$1.log"
       echo "StandardError=append:$hpis2_state_dir/$1.log"
