@@ -1371,9 +1371,13 @@ async def _check_server(ep: Endpoint, title: str, failures: set[str], found: dic
     if ep.is_ollama:
         loaded = await warm(ep, keep_alive=_CHECK_KEEP_ALIVE)
         if not loaded["ok"]:
-            print(f"  加载     失败：{loaded['message']}")
+            message = str(loaded.get("message"))
+            print(f"  加载     失败：{message}")
+            if any(s in message for s in ("ClientConnectorError", "Connect call failed", "Cannot connect")):
+                failures.add("down")
+                return False
             failures.add("load")
-            if "not found" in str(loaded.get("message")):
+            if "not found" in message:
                 if "servers" not in found:
                     found["servers"] = await find_ollama()
                 for s in found["servers"]:
@@ -1459,6 +1463,10 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         return 0
     print("CHECK FAIL")
     hints = {
+        "down": "连不上：这个地址上没有在运行的 Ollama。演示专用的两个 Ollama 由你账号的 systemd 管理，"
+        "用这两条命令看它们为什么没在运行：\n"
+        "  systemctl --user status hpis2-ollama hpis2-ollama-plain --no-pager\n"
+        "  journalctl --user -u hpis2-ollama -u hpis2-ollama-plain -n 40 --no-pager",
         "parallel": "两条通道会排队：这个 Ollama 一次只给这个模型处理一个请求（Ollama 默认如此，"
         "Qwen 3.5 系列架构在 Ollama 里更是固定一次一个），明文通道的首字时间会被拉长，对比就不公平了。"
         "不要改动或重启它，按 H200部署步骤.md 用 --ollama 给两条通道各起一个演示专用的 Ollama。",
@@ -1467,7 +1475,7 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         "load": "模型不在 HPIS_LLM_OLLAMA_URL 指向的 Ollama 上（默认 127.0.0.1:11434）。"
         "按上面的 export 改地址后重新检查；也可以运行 .venv-demo/bin/python -m demo.llm --find-ollama 查看本机所有 Ollama。",
     }
-    for key in ("load", "thinking", "context", "parallel"):
+    for key in ("down", "load", "thinking", "context", "parallel"):
         if key in failures:
             print("提示：" + hints[key])
     return 1

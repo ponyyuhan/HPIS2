@@ -797,6 +797,16 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await llm.models_dir({}), str(folder))
         self.assertIsNone(await llm.models_dir({"HPIS_LLM_QWEN_MODEL": "qwen3.8:27b"}))
 
+    async def test_check_explains_a_server_that_is_not_running(self) -> None:
+        env = await self.serve()
+        await self.server.stop()  # nothing listens on that port any more
+        self.server.stop = lambda: asyncio.sleep(0)  # cleanup already done
+        code, report = await self.run_check(env)
+        self.assertEqual(code, 1)
+        self.assertIn("没有在运行的 Ollama", report)
+        self.assertIn("journalctl --user -u hpis2-ollama", report)
+        self.assertNotIn("模型不在", report)
+
     def test_proc_addresses(self) -> None:
         self.assertEqual(llm._proc_addr("0100007F"), "127.0.0.1")
         self.assertEqual(llm._proc_addr("00000000"), "127.0.0.1")
