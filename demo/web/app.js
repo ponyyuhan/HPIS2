@@ -32,40 +32,6 @@ function secs(ms) {
 const secsText = (ms) => secs(ms).join(" ");
 const intText = (n) => Number(n || 0).toLocaleString("en-US");
 
-// ------------------------------------------------------------------ ambient
-function ambient() {
-  const c = $("#ambient");
-  const ctx = c.getContext("2d");
-  const glyphs = "0123456789abcdef";
-  let w, h, cols;
-  const drops = [];
-  function size() {
-    w = c.width = innerWidth * devicePixelRatio;
-    h = c.height = innerHeight * devicePixelRatio;
-    cols = Math.floor(w / (28 * devicePixelRatio));
-    drops.length = 0;
-    for (let i = 0; i < 70; i++) drops.push({ x: Math.random() * w, y: Math.random() * h, v: 0.15 + Math.random() * 0.45, a: Math.random() * 0.5, g: glyphs[(Math.random() * 16) | 0] });
-  }
-  size();
-  addEventListener("resize", size);
-  let last = 0;
-  function frame(t) {
-    requestAnimationFrame(frame);
-    if (t - last < 40) return;
-    last = t;
-    ctx.clearRect(0, 0, w, h);
-    ctx.font = `${12 * devicePixelRatio}px JBMono, monospace`;
-    for (const d of drops) {
-      d.y += d.v * devicePixelRatio * 2;
-      if (d.y > h) { d.y = -20; d.x = Math.random() * w; }
-      if (Math.random() < 0.02) d.g = glyphs[(Math.random() * 16) | 0];
-      ctx.fillStyle = `rgba(12,154,128,${0.035 + d.a * 0.08})`;
-      ctx.fillText(d.g, d.x, d.y);
-    }
-  }
-  requestAnimationFrame(frame);
-}
-
 // ------------------------------------------------------------------ counters
 const tweens = new Map();
 function tweenTo(el, value, render, dur = 650) {
@@ -138,7 +104,8 @@ class Flow {
     }
     for (const [id, x, icon, label, sub] of cfg.nodes) {
       const g = this.el("g", { class: "node", transform: `translate(${x - 36} ${y - 28})` });
-      this.el("rect", { width: 72, height: 56, rx: 16 }, g);
+      this.el("rect", { width: 72, height: 56, rx: 16, class: "ripple" }, g);
+      this.el("rect", { width: 72, height: 56, rx: 16, class: "box" }, g);
       const use = this.el("use", { href: `/assets/icons.svg#${icon}`, x: 22, y: 14, width: 28, height: 28 }, g);
       use.setAttribute("style", "fill:none;stroke:currentColor");
       const l = this.el("text", { x: 36, y: 76, class: "nlabel" }, g);
@@ -177,8 +144,10 @@ class Flow {
   send(id, { reverse = false, kind = "", r = 3.4, dur = 650 } = {}) {
     const l = this.links[id];
     if (!l) return;
-    const c = this.el("circle", { r, class: `packet ${kind}`, cx: reverse ? l.x2 : l.x1, cy: l.y });
-    this.packets.push({ c, l, reverse, t0: performance.now(), dur });
+    const x0 = reverse ? l.x2 : l.x1;
+    const tail = [0.78, 0.56].map((k) => this.el("circle", { r: r * k, class: `packet tail ${kind}`, cx: x0, cy: l.y, opacity: 0 }));
+    const c = this.el("circle", { r, class: `packet ${kind}`, cx: x0, cy: l.y });
+    this.packets.push({ c, tail, l, reverse, t0: performance.now(), dur });
   }
   stream(id, on, opts = {}) {
     clearInterval(this.streams[id]);
@@ -187,19 +156,26 @@ class Flow {
   }
   reset(cfg) {
     for (const k of Object.keys(this.streams)) this.stream(k, false);
-    for (const p of this.packets) p.c.remove();
+    for (const p of this.packets) { p.c.remove(); p.tail.forEach((x) => x.remove()); }
     this.packets = [];
     for (const [id, , , , sub] of cfg.nodes) this.node(id, null, sub);
     for (const id of Object.keys(this.links)) { this.linkValue(id, ""); this.hot(id, false); }
   }
   frame(now) {
+    const at = (p, t) => {
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      return p.reverse ? p.l.x2 - (p.l.x2 - p.l.x1) * e : p.l.x1 + (p.l.x2 - p.l.x1) * e;
+    };
     this.packets = this.packets.filter((p) => {
       const t = (now - p.t0) / p.dur;
-      if (t >= 1) { p.c.remove(); return false; }
-      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      const x = p.reverse ? p.l.x2 - (p.l.x2 - p.l.x1) * e : p.l.x1 + (p.l.x2 - p.l.x1) * e;
-      p.c.setAttribute("cx", x);
-      p.c.setAttribute("opacity", t > 0.85 ? (1 - t) / 0.15 : 1);
+      if (t >= 1) { p.c.remove(); p.tail.forEach((x) => x.remove()); return false; }
+      const fade = t > 0.85 ? (1 - t) / 0.15 : 1;
+      p.c.setAttribute("cx", at(p, t));
+      p.c.setAttribute("opacity", fade);
+      p.tail.forEach((x, i) => {
+        x.setAttribute("cx", at(p, Math.max(0, t - 0.06 * (i + 1))));
+        x.setAttribute("opacity", t < 0.06 * (i + 1) ? 0 : fade * (0.45 - i * 0.2));
+      });
       return true;
     });
   }
@@ -296,7 +272,7 @@ function setTicker(id, text) {
   const defaults = {
     plain: state.plainTicker || "邮件原文、附件、体检报告、账单、合同金额、联系方式……全部以明文进入普通云",
     v1: "HPIS 只存密文；但 HPIC 每次要解密该用户的全部邮件，才能找出需要的那几封",
-    v2: "AID · HMAC-SHA256 检索令牌 · AES-256-GCM 正文密文 · 密封的目标向量",
+    v2: state.cipherTicker || "AID · HMAC-SHA256 检索令牌 · AES-256-GCM 正文密文 · 密封的目标向量",
   };
   tr.textContent = text || defaults[id];
   // Constant reading speed (~40 px/s) however long the text is.
@@ -398,7 +374,11 @@ async function run() {
   $("#run span").textContent = "对比中…";
   resetLanes();
   const lanes = ["plain", "v2"];
-  for (const id of lanes) { pill(id, "运行中", "run"); lane(id).el.classList.add("running"); }
+  for (const id of lanes) {
+    pill(id, "运行中", "run");
+    lane(id).el.classList.add("running");
+    $("[data-answer]", lane(id).el).innerHTML = `<div class="ph ph--idle ph--run"><i></i><b>检索中</b><span>找到证据后，模型开始作答</span></div>`;
+  }
   $("#device-chips").innerHTML = "";
   const body = JSON.stringify({ question, model: state.model, lanes, net: state.net });
   const t0 = performance.now();
@@ -577,7 +557,9 @@ function handle(ev, question) {
       const note = L.llm?.replay ? "完成 · 回放" : L.llm?.fallback ? "完成 · 摘录" : "完成";
       pill(id, note, "ok");
       L.el.classList.remove("running");
-      L.el.classList.add("done");
+      L.el.classList.add("done", "flash");
+      setTimeout(() => L.el.classList.remove("flash"), 1200);
+      for (const o of $$(".metric output", L.el)) { o.classList.remove("pop"); void o.offsetWidth; o.classList.add("pop"); }
       if (id === "plain") L.flow.node("cloud", "alert", "已读取全部明文", "bad");
       break;
     }
@@ -858,7 +840,7 @@ async function poll() {
     if (first) initModels(s);
     bootOverlay(s);
     if (s.phase !== "ready") { setTimeout(poll, s.phase === "error" ? 5000 : 800); return; }
-    if (!state.loadedSide) { state.loadedSide = true; loadPlainTicker(); }
+    if (!state.loadedSide) { state.loadedSide = true; loadPlainTicker(); loadCipherTicker(); setInterval(scrambleCipher, 110); }
     setTimeout(poll, 20000); // heartbeat: a tab left open for days reconnects after a server restart
   } catch (e) {
     const st = $("#status");
@@ -899,6 +881,29 @@ function initModels(s) {
   state.model = s.defaultModel && s.models.some((m) => m.id === s.defaultModel) ? s.defaultModel : s.models?.[0]?.id;
   sel.value = state.model;
   for (const L of Object.values(state.lanes)) $("[data-model]", L.el).textContent = modelLabel();
+}
+async function loadCipherTicker() {
+  try {
+    const r = await fetch("/api/cloudview?kind=hpis&limit=6").then((x) => x.json());
+    state.cipherTicker = "HPIS 中的真实存储：" + r.rows.map((x) => `AID ${x.aid.slice(0, 10)} · 正文 ${x.body.slice(0, 40)} · 令牌 ${(x.tags[0] || "").slice(0, 24)}`).join("　｜　");
+    if (!state.running) setTicker("v2");
+  } catch {}
+}
+// Hex in the encrypted lane's ticker keeps changing, like ciphertext under a new key.
+function scrambleCipher() {
+  const L = lane("v2");
+  if (!L || document.hidden) return;
+  const tr = $("[data-ticker]", L.el);
+  const text = tr.textContent;
+  if (tr._src !== text) {
+    tr._hex = [];
+    for (const m of text.matchAll(/[0-9a-f]{8,}/g)) for (let i = 0; i < m[0].length; i++) tr._hex.push(m.index + i);
+  }
+  if (!tr._hex.length) { tr._src = text; return; }
+  const chars = [...text];
+  for (let k = 0; k < 8; k++) chars[tr._hex[(Math.random() * tr._hex.length) | 0]] = "0123456789abcdef"[(Math.random() * 16) | 0];
+  tr.textContent = chars.join("");
+  tr._src = tr.textContent;
 }
 async function loadPlainTicker() {
   try {

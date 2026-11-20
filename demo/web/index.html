@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>面向个人敏感数据的智能问答</title>
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/styles.css?v=9">
+<link rel="stylesheet" href="/styles.css?v=11">
 </head>
 <body>
-<canvas id="ambient" aria-hidden="true"></canvas>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 
 <!-- ============================== Cover ============================== -->
 <section id="cover" class="cover" aria-label="开场">
+  <div class="aurora aurora--cover" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <div class="cover__inner">
     <div class="cover__kicker"><span class="dot"></span>面向个人敏感数据的智能问答</div>
-    <h1 class="cover__title">让云端大模型<br><span class="grad">读懂</span>你的私有数据<br>却<span class="grad grad--alt">看不见</span>它</h1>
+    <h1 class="cover__title"><span class="ln">让云端大模型</span><span class="ln"><span class="grad">读懂</span>你的私有数据</span><span class="ln">却<span class="grad grad--alt">看不见</span>它</span></h1>
     <p class="cover__sub"><b>端侧 + HPIC + HPIS</b> 在密文上直接检索，只为大模型取回真正需要的那几封邮件；<b>端侧直传普通云</b>则要把整个邮箱交给云端。</p>
     <div class="cover__stats">
       <div class="stat"><b data-cover="emails">100,000</b><span>封真实规模邮件，全程密文存储</span></div>
@@ -24,7 +25,9 @@
     <button class="btn btn--primary btn--xl" id="enter">进入现场演示 <svg class="i"><use href="/assets/icons.svg#arrow-right"/></svg></button>
   </div>
   <div class="cover__visual" aria-hidden="true">
-    <div class="orb"><div class="orb__ring r1"></div><div class="orb__ring r2"></div><div class="orb__ring r3"></div>
+    <div class="orb"><span class="orb__pulse"></span><span class="orb__pulse p2"></span>
+      <div class="orb__ring r1"></div><div class="orb__ring r2"></div><div class="orb__ring r3"></div>
+      <div class="orb__halo"></div><div class="orb__sat s1"></div><div class="orb__sat s2"></div><div class="orb__sat s3"></div>
       <span class="orb__chip c1">AES-256-GCM 密文存储</span>
       <span class="orb__chip c2">HMAC 检索令牌</span>
       <span class="orb__chip c3">可信执行环境 TEE</span>
@@ -173,6 +176,6 @@
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=7"></script>
+<script type="module" src="/app.js?v=11"></script>
 </body>
 </html>
