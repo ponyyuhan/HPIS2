@@ -82,6 +82,7 @@ async def startup(app):
             await engine.warmup()
             state["engine"] = engine
             state["phase"] = "ready"
+            state["warm"] = asyncio.create_task(warm_models())
             state["keepalive"] = asyncio.create_task(keepalive(state))
         except Exception as exc:
             state["phase"] = "error"
@@ -92,13 +93,28 @@ async def startup(app):
 
 
 TICKET_RENEW_SECONDS = 6 * 3600
+MODEL_WARM_SECONDS = 600
+
+
+async def warm_models():
+    """Ollama unloads a model after keep_alive without requests; load both answer
+    models now and every few minutes so a question never waits for a model load."""
+    from . import llm
+
+    try:
+        for result in await llm.warm_all():
+            if not result.get("ok"):
+                print(f"model warm-up: {result.get('profile')}: {result.get('message')}", flush=True)
+    except Exception:
+        traceback.print_exc()
 
 
 async def keepalive(state):
     """Long-running deployments: renew the one-day anonymous tickets and watch the workers."""
     from hpis.provision import renew
 
-    last_renew = time.monotonic()
+    last_renew = last_warm = time.monotonic()
+    warming = None
     while True:
         await asyncio.sleep(5)
         cluster, engine = state.get("cluster"), state.get("engine")
@@ -110,6 +126,9 @@ async def keepalive(state):
             # systemd (or the restart loop) brings the whole demo back cleanly.
             print(f"worker exited with {dead[0].returncode}; restarting demo", flush=True)
             os._exit(3)
+        if time.monotonic() - last_warm >= MODEL_WARM_SECONDS and (warming is None or warming.done()):
+            warming = asyncio.create_task(warm_models())
+            last_warm = time.monotonic()
         if time.monotonic() - last_renew >= TICKET_RENEW_SECONDS:
             try:
                 for name in cluster.deployments:

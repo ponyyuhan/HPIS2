@@ -1,5 +1,7 @@
 # 在 H200 上部署演示问答模型（Qwen 27B / Gemma 4）
 
+> H200 上已经用 Ollama 运行这两个模型时，按仓库根目录的 [`H200部署步骤.md`](../../../H200部署步骤.md) 操作即可，不需要本页。本页介绍另一种方式：用 vLLM 加载原始权重。
+
 演示程序通过 OpenAI 兼容接口 `/v1/chat/completions` 流式获取回答，代码在 `demo/llm.py`。没有配置 H200 时默认走 OpenRouter。H200 上用 vLLM 提供同样的接口，演示电脑经 SSH 隧道访问。实测结果见 [VERIFIED.md](VERIFIED.md)。
 
 | 演示档位 | 默认权重 | 许可与下载 | BF16 权重 | API 模型名 | H200 端口 |

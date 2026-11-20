@@ -8,6 +8,8 @@ A local aiohttp server plays vLLM / OpenRouter, including their SSE quirks.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import json
 import sys
 import unittest
@@ -397,6 +399,27 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(llm.LLMConfigError):
             llm.resolve_endpoint("qwen", env={"HPIS_LLM_QWEN_EXTRA_BODY": "[1]"})
 
+    def test_ollama_backend(self) -> None:
+        env = {"HPIS_LLM_BACKEND": "ollama", "OPENROUTER_API_KEY": "k"}
+        qwen, gemma = llm.resolve_endpoint("qwen", env=env), llm.resolve_endpoint("gemma", env=env)
+        self.assertEqual(qwen.native_url("api/chat"), "http://127.0.0.1:11434/api/chat")
+        self.assertEqual((qwen.model, gemma.model), ("qwen3.6:27b", "gemma4:31b"))
+        self.assertEqual((qwen.label, gemma.label), ("Qwen3.6-27B", "Gemma 4 31B"))
+        self.assertEqual(qwen.body, {"think": False, "keep_alive": "30m"})
+        self.assertIsNone(qwen.api_key)
+        own = llm.resolve_endpoint("qwen", env={
+            **env, "HPIS_LLM_OLLAMA_URL": "http://127.0.0.1:11435/v1", "HPIS_LLM_QWEN_MODEL": "qwen3.5:27b-q8_0",
+            "HPIS_LLM_OLLAMA_KEEP_ALIVE": "-1", "HPIS_LLM_OLLAMA_NUM_CTX": "16384",
+        })
+        self.assertEqual(own.native_url("/api/tags"), "http://127.0.0.1:11435/api/tags")
+        self.assertEqual(own.label, "Qwen3.5-27B")
+        self.assertEqual(own.body, {"think": False, "keep_alive": -1, "options": {"num_ctx": 16384}})
+        payload = llm.build_ollama_payload(own, [], max_tokens=9, temperature=0.2)
+        self.assertEqual(payload["options"], {"temperature": 0.2, "num_predict": 9, "num_ctx": 16384})
+        self.assertEqual(llm._ollama_label("hf.co/x/Qwen3.6-27B-GGUF:Q4_K_M"), "hf.co/x/Qwen3.6-27B-GGUF:Q4_K_M")
+        with self.assertRaises(llm.LLMConfigError):
+            llm.resolve_endpoint("qwen", env={**env, "HPIS_LLM_OLLAMA_NUM_CTX": "16k"})
+
     def test_describe_profiles_has_no_secrets(self) -> None:
         rows = llm.describe_profiles(env={"OPENROUTER_API_KEY": "secret", "HPIS_LLM_QWEN_MODEL": "qwen/qwen3.8-27b"})
         self.assertEqual([r["id"] for r in rows], ["qwen", "gemma"])
@@ -506,6 +529,146 @@ class PromptTests(unittest.TestCase):
         report = prompts.citation_report("见[2][9]", self.evidence)
         self.assertEqual(report, {"cited": [2, 9], "invalid": [9], "uncited": [1], "ok": False})
         self.assertTrue(prompts.citation_report("见[1][2]", [1, 2])["ok"])
+
+
+class FakeOllama:
+    """Ollama's native API as the demo uses it: /api/chat (NDJSON), /api/tags, /api/version.
+
+    Like Ollama: a thinking model thinks unless the request says ``think: false``;
+    each model answers ``parallel`` requests at once (OLLAMA_NUM_PARALLEL, default 1);
+    a prompt longer than ``context`` characters loses its beginning.
+    """
+
+    MODELS = ("qwen3.6:27b", "gemma4:31b")
+
+    def __init__(self, parallel: int = 1, context: int = 100_000, refuse_think: tuple[str, ...] = ()) -> None:
+        self.parallel, self.context, self.refuse_think = parallel, context, refuse_think
+        self.requests: list[dict] = []
+        self.slots: dict[str, asyncio.Semaphore] = {}
+
+    async def start(self) -> str:
+        app = web.Application()
+        app.router.add_post("/api/chat", self.chat)
+        app.router.add_get("/api/tags", self.tags)
+        app.router.add_get("/api/version", self.version)
+        self.runner = web.AppRunner(app)
+        await self.runner.setup()
+        site = web.TCPSite(self.runner, "127.0.0.1", 0)
+        await site.start()
+        return f"http://127.0.0.1:{self.runner.addresses[0][1]}"
+
+    async def stop(self) -> None:
+        await self.runner.cleanup()
+
+    async def tags(self, request: web.Request) -> web.Response:
+        return web.json_response({"models": [{"name": m, "model": m} for m in self.MODELS]})
+
+    async def version(self, request: web.Request) -> web.Response:
+        return web.json_response({"version": "0.40.16"})
+
+    async def chat(self, request: web.Request) -> web.StreamResponse:
+        body = await request.json()
+        self.requests.append(body)
+        model = body["model"]
+        if model not in self.MODELS:
+            return web.json_response({"error": f"model '{model}' not found"}, status=404)
+        if "think" in body and model in self.refuse_think:
+            return web.json_response({"error": f'"{model}" does not support thinking'}, status=400)
+        if not body.get("messages"):  # load request
+            return web.json_response({"model": model, "message": {"role": "assistant", "content": ""}, "done": True})
+        async with self.slots.setdefault(model, asyncio.Semaphore(self.parallel)):
+            resp = web.StreamResponse(headers={"Content-Type": "application/x-ndjson"})
+            await resp.prepare(request)
+
+            async def send(obj: dict) -> None:
+                await resp.write(json.dumps(obj, ensure_ascii=False).encode() + b"\n")
+
+            text = "".join(m["content"] for m in body["messages"])[-self.context :]
+            if body.get("think", True):
+                await send({"model": model, "message": {"role": "assistant", "content": "", "thinking": "先看证据。"}})
+            if "西湖" in text:
+                pieces, delay = ["西湖"] * 30, 0.05
+            elif "12 月 15 日" in text:
+                pieces, delay = ["天枢项目", "最后定在", "12月15日", "[1]", "。"], 0.005
+            else:
+                pieces, delay = ["证据里", "没有这件事。"], 0.005
+            for piece in pieces:
+                await asyncio.sleep(delay)
+                await send({"model": model, "message": {"role": "assistant", "content": piece}, "done": False})
+            await send(
+                {"model": model, "message": {"role": "assistant", "content": ""}, "done": True,
+                 "done_reason": "stop", "prompt_eval_count": 120, "eval_count": len(pieces)}
+            )
+            await resp.write_eof()
+            return resp
+
+
+class OllamaTests(unittest.IsolatedAsyncioTestCase):
+    async def serve(self, **kwargs) -> dict[str, str]:
+        self.server = FakeOllama(**kwargs)
+        url = await self.server.start()
+        self.addAsyncCleanup(self.server.stop)
+        return {"HPIS_LLM_BACKEND": "ollama", "HPIS_LLM_OLLAMA_URL": url}
+
+    async def collect(self, profile: str, env: dict[str, str]) -> list[dict]:
+        messages = [{"role": "user", "content": "天枢项目最后定的交付日期？证据：12 月 15 日"}]
+        return [e async for e in llm.stream_answer(profile, messages, max_tokens=64, env=env)]
+
+    async def test_stream_turns_thinking_off_and_keeps_the_model_loaded(self) -> None:
+        env = await self.serve()
+        events = await self.collect("qwen", env)
+        self.assertEqual("".join(e["text"] for e in events if e["type"] == "token"), "天枢项目最后定在12月15日[1]。")
+        done = events[-1]
+        self.assertEqual(done["type"], "done")
+        self.assertEqual((done["output_tokens"], done["input_tokens"], done["reasoning_chars"]), (5, 120, 0))
+        self.assertEqual(done["provider"], "Ollama")
+        sent = self.server.requests[0]
+        self.assertIs(sent["think"], False)
+        self.assertEqual(sent["keep_alive"], "30m")
+        self.assertEqual(sent["options"]["num_predict"], 64)
+        self.assertNotIn("num_ctx", sent["options"])  # a shared model must not be reloaded
+
+    async def test_retries_without_think_when_the_model_has_no_thinking_mode(self) -> None:
+        env = await self.serve(refuse_think=("gemma4:31b",))
+        events = await self.collect("gemma", env)
+        self.assertEqual(events[-1]["type"], "done")
+        self.assertEqual([("think" in r) for r in self.server.requests], [True, False])
+
+    async def test_unknown_model_is_an_http_error(self) -> None:
+        env = await self.serve()
+        events = await self.collect("qwen", {**env, "HPIS_LLM_QWEN_MODEL": "qwen9:1b"})
+        self.assertEqual((events[-1]["type"], events[-1]["status"]), ("error", 404))
+        self.assertIn("not found", events[-1]["message"])
+
+    async def test_warm_loads_without_generating(self) -> None:
+        env = await self.serve()
+        result = await llm.warm("gemma", env={**env, "HPIS_LLM_OLLAMA_NUM_CTX": "16384"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.server.requests[-1], {
+            "model": "gemma4:31b", "messages": [], "stream": False, "keep_alive": "30m", "options": {"num_ctx": 16384},
+        })
+        self.assertTrue((await llm.probe("qwen", env=env))["ok"])
+        self.assertTrue((await llm.warm("qwen", env={"HPIS_LLM_BACKEND": "h200"}))["skipped"])
+
+    async def run_check(self, env: dict[str, str]) -> tuple[int, str]:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = await llm.check(["qwen"], env=env)
+        return code, out.getvalue()
+
+    async def test_check_passes_on_a_parallel_server(self) -> None:
+        code, report = await self.run_check(await self.serve(parallel=2))
+        self.assertEqual(code, 0, report)
+        self.assertIn("并行     通过", report)
+        self.assertIn("思考     已关闭", report)
+        self.assertTrue(report.rstrip().endswith("CHECK PASS"))
+
+    async def test_check_catches_queueing_and_a_short_context(self) -> None:
+        code, report = await self.run_check(await self.serve(parallel=1, context=4000))
+        self.assertEqual(code, 1, report)
+        self.assertIn("长提示词 不通过", report)
+        self.assertIn("并行     不通过", report)
+        self.assertIn("--ollama", report)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,22 @@
 """Streaming chat client for the demo's answer models (aiohttp, no OpenAI SDK).
 
-Two profiles, ``qwen`` and ``gemma``, talk to any OpenAI-compatible
-``/v1/chat/completions`` endpoint:
+Two profiles, ``qwen`` and ``gemma``, talk to one of:
 
 * OpenRouter by default (key from ``OPENROUTER_API_KEY``), for testing without
   the GPU server;
-* the user's H200 running vLLM (``demo/deploy/h200``), normally reached through
-  an SSH tunnel on 127.0.0.1:18081 (Qwen) and 127.0.0.1:18082 (Gemma).
+* vLLM on the H200 (``demo/deploy/h200``) at 127.0.0.1:18081 (Qwen) and
+  127.0.0.1:18082 (Gemma), through ``/v1/chat/completions``;
+* Ollama (``HPIS_LLM_BACKEND=ollama``), through its native ``/api/chat``, the
+  one request format that switches thinking off on every Ollama since 0.9.
 
 Environment, with ``P`` = ``QWEN`` or ``GEMMA``:
 
-  HPIS_LLM_BACKEND       ``openrouter`` (default) or ``h200``: endpoint used for
-                         every profile that has no explicit BASE_URL
+  HPIS_LLM_BACKEND       ``openrouter`` (default), ``h200`` (vLLM) or ``ollama``:
+                         endpoint used for every profile that has no explicit BASE_URL
+  HPIS_LLM_OLLAMA_URL    Ollama server [http://127.0.0.1:11434]
+  HPIS_LLM_OLLAMA_KEEP_ALIVE   how long Ollama keeps a model loaded after a request [30m]
+  HPIS_LLM_OLLAMA_NUM_CTX      context length to request; only for an Ollama the demo
+                               owns, since a different value reloads a shared model
   HPIS_LLM_P_BASE_URL    e.g. http://127.0.0.1:18081/v1
   HPIS_LLM_P_MODEL       model id (OpenRouter) or vLLM ``--served-model-name``
   HPIS_LLM_P_API_KEY     bearer token; OpenRouter falls back to OPENROUTER_API_KEY
@@ -20,8 +25,8 @@ Environment, with ``P`` = ``QWEN`` or ``GEMMA``:
 
 Thinking is switched off in every request so the answer starts immediately:
 OpenRouter receives ``reasoning: {"effort": "none"}`` (plus throughput-first
-routing that skips fp4 hosts) and vLLM receives
-``chat_template_kwargs: {"enable_thinking": false}``.  A leading
+routing that skips fp4 hosts), vLLM receives
+``chat_template_kwargs: {"enable_thinking": false}`` and Ollama ``think: false``.  A leading
 ``<think>…</think>`` or Gemma ``<|channel>…<channel|>`` block that still reaches
 the content (server without a reasoning parser) is hidden and counted.
 
@@ -38,6 +43,7 @@ import contextlib
 import ipaddress
 import json
 import os
+import re
 import sys
 import time
 from collections.abc import AsyncIterator, Mapping
@@ -64,6 +70,8 @@ _OPENROUTER_BODY = {
     "provider": {"sort": "throughput", "quantizations": ["bf16", "fp16", "fp8", "unknown"]},
 }
 _VLLM_NO_THINK = {"chat_template_kwargs": {"enable_thinking": False}}
+_OLLAMA_NO_THINK = {"think": False}
+OLLAMA_URL = "http://127.0.0.1:11434"
 
 PROFILES: dict[str, dict[str, Any]] = {
     "qwen": {
@@ -71,16 +79,20 @@ PROFILES: dict[str, dict[str, Any]] = {
         "openrouter_model": "qwen/qwen3.6-27b",
         "h200_model": "hpis-qwen-27b",
         "h200_port": 18081,
+        "ollama_model": "qwen3.6:27b",
         "openrouter_body": _OPENROUTER_BODY,
         "h200_body": _VLLM_NO_THINK,
+        "ollama_body": _OLLAMA_NO_THINK,
     },
     "gemma": {
         "label": "Gemma 4 31B",
         "openrouter_model": "google/gemma-4-31b-it",
         "h200_model": "hpis-gemma-4",
         "h200_port": 18082,
+        "ollama_model": "gemma4:31b",
         "openrouter_body": _OPENROUTER_BODY,
         "h200_body": _VLLM_NO_THINK,
+        "ollama_body": _OLLAMA_NO_THINK,
     },
 }
 
@@ -114,11 +126,22 @@ class Endpoint:
     api_key: str | None = None
     body: Mapping[str, Any] = field(default_factory=dict)
     label: str = ""
+    kind: str = ""  # "openrouter", "h200" (vLLM) or "ollama"
 
     @property
     def is_openrouter(self) -> bool:
         host = urlsplit(self.base_url).hostname or ""
         return host == "openrouter.ai" or host.endswith(".openrouter.ai")
+
+    @property
+    def is_ollama(self) -> bool:
+        return self.kind == "ollama"
+
+    def native_url(self, path: str) -> str:
+        """Ollama's own API (``/api/...``) on the same server."""
+        parts = urlsplit(self.base_url)
+        root = parts.path.rstrip("/").removesuffix("/v1")
+        return urlunsplit((parts.scheme, parts.netloc, f"{root}/{path.lstrip('/')}", "", ""))
 
     @property
     def netloc(self) -> str:
@@ -142,7 +165,7 @@ class Endpoint:
             "id": self.profile,
             "label": self.label,
             "model": self.model,
-            "backend": "openrouter" if self.is_openrouter else "self-hosted",
+            "backend": "openrouter" if self.is_openrouter else ("ollama" if self.is_ollama else "self-hosted"),
             "endpoint": self.netloc,
             "configured": bool(self.api_key) or not self.is_openrouter,
         }
@@ -174,6 +197,32 @@ def _merge(base: Mapping[str, Any], extra: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _ollama_settings(env: Mapping[str, str]) -> dict[str, Any]:
+    keep: Any = env.get("HPIS_LLM_OLLAMA_KEEP_ALIVE", "").strip() or "30m"
+    if re.fullmatch(r"-?\d+", keep):
+        keep = int(keep)  # seconds; negative keeps the model loaded indefinitely
+    out: dict[str, Any] = {"keep_alive": keep}
+    ctx = env.get("HPIS_LLM_OLLAMA_NUM_CTX", "").strip()
+    if ctx:
+        if not ctx.isdigit():
+            raise LLMConfigError("HPIS_LLM_OLLAMA_NUM_CTX must be a whole number of tokens")
+        out["options"] = {"num_ctx": int(ctx)}
+    return out
+
+
+def _ollama_label(model: str) -> str:
+    """qwen3.6:27b -> Qwen3.6-27B, gemma4:31b -> Gemma 4 31B; anything else as is."""
+    last = model.rsplit("/", 1)[-1]
+    base, _, tag = last.partition(":")
+    family = re.fullmatch(r"(qwen|gemma)[-_]?(\d+(?:\.\d+)?)", base.lower())
+    if not family:
+        return model
+    size = re.match(r"(\d+(?:\.\d+)?)b(?![a-z])", tag.lower())
+    if family.group(1) == "qwen":
+        return f"Qwen{family.group(2)}" + (f"-{size.group(1)}B" if size else "")
+    return f"Gemma {family.group(2)}" + (f" {size.group(1)}B" if size else "")
+
+
 def resolve_endpoint(profile: str | Endpoint | Mapping[str, Any], env: Mapping[str, str] | None = None) -> Endpoint:
     """Turn a profile name (or an explicit dict / Endpoint) into an endpoint."""
     if isinstance(profile, Endpoint):
@@ -186,6 +235,7 @@ def resolve_endpoint(profile: str | Endpoint | Mapping[str, Any], env: Mapping[s
             raise LLMConfigError(f"endpoint dict lacks {', '.join(missing)}")
         name = str(spec.get("profile", "custom"))
         defaults: dict[str, Any] = PROFILES.get(name, {})
+        backend = str(spec.get("backend", "")).strip().lower()
     else:
         name = str(profile).strip().lower()
         if name not in PROFILES:
@@ -193,9 +243,11 @@ def resolve_endpoint(profile: str | Endpoint | Mapping[str, Any], env: Mapping[s
         defaults = PROFILES[name]
         prefix = f"HPIS_LLM_{name.upper()}_"
         backend = env.get("HPIS_LLM_BACKEND", "openrouter").strip().lower() or "openrouter"
-        if backend not in ("openrouter", "h200", "local", "vllm"):
-            raise LLMConfigError(f"HPIS_LLM_BACKEND must be openrouter or h200, not {backend!r}")
+        if backend not in ("openrouter", "h200", "local", "vllm", "ollama"):
+            raise LLMConfigError(f"HPIS_LLM_BACKEND must be openrouter, h200 or ollama, not {backend!r}")
         base = env.get(prefix + "BASE_URL", "").strip()
+        if not base and backend == "ollama":
+            base = env.get("HPIS_LLM_OLLAMA_URL", "").strip() or OLLAMA_URL
         if not base:
             base = OPENROUTER_BASE_URL if backend == "openrouter" else f"http://127.0.0.1:{defaults['h200_port']}/v1"
         spec = {
@@ -209,7 +261,7 @@ def resolve_endpoint(profile: str | Endpoint | Mapping[str, Any], env: Mapping[s
     if parts.scheme not in ("http", "https") or not parts.netloc or parts.query or parts.fragment:
         raise LLMConfigError(f"invalid base URL {spec['base_url']!r}")
     on_openrouter = Endpoint(name, spec["base_url"], "-").is_openrouter
-    kind = "openrouter" if on_openrouter else "h200"
+    kind = "openrouter" if on_openrouter else ("ollama" if backend == "ollama" else "h200")
     model = spec.get("model") or defaults.get(f"{kind}_model")
     if not model:
         raise LLMConfigError(f"no model configured for profile {name!r}")
@@ -217,8 +269,12 @@ def resolve_endpoint(profile: str | Endpoint | Mapping[str, Any], env: Mapping[s
     if not api_key and on_openrouter:
         api_key = env.get("OPENROUTER_API_KEY", "").strip() or None
     body = _merge(defaults.get(f"{kind}_body", {}), spec.get("body") or spec.get("extra_body") or {})
-    label = spec.get("label") or KNOWN_LABELS.get(model) or defaults.get("label") or model
-    return Endpoint(name, spec["base_url"], model, api_key, body, label)
+    if kind == "ollama":
+        body = _merge(_ollama_settings(env), body)
+        label = spec.get("label") or KNOWN_LABELS.get(model) or _ollama_label(model)
+    else:
+        label = spec.get("label") or KNOWN_LABELS.get(model) or defaults.get("label") or model
+    return Endpoint(name, spec["base_url"], model, api_key, body, label, kind)
 
 
 def describe_profiles(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
@@ -250,6 +306,26 @@ def build_payload(
     }
     if stream:
         payload["stream_options"] = {"include_usage": True}
+    payload = _merge(payload, endpoint.body)
+    return _merge(payload, extra_body or {})
+
+
+def build_ollama_payload(
+    endpoint: Endpoint,
+    messages: list[Mapping[str, Any]],
+    *,
+    max_tokens: int,
+    temperature: float,
+    stream: bool = True,
+    extra_body: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Body for Ollama's native POST /api/chat."""
+    payload: dict[str, Any] = {
+        "model": endpoint.model,
+        "messages": list(messages),
+        "stream": stream,
+        "options": {"temperature": float(temperature), "num_predict": int(max_tokens)},
+    }
     payload = _merge(payload, endpoint.body)
     return _merge(payload, extra_body or {})
 
@@ -643,6 +719,21 @@ async def stream_answer(
             "profile": ep.profile,
         }
         return
+    if ep.is_ollama:
+        stream = _stream_ollama(
+            ep,
+            messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
+            connect_timeout=connect_timeout,
+            session=session,
+            extra_body=extra_body,
+        )
+        async with contextlib.aclosing(stream):
+            async for event in stream:
+                yield event
+        return
     payload = build_payload(ep, messages, max_tokens=max_tokens, temperature=temperature, extra_body=extra_body)
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
     headers = {
@@ -726,6 +817,118 @@ async def stream_answer(
     yield run.done_event()
 
 
+def _ollama_line(run: _Run, line: bytes) -> list[dict[str, Any]]:
+    """One NDJSON object from /api/chat, fed to _Run as an OpenAI-style chunk."""
+    ok, obj = _try_json(line.decode("utf-8", errors="replace").strip() or "null")
+    if not ok or not isinstance(obj, Mapping):
+        return []
+    if obj.get("error"):
+        return run.handle(SSEEvent("message", "", {"error": {"message": str(obj["error"])}}))
+    message = obj.get("message") if isinstance(obj.get("message"), Mapping) else {}
+    done = bool(obj.get("done"))
+    chunk: dict[str, Any] = {
+        "model": obj.get("model"),
+        "choices": [
+            {
+                "delta": {"content": message.get("content") or "", "reasoning": message.get("thinking") or ""},
+                "finish_reason": (obj.get("done_reason") or "stop") if done else None,
+            }
+        ],
+    }
+    if done:
+        chunk["usage"] = {"prompt_tokens": obj.get("prompt_eval_count"), "completion_tokens": obj.get("eval_count")}
+        run.saw_done = True
+    return run.handle(SSEEvent("message", "", chunk))
+
+
+async def _stream_ollama(
+    ep: Endpoint,
+    messages: list[Mapping[str, Any]],
+    *,
+    max_tokens: int,
+    temperature: float,
+    timeout: float,
+    connect_timeout: float,
+    session: aiohttp.ClientSession | None,
+    extra_body: Mapping[str, Any] | None,
+) -> AsyncIterator[dict[str, Any]]:
+    """stream_answer for Ollama's native /api/chat (NDJSON, ``think: false``)."""
+    payload = build_ollama_payload(ep, messages, max_tokens=max_tokens, temperature=temperature, extra_body=extra_body)
+    headers = {"Content-Type": "application/json", "Accept": "application/x-ndjson", "Accept-Encoding": "identity"}
+    if ep.api_key:
+        headers["Authorization"] = f"Bearer {ep.api_key}"
+    own = session is None
+    if own:
+        session = aiohttp.ClientSession(trust_env=not _is_local_host(urlsplit(ep.base_url).hostname or ""))
+    client_timeout = aiohttp.ClientTimeout(total=timeout, sock_connect=min(connect_timeout, timeout))
+    t0 = time.perf_counter()
+    run = _Run(ep, 0, t0)
+    try:
+        for attempt in range(2):
+            body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+            run = _Run(ep, len(body), t0)
+            run.provider = "Ollama"
+            async with session.post(
+                ep.native_url("api/chat"), data=body, headers=headers, timeout=client_timeout, allow_redirects=False
+            ) as resp:
+                if resp.status != 200:
+                    raw = await resp.content.read(_MAX_ERROR_BODY)
+                    run.response_bytes += len(raw)
+                    text = raw.decode("utf-8", errors="replace")
+                    ok, obj = _try_json(text)
+                    message = _error_message(obj if ok else None, text[:300])
+                    if attempt == 0 and resp.status == 400 and "think" in payload and "thinking" in message.lower():
+                        # Some Ollama releases refuse ``think`` for models without a thinking mode.
+                        payload = {k: v for k, v in payload.items() if k != "think"}
+                        continue
+                    yield run.error_event("http", f"HTTP {resp.status}: {message}", status=resp.status)
+                    return
+                pending = b""
+                async for piece in resp.content.iter_any():
+                    run.response_bytes += len(piece)
+                    *lines, pending = (pending + piece).split(b"\n")
+                    for line in lines:
+                        for event in _ollama_line(run, line):
+                            yield event
+                        if run.error or run.saw_done:
+                            break
+                    if run.error or run.saw_done:
+                        break
+                if not (run.error or run.saw_done) and pending.strip():
+                    for event in _ollama_line(run, pending):
+                        yield event
+            break
+    except asyncio.TimeoutError as exc:
+        for event in run.finish():
+            yield event
+        stage = "connecting" if run.response_bytes == 0 else "streaming"
+        elapsed = time.perf_counter() - t0
+        yield run.error_event(
+            "timeout", f"timed out after {elapsed:.1f} s while {stage} ({type(exc).__name__}, limit {timeout:g} s)"
+        )
+        return
+    except aiohttp.ClientError as exc:
+        for event in run.finish():
+            yield event
+        yield run.error_event("connection", f"{type(exc).__name__}: {exc}")
+        return
+    finally:
+        if own:
+            await session.close()
+    for event in run.finish():
+        yield event
+    if run.error:
+        yield run.error_event(**run.error)
+        return
+    if not run.pieces:
+        detail = f"finish_reason={run.finish_reason}" if run.finish_reason else "stream ended"
+        if run.reasoning_chars:
+            detail += f", {run.reasoning_chars} reasoning chars and no answer"
+        yield run.error_event("empty", f"model returned no answer text ({detail})", finish_reason=run.finish_reason)
+        return
+    yield run.done_event()
+
+
 async def complete(
     profile: str | Endpoint | Mapping[str, Any],
     messages: list[Mapping[str, Any]],
@@ -762,11 +965,12 @@ async def probe(
         return {"ok": False, "profile": str(profile), "message": str(exc)}
     headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
     host = urlsplit(ep.base_url).hostname or ""
+    url = ep.native_url("api/tags") if ep.is_ollama else ep.url("models")
     t0 = time.perf_counter()
     try:
         async with (
             aiohttp.ClientSession(trust_env=not _is_local_host(host)) as session,
-            session.get(ep.url("models"), headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as resp,
+            session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as resp,
         ):
             raw = await resp.read()
     except (asyncio.TimeoutError, aiohttp.ClientError) as exc:
@@ -775,10 +979,13 @@ async def probe(
     ok, obj = _try_json(raw.decode("utf-8", errors="replace"))
     if resp.status != 200 or not ok:
         return {**ep.describe(), "ok": False, "latency_ms": latency, "message": f"HTTP {resp.status}"}
-    rows = obj.get("data") if isinstance(obj, Mapping) else None
+    rows = obj.get("models" if ep.is_ollama else "data") if isinstance(obj, Mapping) else None
     rows = rows if isinstance(rows, list) else []
-    ids = [str(r.get("id")) for r in rows if isinstance(r, Mapping)]
-    entry = next((r for r in rows if isinstance(r, Mapping) and r.get("id") == ep.model), None)
+    key = "name" if ep.is_ollama else "id"
+    ids = [str(r.get(key)) for r in rows if isinstance(r, Mapping)]
+    entry = next(
+        (r for r in rows if isinstance(r, Mapping) and _same_model(str(r.get(key)), ep.model, ep.is_ollama)), None
+    )
     return {
         **ep.describe(),
         "ok": entry is not None,
@@ -789,20 +996,258 @@ async def probe(
     }
 
 
+def _same_model(listed: str, wanted: str, ollama: bool) -> bool:
+    if not ollama:
+        return listed == wanted
+
+    def norm(name: str) -> str:
+        return name if ":" in name.rsplit("/", 1)[-1] else name + ":latest"
+
+    return norm(listed) == norm(wanted)
+
+
+async def warm(
+    profile: str | Endpoint | Mapping[str, Any],
+    *,
+    keep_alive: Any = None,
+    timeout: float = 300.0,
+    env: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Load an Ollama model, or keep it loaded, without generating anything.
+
+    Ollama unloads a model once it has been idle for keep_alive (5 minutes by
+    default), and the next question would then wait for the load.  Other
+    backends keep their model loaded; for them this is a no-op.
+    """
+    try:
+        ep = resolve_endpoint(profile, env)
+    except LLMConfigError as exc:
+        return {"ok": False, "profile": str(profile), "message": str(exc)}
+    if not ep.is_ollama:
+        return {"ok": True, "profile": ep.profile, "skipped": True}
+    body: dict[str, Any] = {"model": ep.model, "messages": [], "stream": False}
+    body["keep_alive"] = ep.body.get("keep_alive", "30m") if keep_alive is None else keep_alive
+    options = ep.body.get("options")
+    if isinstance(options, Mapping) and options.get("num_ctx"):
+        body["options"] = {"num_ctx": options["num_ctx"]}  # same as the chats, or Ollama reloads
+    headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
+    host = urlsplit(ep.base_url).hostname or ""
+    t0 = time.perf_counter()
+    try:
+        async with (
+            aiohttp.ClientSession(trust_env=not _is_local_host(host)) as session,
+            session.post(
+                ep.native_url("api/chat"), json=body, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as resp,
+        ):
+            raw = await resp.read()
+    except (asyncio.TimeoutError, aiohttp.ClientError) as exc:
+        return {"ok": False, "profile": ep.profile, "model": ep.model, "message": f"{type(exc).__name__}: {exc}"}
+    ms = round((time.perf_counter() - t0) * 1000, 1)
+    if resp.status != 200:
+        text = raw.decode("utf-8", errors="replace")
+        ok, obj = _try_json(text)
+        message = _error_message(obj if ok else None, text[:300])
+        return {"ok": False, "profile": ep.profile, "model": ep.model, "ms": ms, "message": f"HTTP {resp.status}: {message}"}
+    return {"ok": True, "profile": ep.profile, "model": ep.model, "ms": ms}
+
+
+async def warm_all(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
+    return [await warm(name, env=env) for name in PROFILES]
+
+
+# ------------------------------------------------------------------- check
+
+_CHECK_SYSTEM = "你是个人邮件问答助手。只依据给出的编号证据回答，每个事实后标注来源编号如[1]。不写推理过程，回答不超过60字。"
+_CHECK_NEEDLE = (
+    "[1] 日期：2026-11-17 18:05\n主题：天枢项目交付时间调整\n正文：\n"
+    "受 HUKS 接口联调影响，天枢项目 SDK 2.0 的交付时间由 12 月 8 日推迟到 12 月 15 日。"
+)
+_CHECK_FILLER = "本周完成了接口文档评审和联调环境部署，测试用例编写进度符合预期，下周继续推进性能测试和问题单闭环。"
+_CHECK_PARALLEL = [{"role": "user", "content": "请用大约200字介绍杭州西湖的历史和主要景点。"}]
+_CHECK_KEEP_ALIVE = "5m"  # the check must not pin models on a server the demo may end up not using
+_CHECK_LONG_TOKENS = 5800  # about the largest prompt the demo sends (prompts.MAX_CONTEXT_TOKENS)
+
+
+def _check_messages(long: bool = False) -> list[dict[str, str]]:
+    """The answer is in evidence [1], so a server that cuts a long prompt from the front fails."""
+    from .prompts import estimate_tokens
+
+    parts = [_CHECK_NEEDLE]
+    while long and estimate_tokens("\n\n".join(parts)) < _CHECK_LONG_TOKENS:
+        n = len(parts) + 1
+        parts.append(f"[{n}] 日期：2026-10-{n % 28 + 1:02d} 09:30\n主题：例会纪要（第{n}期）\n正文：\n" + _CHECK_FILLER * 6)
+    user = "证据：\n\n" + "\n\n".join(parts) + "\n\n问题：天枢项目 SDK 2.0 最后定的交付日期是哪天？"
+    return [{"role": "system", "content": _CHECK_SYSTEM}, {"role": "user", "content": user}]
+
+
+def _answer_ok(text: str) -> bool:
+    from .prompts import parse_citations
+
+    flat = "".join((text or "").split())
+    return any(s in flat for s in ("12月15", "12-15", "12/15")) and 1 in parse_citations(text)
+
+
+async def _timed(
+    ep: Endpoint,
+    messages: list[Mapping[str, Any]],
+    max_tokens: int,
+    *,
+    after: asyncio.Event | None = None,
+    started: asyncio.Event | None = None,
+):
+    """(sent, first token, end, final event) on the perf_counter clock.
+
+    ``after``: send only once this event is set; ``started``: set at the first token.
+    """
+    if after is not None:
+        await after.wait()
+    sent, first = time.perf_counter(), None
+    extra = {"keep_alive": _CHECK_KEEP_ALIVE} if ep.is_ollama else None
+    stream = stream_answer(ep, messages, max_tokens=max_tokens, timeout=300.0, extra_body=extra)
+    async with contextlib.aclosing(stream):
+        async for event in stream:
+            if event["type"] == "token" and first is None:
+                first = time.perf_counter()
+                if started is not None:
+                    started.set()
+            elif event["type"] in ("done", "error"):
+                if started is not None:
+                    started.set()  # never leave the second request waiting
+                return sent, first, time.perf_counter(), event
+    return sent, first, time.perf_counter(), {"type": "error", "message": "stream ended without a result"}
+
+
+async def _ollama_version(ep: Endpoint) -> str | None:
+    host = urlsplit(ep.base_url).hostname or ""
+    try:
+        async with (
+            aiohttp.ClientSession(trust_env=not _is_local_host(host)) as session,
+            session.get(ep.native_url("api/version"), timeout=aiohttp.ClientTimeout(total=5)) as resp,
+        ):
+            obj = await resp.json(content_type=None)
+        return str(obj.get("version")) if isinstance(obj, Mapping) and obj.get("version") else None
+    except (asyncio.TimeoutError, aiohttp.ClientError, ValueError):
+        return None
+
+
+def _short(text: str, n: int = 40) -> str:
+    flat = " ".join((text or "").split())
+    return flat if len(flat) <= n else flat[: n - 1] + "…"
+
+
+async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None = None) -> int:
+    """What the live demo needs from each model server; prints a report, returns an exit code.
+
+    1. a correct, cited answer with thinking off;
+    2. no truncation of a prompt as long as the demo's largest;
+    3. two requests answered at the same time: both lanes ask the same model at
+       once, and if the second waited for the first, the plaintext lane's first
+       token would be late for a reason that has nothing to do with HPIS.
+    """
+    failures: set[str] = set()
+    for name in profiles or list(PROFILES):
+        try:
+            ep = resolve_endpoint(name, env)
+        except LLMConfigError as exc:
+            print(f"[{name}] 配置错误：{exc}")
+            failures.add("config")
+            continue
+        server = "Ollama" if ep.is_ollama else ("OpenRouter" if ep.is_openrouter else "vLLM")
+        version = await _ollama_version(ep) if ep.is_ollama else None
+        print(f"[{name}] {ep.model} · {server}{' ' + version if version else ''} @ {ep.netloc} · 页面显示为 {ep.label}")
+        if ep.is_ollama:
+            loaded = await warm(ep, keep_alive=_CHECK_KEEP_ALIVE)
+            if not loaded["ok"]:
+                print(f"  加载     失败：{loaded['message']}")
+                failures.add("load")
+                continue
+            print(f"  加载     {loaded['ms'] / 1000:.1f} s")
+
+        _, _, _, event = await _timed(ep, _check_messages(), 160)
+        if event["type"] != "done":
+            print(f"  回答     失败：{event.get('message')}")
+            failures.add("answer")
+            continue
+        speed = f" · {event['tokens_per_s']:.0f} tok/s" if event.get("tokens_per_s") else ""
+        verdict = "通过" if _answer_ok(event["text"]) else "不通过"
+        print(f"  回答     {verdict} · 首字 {event['ttft_ms'] / 1000:.2f} s{speed} · 「{_short(event['text'])}」")
+        if verdict != "通过":
+            failures.add("answer")
+        if event.get("reasoning_chars"):
+            print(f"  思考     未关闭：先输出了 {event['reasoning_chars']} 字思考内容，首字会变慢")
+            failures.add("thinking")
+        else:
+            print("  思考     已关闭")
+
+        _, _, _, event = await _timed(ep, _check_messages(long=True), 160)
+        if event["type"] == "done" and _answer_ok(event["text"]):
+            print(f"  长提示词 通过（约 {_CHECK_LONG_TOKENS} token，首字 {event['ttft_ms'] / 1000:.2f} s）")
+        else:
+            detail = event.get("message") if event["type"] != "done" else f"「{_short(event['text'])}」"
+            print(f"  长提示词 不通过：开头的证据丢了，上下文可能太短（{detail}）")
+            failures.add("context")
+
+        # The second request goes out as soon as the first starts answering, like the
+        # plaintext lane asking while the HPIS lane's answer is still streaming.
+        a_started = asyncio.Event()
+        (_, a_first, a_end, a_ev), (b_sent, b_first, _, b_ev) = await asyncio.gather(
+            _timed(ep, _CHECK_PARALLEL, 220, started=a_started),
+            _timed(ep, _CHECK_PARALLEL, 220, after=a_started),
+        )
+        if a_ev["type"] != "done" or b_ev["type"] != "done" or a_first is None or b_first is None:
+            bad = a_ev if a_ev["type"] != "done" else b_ev
+            print(f"  并行     失败：{bad.get('message')}")
+            failures.add("parallel")
+        elif a_end - b_sent < 0.3:
+            print("  并行     无法判断：第一个回答太短，第二个请求发出时它已经结束")
+        elif b_first < a_end - 0.1:
+            print(f"  并行     通过：两个请求同时生成（第二个 {b_first - b_sent:.2f} s 出首字）")
+        else:
+            print(f"  并行     不通过：第二个请求等第一个生成完才开始（多等了 {b_first - b_sent:.1f} s）")
+            failures.add("parallel")
+
+    if not failures:
+        print("CHECK PASS")
+        return 0
+    print("CHECK FAIL")
+    hints = {
+        "parallel": "两条通道会排队：这个服务每个模型一次只处理一个请求（Ollama 默认 OLLAMA_NUM_PARALLEL=1），"
+        "明文通道的首字时间会被拉长，对比就不公平了。不要改动或重启它，"
+        "按 H200部署步骤.md 第 4 步用 --ollama 为演示单独起一个 Ollama。",
+        "context": "上下文太短，长邮件会被截断。--ollama 起的演示专用 Ollama 固定使用 16k 上下文。",
+        "thinking": "模型没有关闭思考。Ollama 需要 0.9 或更新版本（ollama --version）。",
+        "load": "模型加载失败：核对 HPIS_LLM_QWEN_MODEL / HPIS_LLM_GEMMA_MODEL 与 ollama list 的 NAME 是否一致。",
+    }
+    for key in ("load", "thinking", "context", "parallel"):
+        if key in failures:
+            print("提示：" + hints[key])
+    return 1
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m demo.llm", description="Stream one answer to stdout.")
     parser.add_argument("prompt", nargs="?", default="用一句话介绍你自己。")
-    parser.add_argument("-p", "--profile", default="qwen", choices=sorted(PROFILES))
+    parser.add_argument("-p", "--profile", choices=sorted(PROFILES), help="default: qwen (with --check: both)")
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--probe", action="store_true", help="only call GET /models")
+    parser.add_argument("--check", action="store_true", help="check what the live demo needs from the model servers")
+    parser.add_argument("--warm", action="store_true", help="load the Ollama models now")
     args = parser.parse_args(argv)
+    profile = args.profile or "qwen"
 
     async def run() -> int:
+        if args.check:
+            return await check([args.profile] if args.profile else None)
+        if args.warm:
+            results = await warm_all()
+            print(json.dumps(results, ensure_ascii=False, indent=2))
+            return 0 if all(r.get("ok") for r in results) else 1
         if args.probe:
-            print(json.dumps(await probe(args.profile), ensure_ascii=False, indent=2))
+            print(json.dumps(await probe(profile), ensure_ascii=False, indent=2))
             return 0
         messages = [{"role": "user", "content": args.prompt}]
-        async for event in stream_answer(args.profile, messages, max_tokens=args.max_tokens):
+        async for event in stream_answer(profile, messages, max_tokens=args.max_tokens):
             if event["type"] == "token":
                 print(event["text"], end="", flush=True)
             else:
