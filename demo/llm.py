@@ -17,6 +17,8 @@ Environment, with ``P`` = ``QWEN`` or ``GEMMA``:
   HPIS_LLM_OLLAMA_KEEP_ALIVE   how long Ollama keeps a model loaded after a request [30m]
   HPIS_LLM_OLLAMA_NUM_CTX      context length to request; only for an Ollama the demo
                                owns, since a different value reloads a shared model
+  HPIS_LLM_PLAIN_<X>     overrides HPIS_LLM_<X> for the plaintext-cloud lane only, so
+                         each lane can have its own model server (lane_env)
   HPIS_LLM_P_BASE_URL    e.g. http://127.0.0.1:18081/v1
   HPIS_LLM_P_MODEL       model id (OpenRouter) or vLLM ``--served-model-name``
   HPIS_LLM_P_API_KEY     bearer token; OpenRouter falls back to OPENROUTER_API_KEY
@@ -1053,8 +1055,56 @@ async def warm(
     return {"ok": True, "profile": ep.profile, "model": ep.model, "ms": ms}
 
 
+def lane_env(lane: str, env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The settings a lane's model client sees.
+
+    For the plaintext-cloud lane every HPIS_LLM_PLAIN_<X> replaces HPIS_LLM_<X>,
+    so the two lanes can be served by two model servers.  This mirrors the real
+    deployment (the plain cloud and HPIC each run their own model service), and
+    it is the only way to answer both lanes at once with a model that a server
+    can only serve one request at a time (Ollama and Qwen 3.5-family models).
+    """
+    out = dict(os.environ if env is None else env)
+    if lane == "plain":
+        for key, value in list(out.items()):
+            if key.startswith("HPIS_LLM_PLAIN_") and value:
+                out["HPIS_LLM_" + key.removeprefix("HPIS_LLM_PLAIN_")] = value
+    return out
+
+
+def _lane_endpoints(name: str, env: Mapping[str, str] | None = None) -> list[tuple[str, Endpoint]]:
+    """[(lane title, endpoint)]: one entry when both lanes share a server, else two."""
+    hpis = resolve_endpoint(name, os.environ if env is None else env)
+    plain = resolve_endpoint(name, lane_env("plain", env))
+    if (plain.base_url, plain.model) == (hpis.base_url, hpis.model):
+        return [("", hpis)]
+    return [("HPIS 2.0 通道", hpis), ("明文通道", plain)]
+
+
 async def warm_all(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
-    return [await warm(name, env=env) for name in PROFILES]
+    out = []
+    for name in PROFILES:
+        try:
+            lanes = _lane_endpoints(name, env)
+        except LLMConfigError as exc:
+            out.append({"ok": False, "profile": name, "message": str(exc)})
+            continue
+        for _, ep in lanes:
+            out.append(await warm(ep))
+    return out
+
+
+async def models_dir(env: Mapping[str, str] | None = None) -> str | None:
+    """A running Ollama's model folder that this account can read and that holds
+    both configured models (install_services.sh --ollama serves it a second time)."""
+    settings = {**(os.environ if env is None else env), "HPIS_LLM_BACKEND": "ollama"}
+    wanted = [resolve_endpoint(name, settings).model for name in PROFILES]
+    for server in await find_ollama(settings):
+        if server.get("readable") and server.get("models_dir") and all(
+            any(_same_model(m, w, True) for m in server["models"]) for w in wanted
+        ):
+            return server["models_dir"]
+    return None
 
 
 # ------------------------------------------------------------- find Ollama
@@ -1174,8 +1224,9 @@ async def find_ollama(env: Mapping[str, str] | None = None, *, proc: Path = Path
                 return None
             async with session.get(base + "/api/tags", timeout=slow) as resp:
                 tags = await resp.json(content_type=None)
-            rows = tags.get("models") if isinstance(tags, Mapping) else None
-            models = [str(r.get("name")) for r in rows or [] if isinstance(r, Mapping)]
+            rows = [r for r in (tags.get("models") if isinstance(tags, Mapping) else None) or [] if isinstance(r, Mapping)]
+            models = [str(r.get("name")) for r in rows]
+            sizes = {str(r.get("name")): int(r.get("size") or 0) for r in rows}
             folder = None
             if models:
                 ask = {"model": models[0], "name": models[0]}
@@ -1193,6 +1244,7 @@ async def find_ollama(env: Mapping[str, str] | None = None, *, proc: Path = Path
             "version": str(info["version"]),
             "owner": _owner(uid),
             "models": models,
+            "sizes": sizes,
             "models_dir": folder,
             "readable": readable,
         }
@@ -1213,7 +1265,9 @@ def describe_ollama(servers: list[dict[str, Any]]) -> list[str]:
     lines = ["本机的 Ollama："]
     for s in servers:
         owner = f" · 账号 {s['owner']}" if s.get("owner") else ""
-        models = "、".join(s["models"]) if s["models"] else "没有模型"
+        sizes = s.get("sizes") or {}
+        models = "、".join(f"{m}（{sizes[m] / 1e9:.0f} GB）" if sizes.get(m) else m for m in s["models"])
+        models = models or "没有模型"
         lines.append(f"  {s['url']} · Ollama {s['version']}{owner} · {models}")
         if s.get("models_dir"):
             access = "你的账号可以读取" if s.get("readable") else "你的账号无权读取"
@@ -1301,73 +1355,85 @@ def _short(text: str, n: int = 40) -> str:
     return flat if len(flat) <= n else flat[: n - 1] + "…"
 
 
-async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None = None) -> int:
-    """What the live demo needs from each model server; prints a report, returns an exit code.
+async def _check_server(ep: Endpoint, title: str, failures: set[str], found: dict[str, Any]) -> bool:
+    """Load, answer, thinking and long-prompt checks for one model server; False if unusable."""
+    server = "Ollama" if ep.is_ollama else ("OpenRouter" if ep.is_openrouter else "vLLM")
+    version = await _ollama_version(ep) if ep.is_ollama else None
+    print(f"  {title + ' ' if title else ''}{server}{' ' + version if version else ''} @ {ep.netloc}")
+    if ep.is_ollama:
+        loaded = await warm(ep, keep_alive=_CHECK_KEEP_ALIVE)
+        if not loaded["ok"]:
+            print(f"  加载     失败：{loaded['message']}")
+            failures.add("load")
+            if "not found" in str(loaded.get("message")):
+                if "servers" not in found:
+                    found["servers"] = await find_ollama()
+                for s in found["servers"]:
+                    if any(_same_model(m, ep.model, True) for m in s["models"]):
+                        owner = f"（账号 {s['owner']} 的 Ollama）" if s.get("owner") else ""
+                        print(f"           这个模型在 {s['url']}{owner} 上，改用它：")
+                        print(f"           export HPIS_LLM_OLLAMA_URL='{s['url']}'")
+            return False
+        print(f"  加载     {loaded['ms'] / 1000:.1f} s")
 
+    _, _, _, event = await _timed(ep, _check_messages(), 160)
+    if event["type"] != "done":
+        print(f"  回答     失败：{event.get('message')}")
+        failures.add("answer")
+        return False
+    speed = f" · {event['tokens_per_s']:.0f} tok/s" if event.get("tokens_per_s") else ""
+    verdict = "通过" if _answer_ok(event["text"]) else "不通过"
+    print(f"  回答     {verdict} · 首字 {event['ttft_ms'] / 1000:.2f} s{speed} · 「{_short(event['text'])}」")
+    if verdict != "通过":
+        failures.add("answer")
+    if event.get("reasoning_chars"):
+        print(f"  思考     未关闭：先输出了 {event['reasoning_chars']} 字思考内容，首字会变慢")
+        failures.add("thinking")
+    else:
+        print("  思考     已关闭")
+
+    _, _, _, event = await _timed(ep, _check_messages(long=True), 160)
+    if event["type"] == "done" and _answer_ok(event["text"]):
+        print(f"  长提示词 通过（约 {_CHECK_LONG_TOKENS} token，首字 {event['ttft_ms'] / 1000:.2f} s）")
+    else:
+        detail = event.get("message") if event["type"] != "done" else f"「{_short(event['text'])}」"
+        print(f"  长提示词 不通过：开头的证据丢了，上下文可能太短（{detail}）")
+        failures.add("context")
+    return True
+
+
+async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None = None) -> int:
+    """What the live demo needs from the model servers; prints a report, returns an exit code.
+
+    For each model and each lane's server (one server, or two with HPIS_LLM_PLAIN_*):
     1. a correct, cited answer with thinking off;
     2. no truncation of a prompt as long as the demo's largest;
-    3. two requests answered at the same time: both lanes ask the same model at
-       once, and if the second waited for the first, the plaintext lane's first
-       token would be late for a reason that has nothing to do with HPIS.
+    3. both lanes answered at the same time: the lanes ask at once, and if the
+       plaintext lane waited for the HPIS lane's answer, its first token would be
+       late for a reason that has nothing to do with HPIS.
     """
     failures: set[str] = set()
-    servers: list[dict[str, Any]] | None = None
+    found: dict[str, Any] = {}
     for name in profiles or list(PROFILES):
         try:
-            ep = resolve_endpoint(name, env)
+            lanes = _lane_endpoints(name, env)
         except LLMConfigError as exc:
             print(f"[{name}] 配置错误：{exc}")
             failures.add("config")
             continue
-        server = "Ollama" if ep.is_ollama else ("OpenRouter" if ep.is_openrouter else "vLLM")
-        version = await _ollama_version(ep) if ep.is_ollama else None
-        print(f"[{name}] {ep.model} · {server}{' ' + version if version else ''} @ {ep.netloc} · 页面显示为 {ep.label}")
-        if ep.is_ollama:
-            loaded = await warm(ep, keep_alive=_CHECK_KEEP_ALIVE)
-            if not loaded["ok"]:
-                print(f"  加载     失败：{loaded['message']}")
-                failures.add("load")
-                if "not found" in str(loaded.get("message")):
-                    servers = await find_ollama(env) if servers is None else servers
-                    for s in servers:
-                        if any(_same_model(m, ep.model, True) for m in s["models"]):
-                            owner = f"（账号 {s['owner']} 的 Ollama）" if s.get("owner") else ""
-                            print(f"           这个模型在 {s['url']}{owner} 上，改用它：")
-                            print(f"           export HPIS_LLM_OLLAMA_URL={s['url']}")
-                continue
-            print(f"  加载     {loaded['ms'] / 1000:.1f} s")
-
-        _, _, _, event = await _timed(ep, _check_messages(), 160)
-        if event["type"] != "done":
-            print(f"  回答     失败：{event.get('message')}")
-            failures.add("answer")
+        hpis, plain = lanes[0][1], lanes[-1][1]
+        print(f"[{name}] {hpis.model} · 页面显示为 {hpis.label}")
+        usable = [await _check_server(ep, title, failures, found) for title, ep in lanes]
+        if not all(usable):
             continue
-        speed = f" · {event['tokens_per_s']:.0f} tok/s" if event.get("tokens_per_s") else ""
-        verdict = "通过" if _answer_ok(event["text"]) else "不通过"
-        print(f"  回答     {verdict} · 首字 {event['ttft_ms'] / 1000:.2f} s{speed} · 「{_short(event['text'])}」")
-        if verdict != "通过":
-            failures.add("answer")
-        if event.get("reasoning_chars"):
-            print(f"  思考     未关闭：先输出了 {event['reasoning_chars']} 字思考内容，首字会变慢")
-            failures.add("thinking")
-        else:
-            print("  思考     已关闭")
 
-        _, _, _, event = await _timed(ep, _check_messages(long=True), 160)
-        if event["type"] == "done" and _answer_ok(event["text"]):
-            print(f"  长提示词 通过（约 {_CHECK_LONG_TOKENS} token，首字 {event['ttft_ms'] / 1000:.2f} s）")
-        else:
-            detail = event.get("message") if event["type"] != "done" else f"「{_short(event['text'])}」"
-            print(f"  长提示词 不通过：开头的证据丢了，上下文可能太短（{detail}）")
-            failures.add("context")
-
-        # The second request goes out as soon as the first starts answering, like the
-        # plaintext lane asking while the HPIS lane's answer is still streaming.
+        # The plaintext lane asks as soon as the HPIS lane starts answering, as in the demo.
         a_started = asyncio.Event()
         (_, a_first, a_end, a_ev), (b_sent, b_first, _, b_ev) = await asyncio.gather(
-            _timed(ep, _CHECK_PARALLEL, 220, started=a_started),
-            _timed(ep, _CHECK_PARALLEL, 220, after=a_started),
+            _timed(hpis, _CHECK_PARALLEL, 220, started=a_started),
+            _timed(plain, _CHECK_PARALLEL, 220, after=a_started),
         )
+        how = "两条通道各用一个服务，" if len(lanes) == 2 else "两个请求"
         if a_ev["type"] != "done" or b_ev["type"] != "done" or a_first is None or b_first is None:
             bad = a_ev if a_ev["type"] != "done" else b_ev
             print(f"  并行     失败：{bad.get('message')}")
@@ -1375,7 +1441,7 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         elif a_end - b_sent < 0.3:
             print("  并行     无法判断：第一个回答太短，第二个请求发出时它已经结束")
         elif b_first < a_end - 0.1:
-            print(f"  并行     通过：两个请求同时生成（第二个 {b_first - b_sent:.2f} s 出首字）")
+            print(f"  并行     通过：{how}同时生成（第二个 {b_first - b_sent:.2f} s 出首字）")
         else:
             print(f"  并行     不通过：第二个请求等第一个生成完才开始（多等了 {b_first - b_sent:.1f} s）")
             failures.add("parallel")
@@ -1385,9 +1451,9 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         return 0
     print("CHECK FAIL")
     hints = {
-        "parallel": "两条通道会排队：这个服务每个模型一次只处理一个请求（Ollama 默认 OLLAMA_NUM_PARALLEL=1），"
-        "明文通道的首字时间会被拉长，对比就不公平了。不要改动或重启它，"
-        "按 H200部署步骤.md 第 4 步用 --ollama 为演示单独起一个 Ollama。",
+        "parallel": "两条通道会排队：这个 Ollama 一次只给这个模型处理一个请求（Ollama 默认如此，"
+        "Qwen 3.5 系列架构在 Ollama 里更是固定一次一个），明文通道的首字时间会被拉长，对比就不公平了。"
+        "不要改动或重启它，按 H200部署步骤.md 用 --ollama 给两条通道各起一个演示专用的 Ollama。",
         "context": "上下文太短，长邮件会被截断。--ollama 起的演示专用 Ollama 固定使用 16k 上下文。",
         "thinking": "模型没有关闭思考。Ollama 需要 0.9 或更新版本（ollama --version）。",
         "load": "模型不在 HPIS_LLM_OLLAMA_URL 指向的 Ollama 上（默认 127.0.0.1:11434）。"
@@ -1398,7 +1464,6 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
             print("提示：" + hints[key])
     return 1
 
-
 def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m demo.llm", description="Stream one answer to stdout.")
     parser.add_argument("prompt", nargs="?", default="用一句话介绍你自己。")
@@ -1408,6 +1473,7 @@ def _main(argv: list[str] | None = None) -> int:
     parser.add_argument("--check", action="store_true", help="check what the live demo needs from the model servers")
     parser.add_argument("--warm", action="store_true", help="load the Ollama models now")
     parser.add_argument("--find-ollama", action="store_true", help="list every Ollama on this machine")
+    parser.add_argument("--models-dir", action="store_true", help="print a readable model folder with both models")
     args = parser.parse_args(argv)
     profile = args.profile or "qwen"
 
@@ -1415,6 +1481,11 @@ def _main(argv: list[str] | None = None) -> int:
         if args.find_ollama:
             print("\n".join(describe_ollama(await find_ollama())))
             return 0
+        if args.models_dir:
+            folder = await models_dir()
+            if folder:
+                print(folder)
+            return 0 if folder else 1
         if args.check:
             return await check([args.profile] if args.profile else None)
         if args.warm:

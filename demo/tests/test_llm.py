@@ -750,6 +750,46 @@ class OllamaTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(f"这个模型在 http://127.0.0.1:{self.server.port}", report)
         self.assertIn("--find-ollama", report)
 
+    async def test_each_lane_on_its_own_server(self) -> None:
+        """Two servers that each take one request at a time (Ollama with a Qwen 3.5-family
+        model) still answer both lanes at once when each lane has its own server."""
+        env = await self.serve(parallel=1)
+        hpis_server = self.server
+        plain = FakeOllama(parallel=1)
+        plain_url = await plain.start()
+        self.addAsyncCleanup(plain.stop)
+        env["HPIS_LLM_PLAIN_OLLAMA_URL"] = plain_url
+        self.assertEqual(llm.lane_env("plain", env)["HPIS_LLM_OLLAMA_URL"], plain_url)
+        self.assertEqual(llm.lane_env("hpic", env)["HPIS_LLM_OLLAMA_URL"], env["HPIS_LLM_OLLAMA_URL"])
+        results = await llm.warm_all(env)
+        self.assertEqual(len(results), 4)  # two models x two lanes
+        self.assertTrue(all(r["ok"] for r in results))
+        self.assertEqual(len(plain.requests), 2)
+        code, report = await self.run_check(env)
+        self.assertEqual(code, 0, report)
+        self.assertIn("HPIS 2.0 通道", report)
+        self.assertIn("明文通道", report)
+        self.assertIn("两条通道各用一个服务，同时生成", report)
+        self.assertTrue(any(r.get("messages") for r in hpis_server.requests))
+        self.assertTrue(any(r.get("messages") for r in plain.requests))
+
+    async def test_models_dir_finds_a_readable_folder_with_both_models(self) -> None:
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        folder = tmp / "models"
+        for sub_dir in ("manifests", "blobs"):
+            (folder / sub_dir).mkdir(parents=True)
+        await self.serve(folder=str(folder))
+        proc = self.fake_proc(tmp / "proc", [self.server.port])
+        real_find = llm.find_ollama
+
+        async def find(env=None, **_):
+            return await real_find(env, proc=proc)
+
+        llm.find_ollama = find
+        self.addCleanup(setattr, llm, "find_ollama", real_find)
+        self.assertEqual(await llm.models_dir({}), str(folder))
+        self.assertIsNone(await llm.models_dir({"HPIS_LLM_QWEN_MODEL": "qwen3.8:27b"}))
+
     def test_proc_addresses(self) -> None:
         self.assertEqual(llm._proc_addr("0100007F"), "127.0.0.1")
         self.assertEqual(llm._proc_addr("00000000"), "127.0.0.1")

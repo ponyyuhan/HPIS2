@@ -4,7 +4,7 @@
 # Nothing here needs root, restarts a shared service or installs system packages.
 #
 #   ./install_services.sh --lan            # the demo page, open to the intranet
-#   ./install_services.sh --lan --ollama   # plus an Ollama just for the demo (see below)
+#   ./install_services.sh --lan --ollama   # plus one Ollama per lane, just for the demo
 #   ./install_services.sh --native-models  # plus vLLM servers (serve.sh --native)
 #   ./install_services.sh --uninstall
 #
@@ -13,11 +13,12 @@
 #   HPIS_LLM_OLLAMA_URL, HPIS_LLM_OLLAMA_KEEP_ALIVE, HPIS_LLM_QWEN_LABEL, HPIS_LLM_GEMMA_LABEL,
 #   HPIS_DEMO_PORT [8780]
 #
-# --ollama runs `ollama serve` under your account on 127.0.0.1:${HPIS_OLLAMA_PORT:-11535}
-# (the next free port if that one is taken),
-# answering 2 requests per model at once with a 16k context.  It reads the model files of
-# the Ollama you already have (found automatically, or HPIS_OLLAMA_MODELS) without copying
-# or changing them, and uses only the GPU(s) in HPIS_OLLAMA_GPU (required, e.g. 3 or 3,4).
+# --ollama runs two `ollama serve` under your account, one for each lane, on the first free
+# ports from 127.0.0.1:${HPIS_OLLAMA_PORT:-11535}: Ollama answers a Qwen 3.5-family model
+# (Qwen3.6 / 3.8) one request at a time, so a shared server would make one lane wait for
+# the other.  Both have the same settings (16k context) and GPU(s) (HPIS_OLLAMA_GPU, required,
+# e.g. 0 or 0,1), and both read the model files of an Ollama that is already running (found
+# automatically, or HPIS_OLLAMA_MODELS) without copying or changing them.
 # HPIS_OLLAMA_BIN picks another ollama binary (for example a newer one in your home folder).
 #
 # --native-models: HPIS_GPU_QWEN / HPIS_GPU_GEMMA [0 / 0], HPIS_GPU_MEM_UTIL_QWEN / _GEMMA
@@ -51,7 +52,7 @@ MSG
 fi
 
 if $uninstall; then
-  for u in hpis2-demo hpis2-ollama hpis2-qwen hpis2-gemma; do
+  for u in hpis2-demo hpis2-ollama hpis2-ollama-plain hpis2-qwen hpis2-gemma; do
     systemctl --user disable --now "$u.service" 2>/dev/null || true
     rm -f "$units/$u.service"
   done
@@ -104,43 +105,57 @@ if $ollama; then
       if has_models "$dir"; then models=$dir; break; fi
     done
   fi
+  if [[ -z $models ]]; then
+    # For example a colleague's Ollama: ask the running servers where their files are.
+    models=$(HPIS_LLM_BACKEND=ollama "$repo/.venv-demo/bin/python" -m demo.llm --models-dir 2>/dev/null || true)
+  fi
   [[ -n $models ]] && has_models "$models" || {
     echo "cannot read the models ${HPIS_LLM_QWEN_MODEL:-} ${HPIS_LLM_GEMMA_MODEL:-} in an Ollama models folder." >&2
-    echo "Set HPIS_OLLAMA_MODELS to the OLLAMA_MODELS folder of your Ollama (it must be readable by $USER)." >&2
+    echo "Check the names with: $repo/.venv-demo/bin/python -m demo.llm --find-ollama" >&2
+    echo "or set HPIS_OLLAMA_MODELS to the model folder it shows (it must be readable by $USER)." >&2
     exit 1
   }
-  systemctl --user stop hpis2-ollama.service 2>/dev/null || true  # a reinstall keeps its port
-  oport=${HPIS_OLLAMA_PORT:-11535}
-  if [[ -z ${HPIS_OLLAMA_PORT:-} ]]; then
-    while port_busy "$oport"; do oport=$((oport + 1)); done
-  fi
+  for u in hpis2-ollama hpis2-ollama-plain; do  # a reinstall keeps its ports
+    systemctl --user stop "$u.service" 2>/dev/null || true
+  done
+  next_free() { local p=$1; while port_busy "$p"; do p=$((p + 1)); done; echo "$p"; }
+  oport=${HPIS_OLLAMA_PORT:-$(next_free 11535)}
+  pport=$(next_free $((oport + 1)))
   ctx=16384
-  {
-    echo "[Unit]"
-    echo "Description=HPIS 2.0 demo: private Ollama (2 requests per model at once)"
-    echo "After=network-online.target"
-    echo "[Service]"
-    echo "Environment=\"OLLAMA_HOST=127.0.0.1:$oport\""
-    echo "Environment=\"OLLAMA_MODELS=$models\""
-    echo "Environment=\"OLLAMA_NUM_PARALLEL=2\""
-    echo "Environment=\"OLLAMA_CONTEXT_LENGTH=$ctx\""
-    echo "Environment=\"OLLAMA_KEEP_ALIVE=30m\""
-    echo "Environment=\"OLLAMA_NOPRUNE=1\""            # never delete anything in the shared folder
-    echo "Environment=\"CUDA_DEVICE_ORDER=PCI_BUS_ID\""  # GPU numbers as nvidia-smi shows them
-    echo "Environment=\"CUDA_VISIBLE_DEVICES=$HPIS_OLLAMA_GPU\""
-    echo "ExecStart=$ollama_bin serve"
-    echo "Restart=always"
-    echo "RestartSec=5"
-    echo "[Install]"
-    echo "WantedBy=default.target"
-  } > "$units/hpis2-ollama.service"
-  services+=(hpis2-ollama.service)
-  after+=" hpis2-ollama.service"
+  ollama_unit() {  # $1 unit name, $2 port, $3 lane
+    {
+      echo "[Unit]"
+      echo "Description=HPIS 2.0 demo: Ollama for the $3 lane"
+      echo "After=network-online.target"
+      echo "[Service]"
+      echo "Environment=\"OLLAMA_HOST=127.0.0.1:$2\""
+      echo "Environment=\"OLLAMA_MODELS=$models\""
+      echo "Environment=\"OLLAMA_NUM_PARALLEL=1\""
+      echo "Environment=\"OLLAMA_CONTEXT_LENGTH=$ctx\""
+      echo "Environment=\"OLLAMA_KEEP_ALIVE=30m\""
+      echo "Environment=\"OLLAMA_NOPRUNE=1\""            # never delete anything in the shared folder
+      echo "Environment=\"CUDA_DEVICE_ORDER=PCI_BUS_ID\""  # GPU numbers as nvidia-smi shows them
+      echo "Environment=\"CUDA_VISIBLE_DEVICES=$HPIS_OLLAMA_GPU\""
+      echo "ExecStart=$ollama_bin serve"
+      echo "Restart=always"
+      echo "RestartSec=5"
+      echo "[Install]"
+      echo "WantedBy=default.target"
+    } > "$units/$1.service"
+  }
+  ollama_unit hpis2-ollama "$oport" "HPIS 2.0"
+  ollama_unit hpis2-ollama-plain "$pport" "plaintext cloud"
+  services+=(hpis2-ollama.service hpis2-ollama-plain.service)
+  after+=" hpis2-ollama.service hpis2-ollama-plain.service"
   backend=ollama
-elif [[ -f $units/hpis2-ollama.service ]]; then
-  # Installed earlier with --ollama, now without: stop the demo-only Ollama.
-  systemctl --user disable --now hpis2-ollama.service 2>/dev/null || true
-  rm -f "$units/hpis2-ollama.service"
+else
+  # Installed earlier with --ollama, now without: stop the demo-only Ollama servers.
+  for u in hpis2-ollama hpis2-ollama-plain; do
+    if [[ -f $units/$u.service ]]; then
+      systemctl --user disable --now "$u.service" 2>/dev/null || true
+      rm -f "$units/$u.service"
+    fi
+  done
 fi
 
 if $native; then
@@ -191,13 +206,14 @@ fi
   echo "[Service]"
   echo "WorkingDirectory=$repo"
   echo "Environment=PYTHONUNBUFFERED=1"
-  env_lines HPIS_LLM_OLLAMA_URL HPIS_LLM_OLLAMA_KEEP_ALIVE HPIS_LLM_OLLAMA_NUM_CTX \
+  env_lines HPIS_LLM_OLLAMA_URL HPIS_LLM_PLAIN_OLLAMA_URL HPIS_LLM_OLLAMA_KEEP_ALIVE HPIS_LLM_OLLAMA_NUM_CTX \
     HPIS_LLM_QWEN_MODEL HPIS_LLM_GEMMA_MODEL HPIS_LLM_QWEN_BASE_URL HPIS_LLM_GEMMA_BASE_URL \
     HPIS_LLM_QWEN_LABEL HPIS_LLM_GEMMA_LABEL VLLM_API_KEY HPIS_LLM_QWEN_API_KEY HPIS_LLM_GEMMA_API_KEY \
     HPIS_DEMO_RUNTIME
   echo "Environment=HPIS_LLM_BACKEND=$backend"
   if $ollama; then  # later assignments win, so these override the shell's values
     echo "Environment=\"HPIS_LLM_OLLAMA_URL=http://127.0.0.1:$oport\""
+    echo "Environment=\"HPIS_LLM_PLAIN_OLLAMA_URL=http://127.0.0.1:$pport\""
     echo "Environment=\"HPIS_LLM_OLLAMA_NUM_CTX=$ctx\""
   fi
   echo "ExecStart=$repo/.venv-demo/bin/python -m demo --host $host --port $port"
@@ -228,8 +244,8 @@ echo "models:    $backend · qwen=${HPIS_LLM_QWEN_MODEL:-default} · gemma=${HPI
 echo "status:    systemctl --user status ${services[*]}"
 echo "logs:      journalctl --user -u hpis2-demo -f"
 if $ollama; then
-  echo "ollama:    models from $models on GPU $HPIS_OLLAMA_GPU; logs: journalctl --user -u hpis2-ollama -f"
-  echo "check:     cd $repo && HPIS_LLM_OLLAMA_URL=http://127.0.0.1:$oport HPIS_LLM_OLLAMA_NUM_CTX=$ctx .venv-demo/bin/python -m demo.llm --check"
+  echo "ollama:    HPIS 2.0 lane on port $oport, plaintext lane on port $pport, GPU $HPIS_OLLAMA_GPU, model files in $models"
+  echo "check:     cd $repo && HPIS_LLM_OLLAMA_URL=http://127.0.0.1:$oport HPIS_LLM_PLAIN_OLLAMA_URL=http://127.0.0.1:$pport HPIS_LLM_OLLAMA_NUM_CTX=$ctx .venv-demo/bin/python -m demo.llm --check"
 fi
 if $lan; then
   echo "page:      http://$(hostname -I 2>/dev/null | awk '{print $1}'):$port   (anyone on the intranet can open it)"

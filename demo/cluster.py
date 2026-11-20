@@ -95,6 +95,10 @@ class Cluster:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         log = open(self.log_dir / f"{len(self.procs):02d}-{args[0]}-{Path(args[1]).parent.name}.log", "wb")
         env = dict(os.environ)
+        if args[0] == "cloud":
+            from .llm import lane_env
+
+            env = lane_env("plain", env)  # the plaintext cloud may have its own model server
         env["PYTHONPATH"] = str(config.ROOT) + os.pathsep + env.get("PYTHONPATH", "")
         try:
             proc = await asyncio.create_subprocess_exec(
