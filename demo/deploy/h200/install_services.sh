@@ -13,7 +13,8 @@
 #   HPIS_LLM_OLLAMA_URL, HPIS_LLM_OLLAMA_KEEP_ALIVE, HPIS_LLM_QWEN_LABEL, HPIS_LLM_GEMMA_LABEL,
 #   HPIS_DEMO_PORT [8780]
 #
-# --ollama runs `ollama serve` under your account on 127.0.0.1:${HPIS_OLLAMA_PORT:-11435},
+# --ollama runs `ollama serve` under your account on 127.0.0.1:${HPIS_OLLAMA_PORT:-11535}
+# (the next free port if that one is taken),
 # answering 2 requests per model at once with a 16k context.  It reads the model files of
 # the Ollama you already have (found automatically, or HPIS_OLLAMA_MODELS) without copying
 # or changing them, and uses only the GPU(s) in HPIS_OLLAMA_GPU (required, e.g. 3 or 3,4).
@@ -75,6 +76,14 @@ env_lines() {  # copy selected variables from this shell into the unit
   done
 }
 
+port_busy() {  # is something listening on TCP port $1, on any address?
+  if command -v ss >/dev/null 2>&1; then
+    [[ -n $(ss -ltnH "sport = :$1" 2>/dev/null) ]]
+  else
+    (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
+  fi
+}
+
 has_models() {  # does the Ollama models folder $1 hold the configured model tags?
   local dir=$1 m name tag
   [[ -d $dir/manifests && -r $dir/blobs ]] || return 1
@@ -100,7 +109,11 @@ if $ollama; then
     echo "Set HPIS_OLLAMA_MODELS to the OLLAMA_MODELS folder of your Ollama (it must be readable by $USER)." >&2
     exit 1
   }
-  oport=${HPIS_OLLAMA_PORT:-11435}
+  systemctl --user stop hpis2-ollama.service 2>/dev/null || true  # a reinstall keeps its port
+  oport=${HPIS_OLLAMA_PORT:-11535}
+  if [[ -z ${HPIS_OLLAMA_PORT:-} ]]; then
+    while port_busy "$oport"; do oport=$((oport + 1)); done
+  fi
   ctx=16384
   {
     echo "[Unit]"
@@ -124,6 +137,10 @@ if $ollama; then
   services+=(hpis2-ollama.service)
   after+=" hpis2-ollama.service"
   backend=ollama
+elif [[ -f $units/hpis2-ollama.service ]]; then
+  # Installed earlier with --ollama, now without: stop the demo-only Ollama.
+  systemctl --user disable --now hpis2-ollama.service 2>/dev/null || true
+  rm -f "$units/hpis2-ollama.service"
 fi
 
 if $native; then
@@ -197,7 +214,8 @@ if [[ -z ${HPIS_LLM_BACKEND:-} ]] && ! $ollama; then
 fi
 
 systemctl --user daemon-reload
-systemctl --user enable --now "${services[@]}"
+systemctl --user enable "${services[@]}"
+systemctl --user restart "${services[@]}"  # a reinstall must pick up the new settings
 
 if ! loginctl show-user "$USER" --property=Linger 2>/dev/null | grep -q yes; then
   loginctl enable-linger "$USER" 2>/dev/null || \
