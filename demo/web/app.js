@@ -238,7 +238,7 @@ function buildLanes() {
       <div class="sees ${seesCls}"><span class="sees__label">${seesLabel}</span><div class="ticker"><span class="ticker__track ${id === "plain" ? "bad" : "mono"}" data-ticker></span></div></div>
       <div class="answer">
         <div class="answer__head"><span>${ICON("brain")} <b data-model></b> 的回答</span><span data-evcount></span></div>
-        <div class="answer__text" data-answer><span class="ph">等待提问…</span></div>
+        <div class="answer__text" data-answer><div class="ph ph--idle"><i></i><b>等待提问</b><span>点击「开始对比」，两条路径会同时检索并作答</span></div></div>
         <div class="evlist" data-evlist></div>
         <div class="answer__foot" data-quality></div>
       </div>`;
@@ -319,7 +319,7 @@ function resetLanes() {
     L.el.classList.remove("running", "done");
     for (const li of $$(".rail li", L.el)) { li.className = ""; li.style.removeProperty("--p"); $("b", li).textContent = "—"; clearInterval(L["sp_" + li.dataset.stage]); }
     for (const o of $$("output", L.el)) { o.textContent = "—"; o.dataset.v = 0; }
-    $("[data-answer]", L.el).innerHTML = `<span class="ph">等待提问…</span>`;
+    $("[data-answer]", L.el).innerHTML = `<div class="ph ph--idle"><i></i><b>等待提问</b><span>点击「开始对比」，两条路径会同时检索并作答</span></div>`;
     $("[data-evlist]", L.el).innerHTML = "";
     $("[data-quality]", L.el).innerHTML = "";
     $("[data-evcount]", L.el).textContent = "";
@@ -1054,7 +1054,6 @@ function initTabs() {
 }
 
 function init() {
-  ambient();
   initTabs();
   initNet();
   initRecording();

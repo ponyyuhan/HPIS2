@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>面向个人敏感数据的智能问答</title>
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/styles.css?v=5">
+<link rel="stylesheet" href="/styles.css?v=9">
 </head>
 <body>
 <canvas id="ambient" aria-hidden="true"></canvas>
@@ -25,6 +25,10 @@
   </div>
   <div class="cover__visual" aria-hidden="true">
     <div class="orb"><div class="orb__ring r1"></div><div class="orb__ring r2"></div><div class="orb__ring r3"></div>
+      <span class="orb__chip c1">AES-256-GCM 密文存储</span>
+      <span class="orb__chip c2">HMAC 检索令牌</span>
+      <span class="orb__chip c3">可信执行环境 TEE</span>
+      <span class="orb__chip c4">匿名标识 AID</span>
       <svg class="orb__lock" viewBox="0 0 120 140"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14a88d"/><stop offset="1" stop-color="#2f6fd1"/></linearGradient></defs>
         <path d="M30 62V44a30 30 0 0 1 60 0v18" fill="none" stroke="url(#lg)" stroke-width="9" stroke-linecap="round"/>
         <rect x="14" y="60" width="92" height="72" rx="16" fill="rgba(255,255,255,.85)" stroke="url(#lg)" stroke-width="4"/>
@@ -169,6 +173,6 @@
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=5"></script>
+<script type="module" src="/app.js?v=7"></script>
 </body>
 </html>
