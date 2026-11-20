@@ -1,0 +1,26 @@
+{
+ "full_file": "https://ann-benchmarks.com/glove-100-angular.hdf5",
+ "full_shape": {
+  "train": [
+   1183514,
+   100
+  ],
+  "test": [
+   10000,
+   100
+  ]
+ },
+ "local_prefix_file": "glove-100-angular-first100k.hdf5",
+ "prefix_shape": {
+  "train": [
+   100000,
+   100
+  ],
+  "test": [
+   1040,
+   100
+  ]
+ },
+ "prefix_train_identical_to_full": true,
+ "prefix_test_identical_to_full": true
+}

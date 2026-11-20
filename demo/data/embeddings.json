@@ -1,0 +1,29 @@
+{
+ "model": "BAAI/bge-small-zh-v1.5",
+ "onnx": "Xenova/bge-small-zh-v1.5",
+ "dim": 512,
+ "count": 100000,
+ "dtype": "float32",
+ "normalized": true,
+ "layout": "row i = email id i+1, little-endian float32, C order",
+ "pooling": "CLS",
+ "recipe": {
+  "fields": [
+   "subject",
+   "from.org + from.name",
+   "body (quoted history removed)",
+   "attachment names",
+   "attachment text"
+  ],
+  "body_chars": 360,
+  "attachment_chars": 220,
+  "max_attachments": 2,
+  "max_tokens": 512,
+  "query_prefix": "为这个句子生成表示以用于检索相关文章："
+ },
+ "builder": "demo.embed.doc_text",
+ "seconds": 2.8,
+ "encoded_this_run": 64,
+ "reused_from_cache": 99936,
+ "note": "a full CPU run (2 processes x 5 threads, Apple M-series) takes ~15 min (858 s measured); re-runs reuse demo/data/cache/emb_cache.npz"
+}

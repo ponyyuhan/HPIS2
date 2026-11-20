@@ -1,0 +1,16 @@
+{
+  "id": 61614730,
+  "label": "hpis2-linux-acceptance-20261120",
+  "cpu_name": "AMD Ryzen 5 5600X 6-Core Processor",
+  "gpu_name": "RTX 3060",
+  "geolocation": "Poland, PL",
+  "dph_total": 0.07481481481481482,
+  "start_date": 1795166774.5373363,
+  "duration": 1759.702333688736,
+  "actual_status": "running",
+  "observed_before_release_epoch": 1795168534.304544,
+  "absent_from_account_after_destroy": true,
+  "release_observed_utc": "2026-11-20T09:56:23.279123+00:00",
+  "reported_charge_usd": 0.043,
+  "billing_observed_utc": "2026-11-20T09:57:51.414545+00:00"
+}

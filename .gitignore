@@ -1,0 +1,19 @@
+.venv/
+.venv-demo/
+__pycache__/
+*.egg-info/
+.hpis/
+.ruff_cache/
+.DS_Store
+
+# Demo data: GitHub limits files to 100 MB, so the repository keeps
+# demo/data/mailbox.jsonl.gz and demo/data/embeddings.f32.partNN instead;
+# `python -m demo` restores the originals on first start (demo/datafiles.py).
+demo/data/mailbox.jsonl
+demo/data/embeddings.f32
+demo/data/.*.tmp
+# Rebuildable generation artefacts (LLM response cache, intermediate outputs, logs)
+demo/data/cache/
+demo/data/gen/
+demo/data/logs/
+demo/data/models/*/.cache/

@@ -1,0 +1,995 @@
+{
+ "schema": "hpis2-acceptance-run/1",
+ "started_utc": "2026-11-20T12:40:51+00:00",
+ "wall_s": 256.9,
+ "command": "python -m acceptance.run --dataset /root/data/embeddings-business-25776x512.f32 --dim 512 --rows 25232 --queries 512 --rounds 4 --appendix three_arm --io-queries 4 --platform-label Linux x86_64 (vast.ai container) --out /root/out/linux_x86_business",
+ "platform_label": "Linux x86_64 (vast.ai container)",
+ "requirement": "ciphertext end-to-end latency < 1.10 x plaintext (SR 2.2.4)",
+ "parameters": {
+  "rows": 25232,
+  "queries": 512,
+  "query_start": 0,
+  "rounds": 4,
+  "warmup_pairs_per_block": 32,
+  "k": 10,
+  "run_length": 1,
+  "rerank_k": 40,
+  "rerank_extra_k": 20,
+  "beta": 0.25,
+  "extra_betas": [],
+  "body_bytes": 128,
+  "seed": 20261120,
+  "io_queries": 4,
+  "scenarios": [
+   "sse_exact",
+   "sse_keyword",
+   "vec_tee",
+   "vec_ppe",
+   "vec_ppe_rerank",
+   "three_arm"
+  ]
+ },
+ "dataset": {
+  "file": "embeddings-business-25776x512.f32",
+  "sha256": "1ac5c8c45619f6f6f74e6c7e0e2c85ce8eb49977d7c402d7a05aa8c0d4a8aa5e",
+  "bytes": 52789248,
+  "format": "raw float32 matrix",
+  "name": "embeddings-business-25776x512",
+  "file_shape": [
+   25776,
+   512
+  ],
+  "distance": "cosine",
+  "selection": "rows[0:25232] inserted; held-out rows[25232:25744] queried",
+  "rows": 25232,
+  "dims": 512,
+  "queries": 512,
+  "warmups": 32
+ },
+ "environment": {
+  "os": "Linux-6.8.0-111-generic-x86_64-with-glibc2.36",
+  "kernel": "6.8.0-111-generic",
+  "architecture": "x86_64",
+  "python": "3.12.16",
+  "cpu_count": 64,
+  "cpus_allowed": 64,
+  "cpu": "AMD EPYC 7452 32-Core Processor",
+  "cpu_flags": [
+   "aes",
+   "avx2",
+   "fma",
+   "sha_ni"
+  ],
+  "distribution": "Debian GNU/Linux 12 (bookworm)",
+  "memory": "131750940 kB",
+  "cgroup_cpu_max": "768000 100000",
+  "virtualization": "docker",
+  "packages": {
+   "numpy": "2.5.5",
+   "aiohttp": "3.14.5",
+   "cryptography": "50.0.2",
+   "PyNaCl": "1.6.2",
+   "msgpack": "1.2.4",
+   "h5py": "3.16.0",
+   "threadpoolctl": "3.8.0"
+  },
+  "openssl": "OpenSSL 3.0.22 25 Aug 2026",
+  "blas": [
+   {
+    "internal_api": "openblas",
+    "version": "0.3.34.237.2",
+    "num_threads": 1,
+    "architecture": "Haswell"
+   }
+  ]
+ },
+ "pinning": null,
+ "code": {
+  "hpis": {
+   "sha256": "5d69e526cd0411a85b2bf3739bbdd312b913e7a1914ce6dc2f8886d112857b3c",
+   "files": 11
+  },
+  "acceptance": {
+   "sha256": "6e1d3dac49f21f89ed6f3f0044bfa201f835cc1900b616f6a7a959969f0d1f9f",
+   "files": 8
+  }
+ },
+ "method": {
+  "topology": "SDK client, HPIC and HPIS as three processes on one host; two loopback TLS 1.3 hops (HPIC->HPIS mutual TLS); all tenants in one HPIS process / one SQLite file; one shared persistent client connection; concurrency 1",
+  "timing": "SDK entry with the raw query -> SDK returns decoded plaintext records; result checks and FP64 reference outside the timer",
+  "design": "per round: scenario blocks in random order; per block: warm-up, then every query once in random order, grouped into runs of 1 query; within a run each arm issues the run's queries back to back and every arm order (AB/BA, or all 6 for three arms) occurs once per consecutive group of runs; no two arms share a tenant; client cyclic GC frozen between blocks and paused within a block (servers unchanged)",
+  "vector_kernel": "FP32 GEMV (data @ q, single-thread BLAS) + np.partition top-K + (score, id) stable tie-break via hpis.codec.nearest; PPE adds RAP norm projection",
+  "ppe_rerank": "HPIS: production PPE fast search for Top-40 (bodies stay AES-GCM); HPIC: decrypts them with the DEK it already holds, re-ranks with the same FP32 kernel on the normalized vector stored inside each body (holder-signed grant field scan={kind: rerank, q, k}, applied by make_hpic_app's post-decryption filter hook); returns Top-k",
+  "blas_threads": 1,
+  "storage": "one SQLite file for all tenants, memory-mapped with a 256 MiB page cache (PRAGMA mmap_size=2147418112; PRAGMA cache_size=-262144), identical for both arms",
+  "record": "field ref=item-<id>, keyword g<id//10>, vector, ~128 B UTF-8 memo text; the SDK also stores the raw vector inside the body",
+  "oracle": "exhaustive FP64 cosine on the stored unit FP32 vectors, ties by id (0.6s, untimed)"
+ },
+ "setup": {
+  "ingest_s": {
+   "plain": 15.41966363741085,
+   "plain_b": 16.57922191475518,
+   "ppe": 22.90817625611089,
+   "tee": 16.465913015650585
+  },
+  "cold": {
+   "plain": {
+    "first_vector_us": 160681.607
+   },
+   "plain_b": {
+    "first_vector_us": 136846.851
+   },
+   "ppe": {
+    "first_vector_us": 137417.447
+   },
+   "tee": {
+    "first_vector_us": 237204.465
+   }
+  },
+  "stored_bytes": {
+   "plain": {
+    "records": 25232,
+    "body_bytes": 56367838,
+    "vector_index_bytes": 51675136,
+    "vector_original_bytes": 51675136,
+    "postings": 273664,
+    "posting_tag_bytes": 3648338
+   },
+   "plain_b": {
+    "records": 25232,
+    "body_bytes": 56367838,
+    "vector_index_bytes": 51675136,
+    "vector_original_bytes": 51675136,
+    "postings": 273664,
+    "posting_tag_bytes": 3648338
+   },
+   "ppe": {
+    "records": 25232,
+    "body_bytes": 57074334,
+    "vector_index_bytes": 51675136,
+    "vector_original_bytes": 52381632,
+    "postings": 273664,
+    "posting_tag_bytes": 8757248
+   },
+   "tee": {
+    "records": 25232,
+    "body_bytes": 57074334,
+    "vector_index_bytes": 0,
+    "vector_original_bytes": 52381632,
+    "postings": 273664,
+    "posting_tag_bytes": 8757248
+   }
+  }
+ },
+ "scenarios": {
+  "sse_exact": {
+   "name_zh": "精确字段 SSE（命中 1 条）",
+   "section": "main",
+   "kind": "field",
+   "arms": {
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 1942.423377441406,
+      "p50": 1662.835,
+      "p95": 2819.8598,
+      "p99": 2922.26603
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 59.0961796875,
+      "hpis_sqlite_body_read": 31.790525390625,
+      "hpic_decrypt_unpack": 6.38542138671875,
+      "client_and_transport_rest": 1876.9417763671875
+     },
+     "body_rows_per_query": 1.0,
+     "body_bytes_per_query": 2233.9462890625
+    },
+    "sse_cipher": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 1997.6169331054687,
+      "p50": 1692.313,
+      "p95": 2890.2473,
+      "p99": 3018.9340099999995
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 59.724936035156254,
+      "hpis_sqlite_body_read": 31.267998046875,
+      "hpic_decrypt_unpack": 28.0522470703125,
+      "client_and_transport_rest": 1909.8397499999999
+     },
+     "body_rows_per_query": 1.0,
+     "body_bytes_per_query": 2261.9462890625
+    }
+   },
+   "comparisons": {
+    "sse_cipher_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 1942.423377441406,
+     "other_mean_us": 1997.6169331054687,
+     "overhead_pct": {
+      "mean": 2.8414791700440034,
+      "p50": 1.7727555650440374,
+      "p95": 2.4961347369113707
+     },
+     "ci95_pct": {
+      "mean": [
+       0.8409167103331079,
+       4.468963929149251
+      ],
+      "p50": [
+       -0.1332940320554639,
+       4.96432833580551
+      ],
+      "p95": [
+       2.112881624751885,
+       3.0447387727642723
+      ]
+     },
+     "delta_mean_us": 55.193555664062615,
+     "delta_mean_us_ci95": [
+      16.645821923827828,
+      86.41374281005871
+     ],
+     "per_round_overhead_pct": [
+      2.3319451218104748,
+      1.9992066283641474,
+      4.564679312520581,
+      1.6708833736175155
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "sse_cipher": {
+     "tenant": "ppe",
+     "kernel": "unified",
+     "refine": false
+    }
+   },
+   "headline": {
+    "plaintext_mean_ms": 1.9424233774414061,
+    "cipher_mean_ms": 1.9976169331054687,
+    "overhead_pct": 2.8414791700440034,
+    "ci95": [
+     0.8409167103331079,
+     4.468963929149251
+    ],
+    "p95_overhead_pct": 2.4961347369113707,
+    "p95_ci95": [
+     2.112881624751885,
+     3.0447387727642723
+    ],
+    "delta_us": 55.193555664062615,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 2233.9462890625,
+     "cipher": 2261.9462890625
+    },
+    "below_10pct": true,
+    "ci_upper_below_10pct": true
+   }
+  },
+  "sse_keyword": {
+   "name_zh": "关键词 SSE（命中 10 条）",
+   "section": "main",
+   "kind": "word",
+   "arms": {
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 2401.316112792969,
+      "p50": 2651.0735,
+      "p95": 3201.82345,
+      "p99": 3359.50649
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 216.389171875,
+      "hpis_sqlite_body_read": 171.8658369140625,
+      "hpic_decrypt_unpack": 33.0625751953125,
+      "client_and_transport_rest": 2151.864365722656
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22339.83251953125
+    },
+    "sse_cipher": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 2493.629081054688,
+      "p50": 2760.798,
+      "p95": 3313.86035,
+      "p99": 3473.1247
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 215.7332490234375,
+      "hpis_sqlite_body_read": 170.63415234375003,
+      "hpic_decrypt_unpack": 106.80034277343749,
+      "client_and_transport_rest": 2171.095489257813
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22619.83251953125
+    }
+   },
+   "comparisons": {
+    "sse_cipher_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 2401.316112792969,
+     "other_mean_us": 2493.629081054688,
+     "overhead_pct": {
+      "mean": 3.844265557954807,
+      "p50": 4.138870536784434,
+      "p95": 3.4991592056707654
+     },
+     "ci95_pct": {
+      "mean": [
+       3.113247217230386,
+       4.6121005235297385
+      ],
+      "p50": [
+       3.8334526403904685,
+       4.58026086300373
+      ],
+      "p95": [
+       2.9061693270036715,
+       3.946605908996658
+      ]
+     },
+     "delta_mean_us": 92.3129682617191,
+     "delta_mean_us_ci95": [
+      74.50318319091824,
+      110.83737930908244
+     ],
+     "per_round_overhead_pct": [
+      4.429812804160793,
+      4.664740934131406,
+      2.3722209514453585,
+      4.2649647069300745
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "sse_cipher": {
+     "tenant": "ppe",
+     "kernel": "unified",
+     "refine": false
+    }
+   },
+   "headline": {
+    "plaintext_mean_ms": 2.4013161127929687,
+    "cipher_mean_ms": 2.493629081054688,
+    "overhead_pct": 3.844265557954807,
+    "ci95": [
+     3.113247217230386,
+     4.6121005235297385
+    ],
+    "p95_overhead_pct": 3.4991592056707654,
+    "p95_ci95": [
+     2.9061693270036715,
+     3.946605908996658
+    ],
+    "delta_us": 92.3129682617191,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 22339.83251953125,
+     "cipher": 22619.83251953125
+    },
+    "below_10pct": true,
+    "ci_upper_below_10pct": true
+   }
+  },
+  "vec_tee": {
+   "name_zh": "向量 Top-10·软硬协同精确（TEE）",
+   "section": "main",
+   "kind": "vector",
+   "arms": {
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7391.2466738281255,
+      "p50": 7135.9465,
+      "p95": 8905.68755,
+      "p99": 12576.130119999974
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4567.182512695313,
+      "hpis_sqlite_body_read": 320.9490483398437,
+      "hpic_decrypt_unpack": 41.35442333984375,
+      "client_and_transport_rest": 2782.709737792969
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22340.3984375,
+     "recall_at_k_vs_fp64_truth": 0.9994140625000001,
+     "ordered_equal_fp64_truth": 0.990234375,
+     "ordered_equal_plaintext_arm": 1.0,
+     "recall_at_k_vs_plaintext_arm": 1.0
+    },
+    "tee": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7368.350040039062,
+      "p50": 7121.5655,
+      "p95": 8873.82045,
+      "p99": 12313.642579999992
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4420.236668457032,
+      "hpis_sqlite_body_read": 326.8100927734375,
+      "hpic_decrypt_unpack": 144.68332080078125,
+      "client_and_transport_rest": 2803.4300507812495
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22620.3984375,
+     "recall_at_k_vs_fp64_truth": 0.9994140625000001,
+     "ordered_equal_fp64_truth": 0.990234375,
+     "ordered_equal_plaintext_arm": 1.0,
+     "recall_at_k_vs_plaintext_arm": 1.0
+    }
+   },
+   "comparisons": {
+    "tee_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 7391.2466738281255,
+     "other_mean_us": 7368.350040039062,
+     "overhead_pct": {
+      "mean": -0.3097804037597407,
+      "p50": -0.20152897727022667,
+      "p95": -0.35782863278199795
+     },
+     "ci95_pct": {
+      "mean": [
+       -1.2182054003345744,
+       0.5555767935859435
+      ],
+      "p50": [
+       -0.41668826672183523,
+       0.006444299459119116
+      ],
+      "p95": [
+       -2.8218665471943987,
+       1.9700790379887911
+      ]
+     },
+     "delta_mean_us": -22.896633789063344,
+     "delta_mean_us_ci95": [
+      -90.7255300415029,
+      40.78898969726672
+     ],
+     "per_round_overhead_pct": [
+      0.38851154089301065,
+      -0.5749424437993755,
+      0.46505322997740794,
+      -1.5493115831477833
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "tee": {
+     "tenant": "tee",
+     "kernel": "unified",
+     "refine": false
+    }
+   },
+   "headline": {
+    "plaintext_mean_ms": 7.3912466738281255,
+    "cipher_mean_ms": 7.368350040039062,
+    "overhead_pct": -0.3097804037597407,
+    "ci95": [
+     -1.2182054003345744,
+     0.5555767935859435
+    ],
+    "p95_overhead_pct": -0.35782863278199795,
+    "p95_ci95": [
+     -2.8218665471943987,
+     1.9700790379887911
+    ],
+    "delta_us": -22.896633789063344,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 22340.3984375,
+     "cipher": 22620.3984375
+    },
+    "below_10pct": true,
+    "ci_upper_below_10pct": true
+   }
+  },
+  "vec_ppe": {
+   "name_zh": "向量 Top-10·纯密码学 PPE（快速）",
+   "section": "main",
+   "kind": "vector",
+   "arms": {
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7627.941598144531,
+      "p50": 7487.619000000001,
+      "p95": 8878.7753,
+      "p99": 10875.64753
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4538.936104980468,
+      "hpis_sqlite_body_read": 316.85325341796874,
+      "hpic_decrypt_unpack": 47.81646240234375,
+      "client_and_transport_rest": 3041.1890307617186
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22340.3984375,
+     "recall_at_k_vs_fp64_truth": 0.9994140625000001,
+     "ordered_equal_fp64_truth": 0.990234375,
+     "ordered_equal_plaintext_arm": 1.0,
+     "recall_at_k_vs_plaintext_arm": 1.0
+    },
+    "ppe": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7899.534938964844,
+      "p50": 7739.8145,
+      "p95": 9376.462399999999,
+      "p99": 12147.398289999966
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4558.554565429688,
+      "hpis_sqlite_body_read": 310.9598271484375,
+      "hpic_decrypt_unpack": 158.22215576171874,
+      "client_and_transport_rest": 3182.7582177734366
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22620.44384765625,
+     "recall_at_k_vs_fp64_truth": 0.9119140625000002,
+     "ordered_equal_fp64_truth": 0.0263671875,
+     "ordered_equal_plaintext_arm": 0.0263671875,
+     "recall_at_k_vs_plaintext_arm": 0.9118652343750001
+    }
+   },
+   "comparisons": {
+    "ppe_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 7627.941598144531,
+     "other_mean_us": 7899.534938964844,
+     "overhead_pct": {
+      "mean": 3.5605062955172073,
+      "p50": 3.368166836480335,
+      "p95": 5.605357531685695
+     },
+     "ci95_pct": {
+      "mean": [
+       2.7573346945424952,
+       4.346828441734092
+      ],
+      "p50": [
+       2.824474160034342,
+       3.7858182442018204
+      ],
+      "p95": [
+       2.876688062846456,
+       8.467925168563696
+      ]
+     },
+     "delta_mean_us": 271.59334082031273,
+     "delta_mean_us_ci95": [
+      210.57603472900377,
+      330.98762557373124
+     ],
+     "per_round_overhead_pct": [
+      4.145155495699848,
+      2.308064642140173,
+      3.611192078299452,
+      4.051467134530795
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "ppe": {
+     "tenant": "ppe",
+     "kernel": "unified",
+     "refine": false
+    }
+   },
+   "headline": {
+    "plaintext_mean_ms": 7.627941598144531,
+    "cipher_mean_ms": 7.899534938964844,
+    "overhead_pct": 3.5605062955172073,
+    "ci95": [
+     2.7573346945424952,
+     4.346828441734092
+    ],
+    "p95_overhead_pct": 5.605357531685695,
+    "p95_ci95": [
+     2.876688062846456,
+     8.467925168563696
+    ],
+    "delta_us": 271.59334082031273,
+    "pairs": 2048,
+    "correctness": "Recall@10 91.19%",
+    "body_bytes": {
+     "plaintext": 22340.3984375,
+     "cipher": 22620.44384765625
+    },
+    "below_10pct": true,
+    "ci_upper_below_10pct": true
+   }
+  },
+  "vec_ppe_rerank": {
+   "name_zh": "向量 Top-10·纯密码学 PPE 粗排 40 + HPIC 精排",
+   "section": "main",
+   "kind": "vector",
+   "arms": {
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7382.473365722657,
+      "p50": 7154.711499999999,
+      "p95": 8461.85045,
+      "p99": 9817.35592
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4436.883619140624,
+      "hpis_sqlite_body_read": 308.65420947265625,
+      "hpic_decrypt_unpack": 52.7315078125,
+      "client_and_transport_rest": 2892.858238769533
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22340.3984375,
+     "recall_at_k_vs_fp64_truth": 0.9994140625000001,
+     "ordered_equal_fp64_truth": 0.990234375,
+     "ordered_equal_plaintext_arm": 1.0,
+     "recall_at_k_vs_plaintext_arm": 1.0
+    },
+    "ppe_rerank": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 8804.663672851562,
+      "p50": 8594.4545,
+      "p95": 10267.084849999997,
+      "p99": 11813.290410000001
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4859.858874511719,
+      "hpis_sqlite_body_read": 719.9430844726563,
+      "hpic_decrypt_unpack": 613.8974697265625,
+      "client_and_transport_rest": 3330.907328613281
+     },
+     "body_rows_per_query": 40.0,
+     "body_bytes_per_query": 90481.6025390625,
+     "recall_at_k_vs_fp64_truth": 0.997998046875,
+     "ordered_equal_fp64_truth": 0.98046875,
+     "ordered_equal_plaintext_arm": 0.990234375,
+     "recall_at_k_vs_plaintext_arm": 0.998583984375
+    }
+   },
+   "comparisons": {
+    "ppe_rerank_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 7382.473365722657,
+     "other_mean_us": 8804.663672851562,
+     "overhead_pct": {
+      "mean": 19.264415009368463,
+      "p50": 20.12300565857896,
+      "p95": 21.333801757273996
+     },
+     "ci95_pct": {
+      "mean": [
+       18.07117298280783,
+       20.311860686521435
+      ],
+      "p50": [
+       19.601017155565703,
+       21.07093751183032
+      ],
+      "p95": [
+       18.925519522019904,
+       23.661422843975714
+      ]
+     },
+     "delta_mean_us": 1422.1903071289053,
+     "delta_mean_us_ci95": [
+      1339.9218004516592,
+      1496.7115149292
+     ],
+     "per_round_overhead_pct": [
+      18.57555950718035,
+      20.67269081935439,
+      20.038477047965287,
+      17.895397622907417
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "ppe_rerank": {
+     "tenant": "ppe",
+     "kernel": "unified",
+     "refine": false
+    }
+   },
+   "headline": {
+    "plaintext_mean_ms": 7.382473365722657,
+    "cipher_mean_ms": 8.804663672851563,
+    "overhead_pct": 19.264415009368463,
+    "ci95": [
+     18.07117298280783,
+     20.311860686521435
+    ],
+    "p95_overhead_pct": 21.333801757273996,
+    "p95_ci95": [
+     18.925519522019904,
+     23.661422843975714
+    ],
+    "delta_us": 1422.1903071289053,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序 99.02%，Recall@10 99.80%",
+    "body_bytes": {
+     "plaintext": 22340.3984375,
+     "cipher": 90481.6025390625
+    },
+    "below_10pct": false,
+    "ci_upper_below_10pct": false
+   }
+  },
+  "three_arm": {
+   "name_zh": "旧口径对照：明文FP64复核 / 明文同核 / PPE",
+   "section": "appendix",
+   "kind": "vector",
+   "arms": {
+    "plaintext_fp64_recheck": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 8162.444508300781,
+      "p50": 7513.120000000001,
+      "p95": 12276.750099999997,
+      "p99": 16084.036639999998
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 5263.760755859375,
+      "hpis_sqlite_body_read": 311.9128349609375,
+      "hpic_decrypt_unpack": 47.64912060546875,
+      "client_and_transport_rest": 2851.034631835937
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22340.3984375,
+     "recall_at_k_vs_fp64_truth": 1.0,
+     "ordered_equal_fp64_truth": 1.0,
+     "ordered_equal_plaintext_arm": 1.0,
+     "recall_at_k_vs_plaintext_arm": 1.0
+    },
+    "plaintext": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7427.33971875,
+      "p50": 7252.949500000001,
+      "p95": 8678.898599999999,
+      "p99": 10708.65875999999
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4512.034530761719,
+      "hpis_sqlite_body_read": 325.66667138671875,
+      "hpic_decrypt_unpack": 43.98144287109375,
+      "client_and_transport_rest": 2871.3237451171876
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22340.3984375,
+     "recall_at_k_vs_fp64_truth": 0.9994140625000001,
+     "ordered_equal_fp64_truth": 0.990234375,
+     "ordered_equal_plaintext_arm": 0.990234375,
+     "recall_at_k_vs_plaintext_arm": 0.9994140625000001
+    },
+    "ppe": {
+     "latency_us": {
+      "n": 2048,
+      "mean": 7680.750586914062,
+      "p50": 7485.639,
+      "p95": 9060.07275,
+      "p99": 10979.958499999999
+     },
+     "phases_mean_us": {
+      "hpis_search_total": 4518.839084472656,
+      "hpis_sqlite_body_read": 306.76710205078126,
+      "hpic_decrypt_unpack": 144.8456591796875,
+      "client_and_transport_rest": 3017.0658432617183
+     },
+     "body_rows_per_query": 10.0,
+     "body_bytes_per_query": 22620.4521484375,
+     "recall_at_k_vs_fp64_truth": 0.9112304687500001,
+     "ordered_equal_fp64_truth": 0.03125,
+     "ordered_equal_plaintext_arm": 0.03125,
+     "recall_at_k_vs_plaintext_arm": 0.9112304687500001
+    }
+   },
+   "comparisons": {
+    "ppe_vs_plaintext_fp64_recheck": {
+     "pairs": 2048,
+     "baseline_mean_us": 8162.444508300781,
+     "other_mean_us": 7680.750586914062,
+     "overhead_pct": {
+      "mean": -5.901343903739398,
+      "p50": -0.36577347360351453,
+      "p95": -26.201375150578322
+     },
+     "ci95_pct": {
+      "mean": [
+       -7.00465733737921,
+       -4.800176700682803
+      ],
+      "p50": [
+       -0.9260219421525334,
+       0.060812342476092594
+      ],
+      "p95": [
+       -28.314363398076935,
+       -23.291546286112492
+      ]
+     },
+     "delta_mean_us": -481.693921386719,
+     "delta_mean_us_ci95": [
+      -576.3277883056644,
+      -389.1086017089846
+     ],
+     "per_round_overhead_pct": [
+      -4.33120752745324,
+      -6.507927490024191,
+      -5.870774791046818,
+      -7.053862218945362
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    },
+    "ppe_vs_plaintext": {
+     "pairs": 2048,
+     "baseline_mean_us": 7427.33971875,
+     "other_mean_us": 7680.750586914062,
+     "overhead_pct": {
+      "mean": 3.411865859916663,
+      "p50": 3.2082051584668925,
+      "p95": 4.391964551815364
+     },
+     "ci95_pct": {
+      "mean": [
+       2.4752293589757364,
+       4.243438686712701
+      ],
+      "p50": [
+       2.8345458839931377,
+       3.5987800478335656
+      ],
+      "p95": [
+       2.6225582036723263,
+       7.640789724343524
+      ]
+     },
+     "delta_mean_us": 253.41086816406187,
+     "delta_mean_us_ci95": [
+      184.77706771240096,
+      313.92134700927755
+     ],
+     "per_round_overhead_pct": [
+      3.637223603207218,
+      3.5500683387060805,
+      2.763400656659387,
+      3.688078909237835
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    },
+    "plaintext_vs_plaintext_fp64_recheck": {
+     "pairs": 2048,
+     "baseline_mean_us": 8162.444508300781,
+     "other_mean_us": 7427.33971875,
+     "overhead_pct": {
+      "mean": -9.00593919876843,
+      "p50": -3.462882264625089,
+      "p95": -29.306220870293675
+     },
+     "ci95_pct": {
+      "mean": [
+       -10.179388289794145,
+       -7.814129852648861
+      ],
+      "p50": [
+       -4.079253408117342,
+       -2.96317776637693
+      ],
+      "p95": [
+       -31.465455081582558,
+       -27.301217507694993
+      ]
+     },
+     "delta_mean_us": -735.1047895507809,
+     "delta_mean_us_ci95": [
+      -838.3518579467774,
+      -632.9074924926749
+     ],
+     "per_round_overhead_pct": [
+      -7.6887732550313785,
+      -9.713171599106207,
+      -8.401994671773917,
+      -10.359861269670201
+     ],
+     "method": "paired circular moving-block bootstrap, blocks of <= 16 consecutive pairs, stratified by round, 4000 replicates, percentile 95% interval"
+    }
+   },
+   "arm_definitions": {
+    "plaintext_fp64_recheck": {
+     "tenant": "plain_b",
+     "kernel": "production",
+     "refine": false
+    },
+    "plaintext": {
+     "tenant": "plain",
+     "kernel": "unified",
+     "refine": false
+    },
+    "ppe": {
+     "tenant": "ppe",
+     "kernel": "unified",
+     "refine": false
+    }
+   }
+  }
+ },
+ "io": {
+  "1.0_field": {
+   "requests": 4,
+   "mean_ms": 584.96965,
+   "body_rows": 25232.0,
+   "body_bytes": 57074334.0
+  },
+  "1.0_vector": {
+   "requests": 4,
+   "mean_ms": 708.16275,
+   "body_rows": 25232.0,
+   "body_bytes": 57074334.0,
+   "exact_top_k": 1.0
+  },
+  "2.0_field": {
+   "requests": 4,
+   "mean_ms": 3.104925,
+   "body_rows": 1.0,
+   "body_bytes": 2262.5,
+   "reduction_vs_1.0_body_bytes": 25226.22497237569
+  },
+  "2.0_word": {
+   "requests": 4,
+   "mean_ms": 7.591925,
+   "body_rows": 10.0,
+   "body_bytes": 22624.5,
+   "reduction_vs_1.0_body_bytes": 2522.6782470330836
+  },
+  "2.0_vector": {
+   "requests": 4,
+   "mean_ms": 7.690375,
+   "body_rows": 10.0,
+   "body_bytes": 22621.0,
+   "reduction_vs_1.0_body_bytes": 2523.0685646081074
+  },
+  "note": "1.0-style = op 'scan': HPIS reads every record of the AID and ships it to HPIC, which decrypts all and filters (the keyword case reads the same whole AID). 2.0 = HPIS selects inside the AID and ships only the hits. The vector query still scans the in-memory index each time (25232 x 512 x 4 B = 51675136 B of RAM); what 2.0 removes is the per-query body read, transfer and decryption.",
+  "in_memory_vector_index_bytes": 51675136
+ }
+}

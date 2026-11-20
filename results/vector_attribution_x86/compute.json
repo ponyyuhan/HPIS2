@@ -1,0 +1,38 @@
+{
+  "id": 61622569,
+  "label": "hpis2-vector-x86-20261120-1025",
+  "cpu_name": "AMD Ryzen 5 5600X 6-Core Processor",
+  "cpu_cores_effective": 6.0,
+  "gpu_name": "RTX 3060",
+  "start_date": 1795170322.4876072,
+  "dph_total": 0.07481481481481482,
+  "geolocation": "Poland, PL",
+  "actual_status": "running",
+  "machine_id": 22718,
+  "published_traffic": "public GloVe 20,000 training and 1,040 test rows; synthetic record contents; CPU only",
+  "duration_seconds_before_release": 1218.857272863388,
+  "phase_before_release": "running",
+  "destroy_command_utc": "2026-11-20T10:45:41.409150+00:00",
+  "absent_from_account_after_destroy": true,
+  "release_verified_utc": "2026-11-20T10:46:15.825815+00:00",
+  "reported_charge_usd": 0.024,
+  "billing_observed_utc": "2026-11-20T10:48:00.401148+00:00",
+  "charge_items": [
+    {
+      "description": "0.320 hours at $0.073/hour",
+      "amount": 0.023
+    },
+    {
+      "description": "0.329 hours at $0.001/hour",
+      "amount": 0.0
+    },
+    {
+      "description": "0.1 GB Downloaded at $0.009/GB",
+      "amount": 0.001
+    },
+    {
+      "description": "Bandwidth (upload)",
+      "amount": 0.0
+    }
+  ]
+}

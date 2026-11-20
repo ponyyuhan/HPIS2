@@ -1,0 +1,149 @@
+/root/hpis-mapped-rank.so
+ingest 20000 rows into 5 tenants
+  ingest 128/20000
+  ingest 12928/20000
+round 1/8 done in 40.0s
+round 2/8 done in 39.0s
+round 3/8 done in 36.9s
+round 4/8 done in 36.0s
+round 5/8 done in 38.2s
+round 6/8 done in 38.3s
+round 7/8 done in 35.5s
+round 8/8 done in 37.9s
+  io 1/16
+  io 2/16
+  io 3/16
+  io 4/16
+  io 5/16
+  io 6/16
+  io 7/16
+  io 8/16
+  io 9/16
+  io 10/16
+  io 11/16
+  io 12/16
+  io 13/16
+  io 14/16
+  io 15/16
+  io 16/16
+mapped appendix: ingest 20000 rows
+  ingest 128/20000
+  ingest 12928/20000
+mapped round 1/8
+mapped round 2/8
+mapped round 3/8
+mapped round 4/8
+mapped round 5/8
+mapped round 6/8
+mapped round 7/8
+mapped round 8/8
+
+GloVe-100 angular  rows=20000 dims=100  AMD EPYC 7452 32-Core Processor
+sse_exact      plain 2.464 ms  cipher 2.514 ms  +2.05% [+1.00, +3.08]  p95 +2.15%  命中结果与明文一致 100%（4096/4096）
+sse_keyword    plain 2.207 ms  cipher 2.307 ms  +4.53% [+2.81, +6.61]  p95 +3.90%  命中结果与明文一致 100%（4096/4096）
+vec_tee        plain 3.255 ms  cipher 3.343 ms  +2.71% [+1.17, +4.15]  p95 +2.42%  Top-10 与明文逐条同序一致 100.00%
+vec_ppe        plain 3.241 ms  cipher 3.396 ms  +4.77% [+4.15, +5.44]  p95 +4.49%  Recall@10 89.22%
+vec_ppe_rerank plain 3.358 ms  cipher 4.232 ms  +26.03% [+25.50, +26.52]  p95 +25.20%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+vec_ppe_b0125  plain 3.032 ms  cipher 3.172 ms  +4.62% [+3.72, +5.54]  p95 +3.90%  Recall@10 93.95%
+vec_ppe_b0125_rerank plain 3.177 ms  cipher 3.668 ms  +15.47% [+14.44, +16.50]  p95 +13.17%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+three_arm      ppe_vs_plaintext_fp64_recheck: +1.00% [+0.42, +1.60]
+three_arm      ppe_vs_plaintext: +4.54% [+3.25, +5.60]
+three_arm      plaintext_vs_plaintext_fp64_recheck: -3.39% [-4.35, -2.17]
+refine_strict  plain 3.440 ms  cipher 11.971 ms  +247.97% [+244.27, +251.50]  p95 +321.79%  Top-10 与 FP64 穷举真值同序 100.00%
+mapped_exact   plain 3.132 ms  cipher 3.443 ms  +9.96% [+8.83, +11.09]  p95 +8.47%  Top-10 与 FP64 穷举真值同序 100.00%
+io: 1.0 whole-AID 12278110 B/query vs 2.0 field 614 B, vector 6140 B
+wrote /root/out/linux_x86_glove20k
+ingest 20000 rows into 4 tenants
+  ingest 128/20000
+  ingest 12928/20000
+round 1/8 done in 21.9s
+round 2/8 done in 25.6s
+round 3/8 done in 22.5s
+round 4/8 done in 22.1s
+round 5/8 done in 21.9s
+round 6/8 done in 21.4s
+round 7/8 done in 21.2s
+round 8/8 done in 24.6s
+
+GloVe-100 angular  rows=20000 dims=100  AMD EPYC 7452 32-Core Processor
+sse_exact      plain 2.107 ms  cipher 2.148 ms  +1.95% [+0.74, +3.19]  p95 +1.99%  命中结果与明文一致 100%（4096/4096）
+sse_keyword    plain 2.412 ms  cipher 2.490 ms  +3.26% [+1.72, +4.72]  p95 +2.66%  命中结果与明文一致 100%（4096/4096）
+vec_tee        plain 2.991 ms  cipher 3.068 ms  +2.55% [+0.61, +4.43]  p95 +3.63%  Top-10 与明文逐条同序一致 100.00%
+vec_ppe        plain 2.946 ms  cipher 3.150 ms  +6.92% [+5.24, +8.76]  p95 +5.98%  Recall@10 89.22%
+vec_ppe_rerank plain 3.008 ms  cipher 3.915 ms  +30.14% [+27.88, +32.39]  p95 +26.72%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+vec_ppe_b0125  plain 3.030 ms  cipher 3.201 ms  +5.64% [+3.41, +7.88]  p95 +6.15%  Recall@10 94.09%
+vec_ppe_b0125_rerank plain 3.011 ms  cipher 3.502 ms  +16.29% [+14.46, +18.13]  p95 +13.69%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+wrote /root/out/linux_x86_glove20k_warm
+ingest 100000 rows into 4 tenants
+  ingest 128/100000
+  ingest 12928/100000
+  ingest 25728/100000
+  ingest 38528/100000
+  ingest 51328/100000
+  ingest 64128/100000
+  ingest 76928/100000
+  ingest 89728/100000
+round 1/4 done in 56.8s
+round 2/4 done in 55.1s
+round 3/4 done in 59.0s
+round 4/4 done in 57.7s
+  io 1/8
+  io 2/8
+  io 3/8
+  io 4/8
+  io 5/8
+  io 6/8
+  io 7/8
+  io 8/8
+
+GloVe-100 angular  rows=100000 dims=100  AMD EPYC 7452 32-Core Processor
+sse_exact      plain 2.371 ms  cipher 2.432 ms  +2.61% [+0.99, +4.75]  p95 +2.13%  命中结果与明文一致 100%（2048/2048）
+sse_keyword    plain 2.584 ms  cipher 2.687 ms  +3.99% [+2.90, +5.14]  p95 +3.12%  命中结果与明文一致 100%（2048/2048）
+vec_tee        plain 6.765 ms  cipher 6.788 ms  +0.34% [-1.01, +1.83]  p95 +0.33%  Top-10 与明文逐条同序一致 100.00%
+vec_ppe        plain 6.926 ms  cipher 7.100 ms  +2.51% [+1.53, +3.51]  p95 +4.50%  Recall@10 87.67%
+vec_ppe_rerank plain 6.842 ms  cipher 7.664 ms  +12.01% [+10.94, +13.05]  p95 +10.13%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+three_arm      ppe_vs_plaintext_fp64_recheck: +1.98% [+0.81, +3.25]
+three_arm      ppe_vs_plaintext: +2.95% [+1.54, +4.43]
+three_arm      plaintext_vs_plaintext_fp64_recheck: -0.95% [-2.03, +0.12]
+refine_strict  plain 6.660 ms  cipher 24.442 ms  +266.99% [+260.15, +274.16]  p95 +400.72%  Top-10 与 FP64 穷举真值同序 100.00%
+io: 1.0 whole-AID 61420030 B/query vs 2.0 field 614 B, vector 6141 B
+wrote /root/out/linux_x86_glove100k
+ingest 25232 rows into 4 tenants
+  ingest 128/25232
+  ingest 12928/25232
+round 1/4 done in 44.6s
+round 2/4 done in 40.9s
+round 3/4 done in 44.2s
+round 4/4 done in 42.6s
+  io 1/4
+  io 2/4
+  io 3/4
+  io 4/4
+
+embeddings-business-25776x512  rows=25232 dims=512  AMD EPYC 7452 32-Core Processor
+sse_exact      plain 1.942 ms  cipher 1.998 ms  +2.84% [+0.84, +4.47]  p95 +2.50%  命中结果与明文一致 100%（2048/2048）
+sse_keyword    plain 2.401 ms  cipher 2.494 ms  +3.84% [+3.11, +4.61]  p95 +3.50%  命中结果与明文一致 100%（2048/2048）
+vec_tee        plain 7.391 ms  cipher 7.368 ms  -0.31% [-1.22, +0.56]  p95 -0.36%  Top-10 与明文逐条同序一致 100.00%
+vec_ppe        plain 7.628 ms  cipher 7.900 ms  +3.56% [+2.76, +4.35]  p95 +5.61%  Recall@10 91.19%
+vec_ppe_rerank plain 7.382 ms  cipher 8.805 ms  +19.26% [+18.07, +20.31]  p95 +21.33%  Top-10 与明文逐条同序 99.02%，Recall@10 99.80%
+three_arm      ppe_vs_plaintext_fp64_recheck: -5.90% [-7.00, -4.80]
+three_arm      ppe_vs_plaintext: +3.41% [+2.48, +4.24]
+three_arm      plaintext_vs_plaintext_fp64_recheck: -9.01% [-10.18, -7.81]
+io: 1.0 whole-AID 57074334 B/query vs 2.0 field 2262 B, vector 22621 B
+wrote /root/out/linux_x86_business
+ingest 20000 rows into 3 tenants
+  ingest 128/20000
+  ingest 12928/20000
+round 1/4 done in 14.7s
+round 2/4 done in 15.7s
+round 3/4 done in 14.3s
+round 4/4 done in 14.4s
+
+GloVe-100 angular  rows=20000 dims=100  AMD EPYC 7452 32-Core Processor
+sse_exact      plain 2.224 ms  cipher 2.259 ms  +1.57% [-0.25, +3.29]  p95 +1.27%  命中结果与明文一致 100%（2048/2048）
+sse_keyword    plain 1.804 ms  cipher 1.881 ms  +4.26% [+3.27, +5.34]  p95 +4.00%  命中结果与明文一致 100%（2048/2048）
+vec_tee        plain 2.788 ms  cipher 2.888 ms  +3.60% [+2.42, +4.79]  p95 +4.59%  Top-10 与明文逐条同序一致 100.00%
+vec_ppe        plain 3.088 ms  cipher 3.212 ms  +4.04% [+2.57, +5.63]  p95 +4.24%  Recall@10 89.57%
+vec_ppe_rerank plain 2.962 ms  cipher 3.649 ms  +23.22% [+20.87, +25.63]  p95 +22.15%  Top-10 与明文逐条同序 100.00%，Recall@10 100.00%
+wrote /root/out/linux_x86_glove20k_holdout
+SUITE_DONE

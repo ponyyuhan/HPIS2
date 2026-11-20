@@ -1,0 +1,22 @@
+{
+  "platform": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+  "python": "3.12.3",
+  "issued_by_archive": 2,
+  "accepted_by_hpis2": 2,
+  "isolated_tenants": 2,
+  "verified_queries": [
+    "encrypted keyword",
+    "exact refined vector"
+  ],
+  "rejected_cases": [
+    "untrusted upstream RSA key",
+    "changed signed attributes",
+    "changed blind-signed SubAID",
+    "independently valid token for a different enrollment",
+    "wrong HPIS owner signature",
+    "expired redemption proof",
+    "native ticket in owner-only deployment",
+    "tenant A ticket with tenant B valid query and owner proof",
+    "replayed query"
+  ]
+}

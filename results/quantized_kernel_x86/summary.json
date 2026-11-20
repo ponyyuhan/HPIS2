@@ -1,0 +1,21 @@
+{
+  "cpu": "AMD Ryzen 5 5600X",
+  "dataset": "GloVe first 20,000; cosine, 100 dimensions, beta 0.25, k=10",
+  "boundary": "in-process native kernel only; encryption parameters held common; native and Q8 results both validated against independent exhaustive FP64 oracle",
+  "results": {
+    "plain": {
+      "unique_queries": 256,
+      "paired_samples": 512,
+      "reference_mean_us": 126.751212890625,
+      "q8_mean_us": 63.605056640625,
+      "all_reference_and_oracle_equal": true
+    },
+    "ppe": {
+      "unique_queries": 256,
+      "paired_samples": 512,
+      "reference_mean_us": 160.09521875,
+      "q8_mean_us": 100.50891796875,
+      "all_reference_and_oracle_equal": true
+    }
+  }
+}

@@ -1,0 +1,103 @@
+--- a/integration/mapped_index/protocol.py
++++ b/integration/mapped_index/protocol.py
+@@ -109,9 +109,10 @@
+     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+ 
+     async def fetch(request):
+-        nonce, inner, owner_bound, index_id, selected_k, revision, ids = unpack(
+-            await request.read()
+-        )
++        header_size=int.from_bytes(await request.content.readexactly(4),"big")
++        if header_size>65536:
++            raise ValueError("invalid metadata header size")
++        nonce,inner,owner_bound,index_id,selected_k,revision=unpack(await request.content.readexactly(header_size))
+         aid, signed = unpack(box.decrypt(inner))
+         tenant = dbstore.tenant(aid)
+         owner, mode, dim, beta = tenant
+@@ -134,6 +135,13 @@
+         ):
+             raise PermissionError()
+         k = op["k"]
++        if type(k) is not int or not 1<=k<=10000:
++            raise ValueError("invalid selection budget")
++        seen.add((aid,nonce),True)
++        expected=int.from_bytes(await request.content.readexactly(4),"big")
++        if expected>10*k+16:
++            raise ValueError("oversized index result")
++        ids=unpack(await request.content.readexactly(expected))
+         if (
+             type(k) is not int
+             or not 1 <= k <= 10000
+@@ -144,7 +152,6 @@
+             raise PermissionError()
+         if any(type(i) is not int for i in ids):
+             raise ValueError("invalid record ID")
+-        seen.add((aid, nonce), True)
+         start = perf_counter_ns()
+         # Both version validation and selected body lookup read one consistent SQLite version.
+         dbstore.db.execute("BEGIN")
+@@ -250,30 +257,40 @@
+                 # A single last delegation per AID is enough. All entries here are public.
+                 verified.clear()
+                 verified[holder] = delegate
+-        rows = []
+-        opened = 0
+-        rank_start = perf_counter_ns()
+-        if image is not None:
+-            q = np.frombuffer(grant["q"], F32)
+-            rq = np.frombuffer(grant["rq"], F32) if grant["rq"] is not None else q
+-            rows, opened = image.exact(q, rq, k, grant["vek"])
+-        rank_us = (perf_counter_ns() - rank_start) / 1000
+-        rank_diag = dict(getattr(image, "diagnostic", {}))
+-        result = await post(
+-            state["upstream"],
+-            store_url,
+-            "/mapped/fetch",
+-            [
+-                nonce,
+-                sealed,
+-                bound,
+-                idx,
+-                k,
+-                None if image is None else image.revision,
+-                rows,
+-            ],
+-            "hpis",
+-        )
++        rank_us=0.
++        rank_diag={}
++        opened=0
++        rank_error=None
++        header=pack([nonce,sealed,bound,idx,k,None if image is None else image.revision])
++        async def payload():
++            nonlocal rank_us,rank_diag,opened,rank_error
++            # aiohttp writes this framed fragment onto the authenticated TLS
++            # stream before asking the generator for the actual result IDs.
++            yield len(header).to_bytes(4,"big")+header
++            rows=[]
++            t0=perf_counter_ns()
++            try:
++                if image is not None:
++                    q=np.frombuffer(grant["q"],F32)
++                    rq=np.frombuffer(grant["rq"],F32) if grant["rq"] is not None else q
++                    rows,opened=image.exact(q,rq,k,grant["vek"])
++            except Exception as exc:
++                rank_error=exc
++            rank_us=(perf_counter_ns()-t0)/1000
++            rank_diag=dict(getattr(image,"diagnostic",{}))
++            tail=pack(rows)
++            yield len(tail).to_bytes(4,"big")+tail
++
++        async with state["upstream"].post(store_url.rstrip("/")+"/mapped/fetch",
++                                          data=payload(),server_hostname="hpis.internal",
++                                          headers={"Content-Type":"application/octet-stream"},
++                                          allow_redirects=False) as response:
++            response.raise_for_status()
++            if response.status!=200:
++                raise ValueError("unexpected storage response")
++            result=unpack(await response.read())
++        if rank_error is not None:
++            raise rank_error
+         if result.get("retry"):
+             if images.get(idx) is entry:
+                 images.pop(idx, None)

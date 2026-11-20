@@ -1,0 +1,350 @@
+{
+  "upstream": {
+    "repository": "ponyyuhan/mcp_agent",
+    "commit": "f1207dfa8c3909293e217e2961934c085869263a",
+    "source": "original server functions and client_pic.token_demo/pre_store/call_infer"
+  },
+  "started_at_utc": "2026-11-20T09:33:41.644795+00:00",
+  "dataset": {
+    "name": "glove-100-angular",
+    "train_first": 20000,
+    "test_first": 12,
+    "dim": 100,
+    "k": 10
+  },
+  "environment": {
+    "os": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+    "arch": "aarch64",
+    "python": "3.12.3",
+    "versions": {
+      "fastapi": "0.165.0",
+      "uvicorn": "0.54.0",
+      "requests": "2.34.2",
+      "pyjwt": "2.15.1",
+      "numpy": "2.5.5",
+      "h5py": "3.16.0",
+      "cryptography": "50.0.2"
+    }
+  },
+  "method": {
+    "warmup": 2,
+    "seed": 20261120,
+    "transport": "unchanged upstream HTTP loopback",
+    "timing": "original call_infer entry through C4 decryption/answer; token issuance, pre-store and reference filtering excluded",
+    "context": "one complete JSON blob per AID; normalized float32 vectors encoded as base64 per record",
+    "pid_roles": "three distinct upstream processes, plus client",
+    "native_search": false
+  },
+  "latency_ms": {
+    "exact": {
+      "mean": 346.6841535833333,
+      "p50": 344.9244705,
+      "p95": 363.0462355,
+      "n": 12
+    },
+    "vector": {
+      "mean": 367.96084091666665,
+      "p50": 350.024398,
+      "p95": 455.9650225999999,
+      "n": 12
+    }
+  },
+  "verification": {
+    "c3_ref_check": {
+      "received_records": 20000,
+      "all_record_values_match": true,
+      "matches": [
+        {
+          "workload": "exact",
+          "selector": 4556,
+          "ids": [
+            4556
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 3,
+          "ids": [
+            7453,
+            17714,
+            15208,
+            19374,
+            17916,
+            19922,
+            19343,
+            7430,
+            6750,
+            3882
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 6,
+          "ids": [
+            13270,
+            8985,
+            5497,
+            8716,
+            1105,
+            6701,
+            1808,
+            15326,
+            1729,
+            10125
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 10,
+          "ids": [
+            19887,
+            18100,
+            8611,
+            7300,
+            18882,
+            3921,
+            10388,
+            12480,
+            5632,
+            18334
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 9622,
+          "ids": [
+            9622
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 1,
+          "ids": [
+            15355,
+            19935,
+            14790,
+            18070,
+            8630,
+            9584,
+            18627,
+            13231,
+            14818,
+            19163
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 7,
+          "ids": [
+            1231,
+            5249,
+            19630,
+            14432,
+            3165,
+            9688,
+            11321,
+            6284,
+            4159,
+            8136
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 9,
+          "ids": [
+            12527,
+            16825,
+            11526,
+            8311,
+            19230,
+            1032,
+            11241,
+            17616,
+            13705,
+            8239
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 4137,
+          "ids": [
+            4137
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 3477,
+          "ids": [
+            3477
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 13906,
+          "ids": [
+            13906
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 4388,
+          "ids": [
+            4388
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 0,
+          "ids": [
+            1961,
+            6303,
+            3143,
+            17932,
+            852,
+            8063,
+            19414,
+            12131,
+            14922,
+            5491
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 14530,
+          "ids": [
+            14530
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 17011,
+          "ids": [
+            17011
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 19166,
+          "ids": [
+            19166
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 11,
+          "ids": [
+            16919,
+            3515,
+            18458,
+            19156,
+            15362,
+            13461,
+            4654,
+            5013,
+            523,
+            17111
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 8,
+          "ids": [
+            10347,
+            13084,
+            8586,
+            11694,
+            2107,
+            9388,
+            1959,
+            1862,
+            13232,
+            12702
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 2,
+          "ids": [
+            12993,
+            9505,
+            2850,
+            9570,
+            867,
+            1331,
+            16195,
+            17363,
+            3623,
+            2019
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 6977,
+          "ids": [
+            6977
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 5,
+          "ids": [
+            3846,
+            12141,
+            6389,
+            13559,
+            6122,
+            12054,
+            18797,
+            11468,
+            3033,
+            12174
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 13680,
+          "ids": [
+            13680
+          ]
+        },
+        {
+          "workload": "exact",
+          "selector": 12667,
+          "ids": [
+            12667
+          ]
+        },
+        {
+          "workload": "vector",
+          "selector": 4,
+          "ids": [
+            15857,
+            15478,
+            3926,
+            6799,
+            11411,
+            16237,
+            4712,
+            4224,
+            11879,
+            13721
+          ]
+        }
+      ],
+      "returned_natively_by_pic": false
+    },
+    "old_aid_absent": true,
+    "new_aid_dek_open_full_context": true,
+    "final_db_file_bytes": 18524011,
+    "context_json_utf8_bytes": 13892882,
+    "c3_ct_bytes": 13892898,
+    "c3_nonce_bytes": 12,
+    "c3_ephemeral_public_key_bytes": 32,
+    "c3_ct_b64_chars": 18523864,
+    "resolve_http_response_body_bytes": 18523959,
+    "stored_full_ciphertext_bytes": 13892898,
+    "native_c3_received_decrypted_and_c4_opened": 26,
+    "hpis_full_rotations_including_out_of_timer_check": 27,
+    "native_c3_sizes_all_match_reference": true
+  }
+}

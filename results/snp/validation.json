@@ -1,0 +1,56 @@
+{
+  "observed_utc": "2026-11-20T09:42:32.816841+00:00",
+  "linux_release": "6.8.0-117-generic",
+  "architecture": "aarch64",
+  "verifier": "github.com/google/go-sev-guest/tools/check@v0.15.0",
+  "collector": "github.com/google/go-sev-guest/tools/attest@v0.15.0",
+  "online_crl": true,
+  "time_source": "current OS time",
+  "sample_type": "public historical AMD-signed VirTEE Milan report with published endorsement certificates",
+  "sample_source": "https://github.com/virtee/sev/tree/feaf142ec916c23e7658f088802921177ee290f9/tests/certs_data",
+  "sample_files": [
+    "report_milan.hex",
+    "vcek_milan.der",
+    "cert_chain_milan"
+  ],
+  "cases": [
+    {
+      "case": "unchanged_archived_report",
+      "verifier_exit": 0,
+      "diagnostic": null
+    },
+    {
+      "case": "other_challenge",
+      "verifier_exit": 5,
+      "diagnostic": "check exited with status 5: error validating attestation: report field REPORT_DATA is d447b55d197491bfe15cf298f9de9986b7a7c4be2468b4f6e2d53b71d7c645810b0f2cdfca0040433be063fc1a8293f0f3f8dae7b79fecb3d1cd82bd6a93ebfd. Expect d547b55d197491bfe15cf298f9de9986b7a7c4be2468b4f6e2d53b71d7c645810b0f2cdfca0040433be063fc1a8293f0f3f8dae7b79fecb3d1cd82bd6a93ebfd"
+    },
+    {
+      "case": "other_recipient",
+      "verifier_exit": 5,
+      "diagnostic": "check exited with status 5: error validating attestation: report field REPORT_DATA is d447b55d197491bfe15cf298f9de9986b7a7c4be2468b4f6e2d53b71d7c645810b0f2cdfca0040433be063fc1a8293f0f3f8dae7b79fecb3d1cd82bd6a93ebfd. Expect d447b55d197491bfe15cf298f9de9986b7a7c4be2468b4f6e2d53b71d7c645810a0f2cdfca0040433be063fc1a8293f0f3f8dae7b79fecb3d1cd82bd6a93ebfd"
+    },
+    {
+      "case": "other_expected_measurement",
+      "verifier_exit": 5,
+      "diagnostic": "check exited with status 5: error validating attestation: report field MEASUREMENT is 7a1e5c266c0108dbc9bb94fa926951320940915d0aafb42464bd88b579ea158d3e1a0dc39b2c60bd95b9c480cd81841f. Expect 7b1e5c266c0108dbc9bb94fa926951320940915d0aafb42464bd88b579ea158d3e1a0dc39b2c60bd95b9c480cd81841f"
+    },
+    {
+      "case": "smt_not_authorized",
+      "verifier_exit": 5,
+      "diagnostic": "check exited with status 5: error validating attestation: found unauthorized symmetric multithreading (SMT) capability"
+    },
+    {
+      "case": "corrupt_signature",
+      "verifier_exit": 2,
+      "diagnostic": "check exited with status 2: could not verify attestation signature: report signature verification error: x509: ECDSA verification failure"
+    }
+  ],
+  "ordinary_linux": {
+    "collection_error": "attest exited with status 1: FATAL: 2026/11/20 10:42:32.409233 attest.go:240: no supported SEV-SNP QuoteProvider found\nFATAL: 2026/11/20 10:42:32.409233 attest.go:240: no supported SEV-SNP QuoteProvider found",
+    "sdk_http_status": 403,
+    "sdk_session_open": false,
+    "recipient_box_available": false,
+    "body_rows": 0
+  },
+  "fresh_quote_for_this_deployment": false
+}

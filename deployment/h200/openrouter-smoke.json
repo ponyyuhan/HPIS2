@@ -1,0 +1,56 @@
+{
+  "started_utc": "2026-11-20T10:17:09.890859+00:00",
+  "endpoint_type": "OpenRouter",
+  "scope": "one real chat-completions request per listed profile; synthetic email and attachment only",
+  "observations": [
+    {
+      "profile": "qwen",
+      "requested_model": "qwen/qwen3.6-27b",
+      "requested_question": "星澜项目最终的上线时间是什么？",
+      "retrieved_synthetic_email_ids": [
+        2
+      ],
+      "verified_model_answer": false,
+      "verified_model_quotes": [],
+      "model_call": {
+        "engine": "本地证据抽取",
+        "profile": "qwen",
+        "status": "evidence-fallback",
+        "elapsedMs": 13391.574000008404,
+        "requestBytes": 1446,
+        "responseBytes": 8268,
+        "configuredModel": "qwen/qwen3.6-27b",
+        "detail": "模型回答未完整生成"
+      }
+    },
+    {
+      "profile": "gemma",
+      "requested_model": "google/gemma-4-31b-it",
+      "requested_question": "星澜项目最终的上线时间是什么？",
+      "retrieved_synthetic_email_ids": [
+        2
+      ],
+      "verified_model_answer": true,
+      "verified_model_quotes": [
+        {
+          "id": 2,
+          "attachment": "试点上线排期.csv",
+          "text": "2026 年 12 月 15 日 20:00（北京时间）启动试点上线。"
+        }
+      ],
+      "model_call": {
+        "engine": "google/gemma-4-31b-it · 引文问答",
+        "profile": "gemma",
+        "status": "verified",
+        "elapsedMs": 1462.0180421043187,
+        "requestBytes": 1451,
+        "responseBytes": 991,
+        "configuredModel": "google/gemma-4-31b-it",
+        "inputTokens": 337,
+        "outputTokens": 55,
+        "model": "google/gemma-4-31b-it"
+      }
+    }
+  ],
+  "finished_utc": "2026-11-20T10:17:24.746211+00:00"
+}

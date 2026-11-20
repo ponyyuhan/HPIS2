@@ -1,0 +1,70 @@
+--- a/hpis/services.py
++++ b/hpis/services.py
+@@ -3,6 +3,7 @@
+ import os
+ import time
+ from collections import OrderedDict, defaultdict
++from functools import lru_cache
+ from pathlib import Path
+ from time import perf_counter_ns
+ 
+@@ -194,14 +195,38 @@
+     return ids[nearest(ids[:stop], scored, k)].tolist(), stop
+ 
+ 
+-def make_hpic_app(folder, store_url):
++class PublicTicketVerifier:
++    """Cache only the authenticated issuer statements, never a holder authorization."""
++
++    def __init__(self, key, *, cache):
++        issuer = VerifyKey(key)
++
++        def verify(ticket):
++            return unpack(issuer.verify(ticket))
++
++        self.verify = lru_cache(maxsize=256)(verify) if cache else verify
++        self.cached = cache
++
++    def claims(self, ticket):
++        if not self.cached:
++            return self.verify(ticket), False
++        before = self.verify.cache_info().hits
++        claims = self.verify(ticket)
++        return claims, self.verify.cache_info().hits != before
++
++
++PUBLIC_TICKETS = web.AppKey("hpis_public_ticket_verifier", PublicTicketVerifier)
++
++
++def make_hpic_app(folder, store_url, *, cache_public_ticket=False):
+     if not store_url.startswith("https://"):
+         raise ValueError("HPIS must use HTTPS")
+     config = read_config(folder)
+-    issuer = VerifyKey(config["verify"])
++    issuer = PublicTicketVerifier(config["verify"], cache=cache_public_ticket)
+     owner_ticket_only = config.get("owner_ticket_only", False)
+     seen = Window()
+     app = web.Application(middlewares=[errors], client_max_size=64 << 20)
++    app[PUBLIC_TICKETS] = issuer
+     upstream = None
+ 
+     async def connect(_):
+@@ -216,7 +241,8 @@
+ 
+     async def forward(request):
+         ticket, signed = unpack(await request.read())
+-        audience, expiration, holder, *commitment = unpack(issuer.verify(ticket))
++        claims, cache_hit = issuer.claims(ticket)
++        audience, expiration, holder, *commitment = claims
+         if time.time() >= expiration:
+             raise PermissionError()
+         if audience == "hpic-owner-v1" and len(commitment) == 1:
+@@ -259,6 +285,8 @@
+         if "scan" in grant:
+             records = scan_filter(records, grant["scan"])
+         stats["open_and_filter_us"] = (perf_counter_ns() - start) / 1000
++        if cache_public_ticket:
++            stats.update(issuer_cache_hit=cache_hit, ticket_expiry_checks=1, holder_signature_checks=1, owner_signature_checks=1, nonce_checks=2)
+         return reply(
+             {"records": [(rid, obj["content"]) for rid, obj in records], "stats": stats}
+         )

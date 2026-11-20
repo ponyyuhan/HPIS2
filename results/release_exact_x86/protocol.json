@@ -1,0 +1,66 @@
+{
+  "archived_utc": "2026-11-20T10:51:39.881614+00:00",
+  "predeclared": {
+    "n": 20000,
+    "d": 100,
+    "k": 10,
+    "beta": 0.25,
+    "query_offsets": [
+      0,
+      512
+    ],
+    "queries": 512,
+    "rounds": 4,
+    "concurrency": 1,
+    "backend": [
+      "FP32",
+      "Q8"
+    ],
+    "arms": [
+      "native_plain",
+      "mapped_plain",
+      "mapped_encrypted"
+    ],
+    "same_auth_cache": true,
+    "reported_denominator": "faster of native_plain and mapped_plain, also both explicit"
+  },
+  "files": [
+    "bench/__init__.py",
+    "bench/cluster.py",
+    "bench/metrics.py",
+    "bench/run.py",
+    "bench/strict_refinement.py",
+    "bench/vector_attribution.py",
+    "hpis/__init__.py",
+    "hpis/__main__.py",
+    "hpis/attestation.py",
+    "hpis/codec.py",
+    "hpis/exact_order.py",
+    "hpis/network.py",
+    "hpis/provision.py",
+    "hpis/refine_stream.py",
+    "hpis/sdk.py",
+    "hpis/services.py",
+    "hpis/store.py",
+    "integration/mapped_index/__init__.py",
+    "integration/mapped_index/__main__.py",
+    "integration/mapped_index/bench.py",
+    "integration/mapped_index/build_native.py",
+    "integration/mapped_index/index.py",
+    "integration/mapped_index/native.py",
+    "integration/mapped_index/protocol.py",
+    "integration/mapped_index/q8/__init__.py",
+    "integration/mapped_index/q8/build.py",
+    "integration/mapped_index/q8/fine_dot.h",
+    "integration/mapped_index/q8/q8.cc",
+    "integration/mapped_index/q8/q8.h",
+    "integration/mapped_index/q8/tests.py",
+    "integration/mapped_index/rank.c",
+    "integration/mapped_index/tests.py",
+    "pyproject.toml",
+    "tests/test_mapped_stream_protocol.py",
+    "tests/test_mapped_numerics.py",
+    "tests/test_exact_order.py",
+    "integration/__init__.py"
+  ]
+}

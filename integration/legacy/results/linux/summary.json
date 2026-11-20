@@ -1,0 +1,98 @@
+{
+  "platform": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+  "python": "3.12.3",
+  "source": "ponyyuhan/mcp_agent@f1207dfa8c3909293e217e2961934c085869263a",
+  "upstream": [
+    "oauth_server",
+    "pic_server",
+    "hpis_server",
+    "client_pic"
+  ],
+  "topology": "SDK and adapter share a Linux process, with a real TCP hop. Archived services and new HPIC/HPIS run in separate processes.",
+  "forwarding": "new and legacy C1/C3/C4 consumed by original pic_server.py",
+  "synthetic_keys": true,
+  "functional": {
+    "legacy_rotation_count": 1,
+    "migrated_rows": 2,
+    "exact_ids": [
+      1
+    ],
+    "vector_ids": [
+      0
+    ],
+    "other_tenant_ids": [],
+    "rejections": {
+      "exact_request_replay": 502,
+      "different_C1": 403,
+      "direct_resolve": 403,
+      "wrong_owner": 502,
+      "invalid_legacy_AT": 401
+    }
+  },
+  "benchmark": {
+    "rows": 20000,
+    "queries": 128,
+    "dim": 100,
+    "rounds": 3,
+    "k": 10,
+    "beta": 0.25,
+    "source": "ANN-Benchmarks GloVe first train/test rows",
+    "timing": "SDK target generation through decrypted C4 over loopback, distinct original OAuth/PIC and HPIS2 HPIC/store services; oracle check outside interval",
+    "workloads": {
+      "field": {
+        "plain": {
+          "n": 384,
+          "mean_us": 2663.9523177083333,
+          "p50_us": 2456.5950000000003,
+          "p95_us": 3959.521899999999,
+          "recall": 1.0,
+          "body_rows": 1.0
+        },
+        "encrypted": {
+          "n": 384,
+          "mean_us": 2699.3149192708333,
+          "p50_us": 2498.5785,
+          "p95_us": 4027.5441999999994,
+          "recall": 1.0,
+          "body_rows": 1.0
+        },
+        "overhead_pct": {
+          "mean_us": 1.327448743261317,
+          "p50_us": 1.7090118639824459,
+          "p95_us": 1.7179422596450555
+        },
+        "mean_overhead_bootstrap95_pct": [
+          -0.21221674248241534,
+          2.933323278867878
+        ]
+      },
+      "vector": {
+        "plain": {
+          "n": 384,
+          "mean_us": 3238.8919921875,
+          "p50_us": 2971.5209999999997,
+          "p95_us": 4899.982999999999,
+          "recall": 1.0,
+          "body_rows": 10.0
+        },
+        "encrypted": {
+          "n": 384,
+          "mean_us": 3259.1366875,
+          "p50_us": 3023.031,
+          "p95_us": 4881.26525,
+          "recall": 0.8820312500000002,
+          "body_rows": 10.0
+        },
+        "overhead_pct": {
+          "mean_us": 0.6250500282606541,
+          "p50_us": 1.7334556949118118,
+          "p95_us": -0.38199622325217897
+        },
+        "mean_overhead_bootstrap95_pct": [
+          -1.0392992767796052,
+          2.442860318834966
+        ]
+      }
+    }
+  }
+}

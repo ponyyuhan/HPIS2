@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HPIS 2.0 · 密态智能问答</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/styles.css?v=3">
+</head>
+<body>
+<canvas id="ambient" aria-hidden="true"></canvas>
+
+<!-- ============================== Cover ============================== -->
+<section id="cover" class="cover" aria-label="开场">
+  <div class="cover__inner">
+    <div class="cover__kicker"><span class="dot"></span>HPIS 2.0 · 匿名私人智能存储</div>
+    <h1 class="cover__title">让云端大模型<br><span class="grad">读懂</span>你的私有数据<br>却<span class="grad grad--alt">看不见</span>它</h1>
+    <p class="cover__sub">面向个人敏感数据的密态智能问答 —— 在密文上直接检索，只为大模型取回真正需要的那几封邮件。</p>
+    <div class="cover__stats">
+      <div class="stat"><b data-cover="emails">100,000</b><span>封真实规模邮件，全程密文存储</span></div>
+      <div class="stat"><b>&lt;10<small>%</small></b><span>密态检索相对明文的时延损耗</span></div>
+      <div class="stat"><b>≈3<small> KB</small></b><span>每次提问的端云传输（直传普通云需数百 MB）</span></div>
+    </div>
+    <button class="btn btn--primary btn--xl" id="enter">进入现场演示 <svg class="i"><use href="/assets/icons.svg#arrow-right"/></svg></button>
+  </div>
+  <div class="cover__visual" aria-hidden="true">
+    <div class="orb"><div class="orb__ring r1"></div><div class="orb__ring r2"></div><div class="orb__ring r3"></div>
+      <svg class="orb__lock" viewBox="0 0 120 140"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5ef0d0"/><stop offset="1" stop-color="#4aa8ff"/></linearGradient></defs>
+        <path d="M30 62V44a30 30 0 0 1 60 0v18" fill="none" stroke="url(#lg)" stroke-width="9" stroke-linecap="round"/>
+        <rect x="14" y="60" width="92" height="72" rx="16" fill="rgba(94,240,208,.08)" stroke="url(#lg)" stroke-width="4"/>
+        <circle cx="60" cy="92" r="9" fill="url(#lg)"/><rect x="56" y="96" width="8" height="18" rx="4" fill="url(#lg)"/></svg>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== Shell ============================== -->
+<header class="topbar">
+  <div class="brand">
+    <img src="/assets/logo.svg" alt="" class="brand__mark">
+    <span class="brand__name">HPIS</span><span class="brand__ver">2.0</span>
+    <span class="brand__sep"></span>
+    <span class="brand__title">面向个人敏感数据的密态智能问答</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="race" class="active">现场对比</button>
+    <button role="tab" data-tab="cloud">云端视角</button>
+    <button role="tab" data-tab="bench">性能验收</button>
+    <button role="tab" data-tab="arch">方案架构</button>
+  </nav>
+  <div class="controls">
+    <div class="select" id="model-select"><svg class="i"><use href="/assets/icons.svg#cpu"/></svg><select id="model"></select></div>
+    <button class="chip-btn" id="net-btn" title="统一网络条件"><svg class="i"><use href="/assets/icons.svg#signal"/></svg><span id="net-label">端云 1 Gbps · 云云 50 Gbps</span></button>
+    <span class="status" id="status"><i></i><span>连接中</span></span>
+  </div>
+</header>
+
+<div class="netpop" id="netpop" hidden>
+  <h4>统一网络条件</h4>
+  <p class="muted">两种方案使用相同数据、问题与模型。链路时间按带宽与往返时延折算，计算部分均为真实执行。</p>
+  <div class="netgrid">
+    <label>端云带宽<select id="edge-gbps"><option value="1">1 Gbps（光纤）</option><option value="0.3">300 Mbps（5G）</option><option value="0.1">100 Mbps（4G/Wi‑Fi）</option></select></label>
+    <label>端云 RTT<select id="edge-rtt"><option value="30">30 ms</option><option value="15">15 ms</option><option value="60">60 ms</option></select></label>
+    <label>云云带宽<select id="cloud-gbps"><option value="50">50 Gbps</option><option value="25">25 Gbps</option><option value="10">10 Gbps</option></select></label>
+    <label>云云 RTT<select id="cloud-rtt"><option value="0.5">0.5 ms</option><option value="1">1 ms</option><option value="0.2">0.2 ms</option></select></label>
+  </div>
+</div>
+
+<main>
+<!-- ============================== Race ============================== -->
+<section class="tab-pane active" id="pane-race">
+  <div class="ask card">
+    <div class="ask__row">
+      <div class="ask__field">
+        <svg class="i ask__icon"><use href="/assets/icons.svg#sparkles"/></svg>
+        <input id="question" autocomplete="off" spellcheck="false" placeholder="向你的私人邮箱提问…">
+      </div>
+      <button class="btn btn--primary btn--lg" id="run"><svg class="i"><use href="/assets/icons.svg#play"/></svg><span>开始对比</span></button>
+    </div>
+    <div class="ask__row ask__meta">
+      <div class="presets" id="presets"></div>
+      <div class="mailbox-meta" id="mailbox-meta"></div>
+    </div>
+    <div class="device" id="device">
+      <span class="device__tag"><svg class="i"><use href="/assets/icons.svg#smartphone"/></svg>终端本地完成</span>
+      <div class="device__chips" id="device-chips"><span class="device__idle">提问后，终端在本地生成查询向量、HMAC 检索令牌，并把目标向量密封给 HPIS —— 密钥从不离开终端</span></div>
+    </div>
+  </div>
+
+  <div class="lanes" id="lanes"></div>
+
+  <div class="verdict card" id="verdict" hidden>
+    <div class="verdict__title"><svg class="i"><use href="/assets/icons.svg#award"/></svg>本次提问 · HPIS 2.0 对比结论<button class="verdict__close" id="verdict-close">收起</button></div>
+    <div class="verdict__grid" id="verdict-grid"></div>
+  </div>
+</section>
+
+<!-- ============================== Cloud view ============================== -->
+<section class="tab-pane" id="pane-cloud">
+  <div class="pane-head">
+    <h2>如果你是云端运维人员，你能看到什么？</h2>
+    <p>同一个邮箱，在两种云里的真实存储形态。右侧数据直接读取自 HPIS 的 SQLite 存储文件。</p>
+  </div>
+  <div class="prov card" id="prov"></div>
+  <div class="spy card">
+    <svg class="i"><use href="/assets/icons.svg#search"/></svg>
+    <span>运维人员尝试检索：</span>
+    <input id="spy-q" value="体检报告">
+    <button class="btn btn--ghost" id="spy-go">检索</button>
+    <span class="spy__result" id="spy-result"></span>
+  </div>
+  <div class="views">
+    <div class="view card view--plain">
+      <div class="view__head"><span class="badge badge--risk">明文</span><h3>普通云数据库</h3><span class="muted" id="plain-count"></span></div>
+      <div class="table" id="plain-rows"></div>
+    </div>
+    <div class="view card view--hpis">
+      <div class="view__head"><span class="badge badge--safe">密文</span><h3>HPIS 匿名密态存储</h3><span class="muted" id="hpis-count"></span></div>
+      <div class="table mono" id="hpis-rows"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== Benchmark ============================== -->
+<section class="tab-pane" id="pane-bench">
+  <div class="pane-head">
+    <h2>Linux 验收：密文检索 vs 明文检索</h2>
+    <p id="bench-sub">同一台 Linux 服务器、同一条请求链路，明文与密文请求交替配对执行。</p>
+  </div>
+  <div class="bench" id="bench"></div>
+</section>
+
+<!-- ============================== Architecture ============================== -->
+<section class="tab-pane" id="pane-arch">
+  <div class="pane-head">
+    <h2>HPIS 2.0：在匿名存储之上叠加密态检索</h2>
+    <p>终端掌控全部密钥；HPIS 只见密文、HMAC 令牌与匿名标识；HPIC 只解开本次真正需要的几条记录。</p>
+  </div>
+  <div class="arch" id="arch"></div>
+</section>
+</main>
+
+<!-- ============================== Evidence drawer ============================== -->
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer__bar">
+    <div class="drawer__seg" role="tablist">
+      <button class="active" data-view="plain">原文</button>
+      <button data-view="cipher">HPIS 中的样子</button>
+    </div>
+    <button class="icon-btn" id="drawer-close" aria-label="关闭"><svg class="i"><use href="/assets/icons.svg#x"/></svg></button>
+  </div>
+  <div class="drawer__body" id="drawer-body"></div>
+</aside>
+<div class="scrim" id="scrim"></div>
+
+<!-- ============================== Boot ============================== -->
+<div class="boot" id="boot">
+  <div class="boot__card card">
+    <img src="/assets/logo.svg" alt="" class="boot__logo">
+    <h3 id="boot-title">正在启动密态服务…</h3>
+    <p class="muted" id="boot-sub">首次运行会在本机加密预置邮箱并建立密态索引，之后启动只需数秒。</p>
+    <div class="boot__bars" id="boot-bars"></div>
+  </div>
+</div>
+
+<script type="module" src="/app.js?v=3"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+{
+  "system": {
+    "os": "Linux-6.8.0-51-generic-x86_64-with-glibc2.36",
+    "distribution": "Debian GNU/Linux 12 (bookworm)",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "cpu_count_visible": 12,
+    "architecture": "x86_64",
+    "python": "3.12.16",
+    "versions": {
+      "numpy": "2.5.5",
+      "aiohttp": "3.14.5",
+      "cryptography": "50.0.2",
+      "PyNaCl": "1.6.2",
+      "msgpack": "1.2.4",
+      "h5py": "3.16.0"
+    },
+    "blas": [
+      {
+        "internal_api": "openblas",
+        "version": "0.3.34.237.2",
+        "num_threads": 1,
+        "architecture": "Haswell"
+      }
+    ]
+  },
+  "rows": 20000,
+  "dimensions": 100,
+  "unique_queries": 512,
+  "same_hpic_and_hpis_processes": true,
+  "identical_public_ticket_cache_all_three_arms": true,
+  "native_fused": true,
+  "query_offset": 0,
+  "k": 10,
+  "rounds": 4,
+  "beta": 0.25,
+  "top_k_order": 1.0,
+  "setup": {
+    "plain": {
+      "ingest_s": 2.372915784,
+      "mapped_image_bytes": 8160256
+    },
+    "encrypted": {
+      "ingest_s": 4.466042703,
+      "mapped_image_bytes": 16720256
+    }
+  },
+  "first_query_including_snapshot_us": {
+    "mapped_plain": {
+      "e2e_us": 56487.504,
+      "snapshot_bytes": 8160256,
+      "snapshot_build_us": 38366.778
+    },
+    "mapped_encrypted": {
+      "e2e_us": 69229.994,
+      "snapshot_bytes": 16720256,
+      "snapshot_build_us": 46720.879
+    },
+    "native_plain": {
+      "e2e_us": 27762.052,
+      "snapshot_bytes": 0,
+      "snapshot_build_us": 0
+    }
+  },
+  "results": {
+    "native_plain": {
+      "n": 2048,
+      "mean_us": 1913.6486123046875,
+      "p50_us": 1956.702,
+      "p95_us": 2552.6365,
+      "opened_mean": 0.0,
+      "rank_mean_us": 464.426802734375,
+      "auth_counts": {
+        "issuer_cache_hit": 2048,
+        "ticket_expiry_checks": 2048,
+        "holder_signature_checks": 2048,
+        "owner_signature_checks": 2048,
+        "nonce_checks": 4096
+      }
+    },
+    "mapped_plain": {
+      "n": 2048,
+      "mean_us": 1762.4151655273438,
+      "p50_us": 1784.509,
+      "p95_us": 2368.5271500000003,
+      "opened_mean": 0.0,
+      "rank_mean_us": 164.97570068359374,
+      "auth_counts": {
+        "issuer_cache_hit": 2048,
+        "ticket_expiry_checks": 2048,
+        "holder_signature_checks": 2048,
+        "owner_signature_checks": 2048,
+        "nonce_checks": 4096
+      }
+    },
+    "mapped_encrypted": {
+      "n": 2048,
+      "mean_us": 1837.4617221679687,
+      "p50_us": 1861.8029999999999,
+      "p95_us": 2446.3795,
+      "opened_mean": 67.7734375,
+      "rank_mean_us": 251.8511650390625,
+      "auth_counts": {
+        "issuer_cache_hit": 2048,
+        "ticket_expiry_checks": 2048,
+        "holder_signature_checks": 2048,
+        "owner_signature_checks": 2048,
+        "nonce_checks": 4096
+      }
+    },
+    "versus_native_plain": {
+      "mean_overhead_pct": -3.9812371846555283,
+      "round_overhead_pct": [
+        -3.76091531799152,
+        -4.623878071059606,
+        -3.4070666001603023,
+        -4.116242843832884
+      ],
+      "mean_ci95_block_pairs_16": [
+        -4.578112732501199,
+        -3.5091306780008655
+      ]
+    },
+    "versus_mapped_plain": {
+      "mean_overhead_pct": 4.258165618892051,
+      "round_overhead_pct": [
+        3.7085309644750986,
+        4.814379618565101,
+        4.74639518664548,
+        3.7945171880703343
+      ],
+      "mean_ci95_block_pairs_16": [
+        4.000153527663678,
+        4.5432966164846995
+      ]
+    }
+  }
+}

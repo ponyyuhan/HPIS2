@@ -1,0 +1,55 @@
+{
+ "provider": "vast.ai",
+ "instance_id": 61632046,
+ "label": "hpis2-acceptance-claude",
+ "offer_id": 61536955,
+ "image": "python:3.12-slim-bookworm",
+ "machine_id": 112617,
+ "cpu": "AMD EPYC 7452 32-Core Processor",
+ "cpu_threads_host": 64,
+ "cpu_effective_for_container": 8.0,
+ "cgroup_cpu_max": "768000 100000 (7.68 CPUs)",
+ "gpu_on_host_unused": "RTX 3060",
+ "geolocation": "Poland, PL",
+ "verified_host": true,
+ "reliability": 0.9878497,
+ "dph_total_usd": 0.06814814814814815,
+ "disk_gb": 40.0,
+ "created_utc": "2026-11-20T11:37:23Z",
+ "destroy_command_utc": "2026-11-20T12:47:23Z",
+ "absent_from_account_after_destroy": true,
+ "other_instances_untouched": {
+  "51000125": "exited",
+  "59622895": "exited",
+  "61625846": "running"
+ },
+ "charges_usd": [
+  {
+   "item": "compute",
+   "hours": 1.139,
+   "rate": 0.0533,
+   "amount": 0.061
+  },
+  {
+   "item": "storage",
+   "hours": 1.163,
+   "rate": 0.0148,
+   "amount": 0.017
+  },
+  {
+   "item": "download",
+   "gb": 0.707,
+   "rate": 0.003,
+   "amount": 0.002
+  },
+  {
+   "item": "upload",
+   "gb": 0.023,
+   "rate": 0.005,
+   "amount": 0.0
+  }
+ ],
+ "total_charge_usd": 0.08,
+ "source": "vast.ai invoice line items for this instance id, read after destroy",
+ "traffic": "public GloVe (ann-benchmarks), a demo-mailbox embedding snapshot (vectors only), synthetic record text; CPU only"
+}

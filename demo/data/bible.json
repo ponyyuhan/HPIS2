@@ -1,0 +1,1377 @@
+{
+ "as_of": "2026-11-20T18:00:00+08:00",
+ "start": "2024-01-01T00:00:00+08:00",
+ "windows": {
+  "过去三个月": [
+   "2026-08-20",
+   "2026-11-20"
+  ],
+  "上个月": [
+   "2026-10-01",
+   "2026-10-31"
+  ],
+  "下周": [
+   "2026-11-23",
+   "2026-11-29"
+  ],
+  "本周": [
+   "2026-11-16",
+   "2026-11-22"
+  ]
+ },
+ "owner": {
+  "key": "linzhou",
+  "name": "林舟",
+  "age": 42,
+  "born": 1984,
+  "title": "解决方案部总监",
+  "dept": "解决方案部",
+  "org": "云帆智能科技有限公司",
+  "email": "linzhou@yunfan-tech.cn",
+  "personal_email": "linzhou84@lanmail.cn",
+  "mobile": "138****5521",
+  "city": "北京",
+  "home": "北京市朝阳区望京街道 嘉禾园小区7号楼2单元1102",
+  "car": "远途 T5 SUV（京N·8K2**）",
+  "cards": {
+   "星辰银行信用卡": "**** 6411",
+   "海川银行信用卡": "**** 2087",
+   "星辰银行储蓄卡": "**** 3390"
+  },
+  "frequent_flyer": "蓝鲸航空 鲸享会 金卡 JW88****215"
+ },
+ "company": {
+  "name": "云帆智能科技有限公司",
+  "short": "云帆智能",
+  "domain": "yunfan-tech.cn",
+  "address": "北京市海淀区中关村软件园二期 云帆大厦6层"
+ },
+ "family": [
+  {
+   "key": "suqing",
+   "name": "苏晴",
+   "relation": "妻子",
+   "job": "北京市朝阳区育英中学 语文老师",
+   "email": "suqing_1986@lanmail.cn",
+   "mobile": "139****2716"
+  },
+  {
+   "key": "linxiaohe",
+   "name": "林小禾",
+   "relation": "儿子",
+   "age": 10,
+   "school": "育才实验小学",
+   "class": "四年级3班",
+   "note": "2024年9月读二年级，2025年9月三年级，2026年9月升入四年级"
+  },
+  {
+   "key": "linman",
+   "name": "林曼",
+   "relation": "妹妹",
+   "email": "linman_sh@lanmail.cn",
+   "city": "上海"
+  },
+  {
+   "key": "linfather",
+   "name": "林建华",
+   "relation": "父亲",
+   "city": "江苏扬州",
+   "note": "退休教师，高血压"
+  },
+  {
+   "key": "suhang",
+   "name": "苏杭",
+   "relation": "妻弟",
+   "email": "suhang@lanmail.cn"
+  }
+ ],
+ "friends": [
+  {
+   "key": "weidong",
+   "name": "韦东",
+   "relation": "大学室友",
+   "email": "weidong1984@lanmail.cn",
+   "org": "某设计院"
+  },
+  {
+   "key": "huosiyuan",
+   "name": "霍思远",
+   "relation": "高中同学",
+   "email": "huosiyuan@lanmail.cn",
+   "org": "扬州"
+  },
+  {
+   "key": "qiaoyu",
+   "name": "乔宇",
+   "relation": "前同事/好友",
+   "email": "qiaoyu.pm@lanmail.cn",
+   "org": "创业公司"
+  },
+  {
+   "key": "dingning",
+   "name": "丁宁",
+   "relation": "邻居/羽毛球球友",
+   "email": "dingning88@lanmail.cn"
+  }
+ ],
+ "colleagues": [
+  {
+   "key": "hanzhendong",
+   "name": "韩振东",
+   "title": "总裁",
+   "dept": "总裁办",
+   "email": "hanzhendong@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "139****0601"
+  },
+  {
+   "key": "yaojia",
+   "name": "姚佳",
+   "title": "总裁助理",
+   "dept": "总裁办",
+   "email": "yaojia@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "136****2203"
+  },
+  {
+   "key": "zhaoyiming",
+   "name": "赵一鸣",
+   "title": "CTO",
+   "dept": "技术中心",
+   "email": "zhaoyiming@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "138****7310"
+  },
+  {
+   "key": "chenmo",
+   "name": "陈默",
+   "title": "首席架构师",
+   "dept": "技术中心",
+   "email": "chenmo@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "137****4482"
+  },
+  {
+   "key": "liangfeng",
+   "name": "梁峰",
+   "title": "研发总监",
+   "dept": "技术中心",
+   "email": "liangfeng@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "135****9017"
+  },
+  {
+   "key": "jiangtao",
+   "name": "蒋涛",
+   "title": "后端开发组长",
+   "dept": "技术中心",
+   "email": "jiangtao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "xielei",
+   "name": "谢磊",
+   "title": "高级开发工程师",
+   "dept": "技术中心",
+   "email": "xielei@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "luoxiaotong",
+   "name": "罗晓彤",
+   "title": "前端开发工程师",
+   "dept": "技术中心",
+   "email": "luoxiaotong@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "tianye",
+   "name": "田野",
+   "title": "数据工程师",
+   "dept": "技术中心",
+   "email": "tianye@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "gaoyuan",
+   "name": "高远",
+   "title": "数据开发组长",
+   "dept": "技术中心",
+   "email": "gaoyuan@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "xuzihao",
+   "name": "徐子豪",
+   "title": "算法负责人",
+   "dept": "技术中心",
+   "email": "xuzihao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "186****3325"
+  },
+  {
+   "key": "weiran",
+   "name": "魏然",
+   "title": "算法工程师",
+   "dept": "技术中心",
+   "email": "weiran@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "panting",
+   "name": "潘婷",
+   "title": "测试经理",
+   "dept": "技术中心",
+   "email": "panting@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "wudi",
+   "name": "吴迪",
+   "title": "运维/SRE负责人",
+   "dept": "技术中心",
+   "email": "wudi@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "158****6670"
+  },
+  {
+   "key": "gucheng",
+   "name": "顾城",
+   "title": "解决方案部副总监",
+   "dept": "解决方案部",
+   "email": "gucheng@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "139****8826",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "fangyu",
+   "name": "方宇",
+   "title": "高级解决方案经理",
+   "dept": "解决方案部",
+   "email": "fangyu@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "137****1290",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "yezihan",
+   "name": "叶子涵",
+   "title": "解决方案经理",
+   "dept": "解决方案部",
+   "email": "yezihan@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "152****4471",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "qinchuan",
+   "name": "秦川",
+   "title": "解决方案经理",
+   "dept": "解决方案部",
+   "email": "qinchuan@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "135****6638",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "tangyue",
+   "name": "唐悦",
+   "title": "解决方案经理",
+   "dept": "解决方案部",
+   "email": "tangyue@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "188****2054",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "songjia",
+   "name": "宋佳",
+   "title": "解决方案经理（医疗行业）",
+   "dept": "解决方案部",
+   "email": "songjia@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "qiuyang",
+   "name": "邱阳",
+   "title": "售前工程师",
+   "dept": "解决方案部",
+   "email": "qiuyang@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "baiyang",
+   "name": "白杨",
+   "title": "售前工程师",
+   "dept": "解决方案部",
+   "email": "baiyang@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "yangyu",
+   "name": "杨雨",
+   "title": "部门助理",
+   "dept": "解决方案部",
+   "email": "yangyu@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "131****7759",
+   "reports_to": "linzhou"
+  },
+  {
+   "key": "dumingyuan",
+   "name": "杜明远",
+   "title": "交付总监",
+   "dept": "交付中心",
+   "email": "dumingyuan@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "139****5160"
+  },
+  {
+   "key": "zhouheng",
+   "name": "周衡",
+   "title": "高级项目经理",
+   "dept": "交付中心",
+   "email": "zhouheng@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "138****2417"
+  },
+  {
+   "key": "fengtao",
+   "name": "冯涛",
+   "title": "项目经理",
+   "dept": "交付中心",
+   "email": "fengtao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "136****8803"
+  },
+  {
+   "key": "shaomin",
+   "name": "邵敏",
+   "title": "项目经理",
+   "dept": "交付中心",
+   "email": "shaomin@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "159****3328"
+  },
+  {
+   "key": "kongxiang",
+   "name": "孔祥",
+   "title": "实施工程师",
+   "dept": "交付中心",
+   "email": "kongxiang@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "luhao",
+   "name": "卢昊",
+   "title": "实施工程师",
+   "dept": "交付中心",
+   "email": "luhao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "guowen",
+   "name": "郭文",
+   "title": "销售副总裁",
+   "dept": "销售部",
+   "email": "guowen@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "139****1188"
+  },
+  {
+   "key": "wanglei",
+   "name": "王蕾",
+   "title": "大客户总监（物流行业）",
+   "dept": "销售部",
+   "email": "wanglei@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "137****6025"
+  },
+  {
+   "key": "zhongling",
+   "name": "钟灵",
+   "title": "大客户经理（制造/能源）",
+   "dept": "销售部",
+   "email": "zhongling@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "135****0942"
+  },
+  {
+   "key": "shenhang",
+   "name": "沈航",
+   "title": "大客户经理（医疗/文旅）",
+   "dept": "销售部",
+   "email": "shenhang@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "186****7713"
+  },
+  {
+   "key": "bailu",
+   "name": "白露",
+   "title": "市场总监",
+   "dept": "市场部",
+   "email": "bailu@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "taoran",
+   "name": "陶然",
+   "title": "品牌经理",
+   "dept": "市场部",
+   "email": "taoran@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "pangli",
+   "name": "庞丽",
+   "title": "人力资源总监",
+   "dept": "人力资源部",
+   "email": "pangli@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "liuqian",
+   "name": "刘倩",
+   "title": "HRBP",
+   "dept": "人力资源部",
+   "email": "liuqian@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "150****3361"
+  },
+  {
+   "key": "zhangrui",
+   "name": "张蕊",
+   "title": "招聘专员",
+   "dept": "人力资源部",
+   "email": "zhangrui@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "fanzhiqiang",
+   "name": "范志强",
+   "title": "财务总监",
+   "dept": "财务部",
+   "email": "fanzhiqiang@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "sunhao",
+   "name": "孙浩",
+   "title": "财务经理",
+   "dept": "财务部",
+   "email": "sunhao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "138****9042"
+  },
+  {
+   "key": "mengyao",
+   "name": "孟瑶",
+   "title": "会计",
+   "dept": "财务部",
+   "email": "mengyao@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "zhengya",
+   "name": "郑雅",
+   "title": "法务经理",
+   "dept": "法务部",
+   "email": "zhengya@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "139****6610"
+  },
+  {
+   "key": "xunuo",
+   "name": "许诺",
+   "title": "采购经理",
+   "dept": "采购部",
+   "email": "xunuo@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司",
+   "mobile": "137****2235"
+  },
+  {
+   "key": "malin",
+   "name": "马琳",
+   "title": "行政主管",
+   "dept": "行政部",
+   "email": "malin@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "houjia",
+   "name": "侯佳",
+   "title": "行政专员",
+   "dept": "行政部",
+   "email": "houjia@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "leiming",
+   "name": "雷鸣",
+   "title": "信息部经理",
+   "dept": "信息部",
+   "email": "leiming@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "ouyangchen",
+   "name": "欧阳晨",
+   "title": "产品总监",
+   "dept": "产品部",
+   "email": "ouyangchen@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "xiabing",
+   "name": "夏冰",
+   "title": "产品经理",
+   "dept": "产品部",
+   "email": "xiabing@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "yuelin",
+   "name": "岳琳",
+   "title": "产品经理",
+   "dept": "产品部",
+   "email": "yuelin@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  },
+  {
+   "key": "xuekai",
+   "name": "薛凯",
+   "title": "PMO经理",
+   "dept": "交付中心",
+   "email": "xuekai@yunfan-tech.cn",
+   "org": "云帆智能科技有限公司"
+  }
+ ],
+ "orgs": [
+  {
+   "name": "瀚海物流",
+   "full": "瀚海物流集团股份有限公司",
+   "type": "client",
+   "domain": "hanhai-logistics.com",
+   "industry": "物流",
+   "city": "上海",
+   "note": "核心客户。2024年运输可视化项目，2026年上半年WMS升级，2026年8月起华东智能调度平台（一期），11月起洽谈华南推广。",
+   "contacts": [
+    {
+     "key": "maguodong",
+     "name": "马国栋",
+     "title": "信息技术部总经理",
+     "email": "maguodong@hanhai-logistics.com",
+     "org": "瀚海物流",
+     "mobile": "139****3011"
+    },
+    {
+     "key": "yanning",
+     "name": "严宁",
+     "title": "IT项目经理",
+     "email": "yanning@hanhai-logistics.com",
+     "org": "瀚海物流",
+     "mobile": "137****5598"
+    },
+    {
+     "key": "chengyuan",
+     "name": "程远",
+     "title": "运营副总裁",
+     "email": "chengyuan@hanhai-logistics.com",
+     "org": "瀚海物流"
+    },
+    {
+     "key": "huangzhen",
+     "name": "黄振",
+     "title": "数据平台负责人",
+     "email": "huangzhen@hanhai-logistics.com",
+     "org": "瀚海物流"
+    },
+    {
+     "key": "lvqiang",
+     "name": "吕强",
+     "title": "华东区运营总监",
+     "email": "lvqiang@hanhai-logistics.com",
+     "org": "瀚海物流"
+    },
+    {
+     "key": "chenlixin",
+     "name": "陈立新",
+     "title": "华南区总经理",
+     "email": "chenlixin@hanhai-logistics.com",
+     "org": "瀚海物流",
+     "mobile": "138****6620"
+    },
+    {
+     "key": "caiqi",
+     "name": "蔡琪",
+     "title": "华南区总经理助理",
+     "email": "caiqi@hanhai-logistics.com",
+     "org": "瀚海物流",
+     "mobile": "135****0817"
+    },
+    {
+     "key": "luomin",
+     "name": "罗敏",
+     "title": "采购经理",
+     "email": "luomin@hanhai-logistics.com",
+     "org": "瀚海物流"
+    }
+   ]
+  },
+  {
+   "name": "远洋港务",
+   "full": "远洋港务集团有限公司",
+   "type": "client",
+   "domain": "yuanyang-port.com",
+   "industry": "港口",
+   "city": "天津",
+   "note": "2026年9月起智慧堆场规划项目。",
+   "contacts": [
+    {
+     "key": "caofeng",
+     "name": "曹锋",
+     "title": "信息部主任",
+     "email": "caofeng@yuanyang-port.com",
+     "org": "远洋港务"
+    },
+    {
+     "key": "gongxue",
+     "name": "龚雪",
+     "title": "信息部项目主管",
+     "email": "gongxue@yuanyang-port.com",
+     "org": "远洋港务"
+    }
+   ]
+  },
+  {
+   "name": "华川制造",
+   "full": "华川精密制造股份有限公司",
+   "type": "client",
+   "domain": "huachuan-mfg.com",
+   "industry": "制造",
+   "city": "苏州",
+   "contacts": [
+    {
+     "key": "dengkai",
+     "name": "邓凯",
+     "title": "数字化部部长",
+     "email": "dengkai@huachuan-mfg.com",
+     "org": "华川制造"
+    },
+    {
+     "key": "liuqing",
+     "name": "柳青",
+     "title": "设备工程师",
+     "email": "liuqing@huachuan-mfg.com",
+     "org": "华川制造"
+    }
+   ]
+  },
+  {
+   "name": "青禾医疗",
+   "full": "青禾医疗集团",
+   "type": "client",
+   "domain": "qinghe-medical.com",
+   "industry": "医疗",
+   "city": "杭州",
+   "contacts": [
+    {
+     "key": "fulan",
+     "name": "付兰",
+     "title": "信息科科长",
+     "email": "fulan@qinghe-medical.com",
+     "org": "青禾医疗"
+    },
+    {
+     "key": "yubo",
+     "name": "余波",
+     "title": "医务处副处长",
+     "email": "yubo@qinghe-medical.com",
+     "org": "青禾医疗"
+    }
+   ]
+  },
+  {
+   "name": "北辰能源",
+   "full": "北辰新能源集团有限公司",
+   "type": "client",
+   "domain": "beichen-energy.com",
+   "industry": "能源",
+   "city": "西安",
+   "contacts": [
+    {
+     "key": "yinzhigang",
+     "name": "尹志刚",
+     "title": "CIO",
+     "email": "yinzhigang@beichen-energy.com",
+     "org": "北辰能源"
+    },
+    {
+     "key": "tangjing",
+     "name": "汤静",
+     "title": "数字化项目经理",
+     "email": "tangjing@beichen-energy.com",
+     "org": "北辰能源"
+    }
+   ]
+  },
+  {
+   "name": "金穗农业",
+   "full": "金穗农业科技集团",
+   "type": "client",
+   "domain": "jinsui-agri.com",
+   "industry": "农业/冷链",
+   "city": "郑州",
+   "contacts": [
+    {
+     "key": "jijun",
+     "name": "季军",
+     "title": "信息总监",
+     "email": "jijun@jinsui-agri.com",
+     "org": "金穗农业"
+    }
+   ]
+  },
+  {
+   "name": "南湖文旅",
+   "full": "南湖文旅集团",
+   "type": "client",
+   "domain": "nanhu-culture.com",
+   "industry": "文旅",
+   "city": "嘉兴",
+   "contacts": [
+    {
+     "key": "qiyue",
+     "name": "齐悦",
+     "title": "数字化中心主任",
+     "email": "qiyue@nanhu-culture.com",
+     "org": "南湖文旅"
+    }
+   ]
+  },
+  {
+   "name": "明德教育",
+   "full": "明德教育集团",
+   "type": "client",
+   "domain": "mingde-edu.com",
+   "industry": "教育",
+   "city": "北京",
+   "contacts": [
+    {
+     "key": "shilei",
+     "name": "史磊",
+     "title": "信息中心主任",
+     "email": "shilei@mingde-edu.com",
+     "org": "明德教育"
+    }
+   ]
+  },
+  {
+   "name": "东岳化工",
+   "full": "东岳化工股份有限公司",
+   "type": "client",
+   "domain": "dongyue-chem.com",
+   "industry": "化工",
+   "city": "淄博",
+   "contacts": [
+    {
+     "key": "hejun",
+     "name": "贺军",
+     "title": "设备部部长",
+     "email": "hejun@dongyue-chem.com",
+     "org": "东岳化工"
+    }
+   ]
+  },
+  {
+   "name": "星河数据",
+   "full": "星河数据技术有限公司",
+   "type": "vendor",
+   "domain": "xinghe-data.com",
+   "industry": "数据服务",
+   "city": "北京",
+   "note": "数据服务供应商。2026年签订数据服务合同 YF-XH-2026-031。",
+   "contacts": [
+    {
+     "key": "geming",
+     "name": "葛明",
+     "title": "销售总监",
+     "email": "geming@xinghe-data.com",
+     "org": "星河数据",
+     "mobile": "139****4458"
+    },
+    {
+     "key": "jiangwen",
+     "name": "姜雯",
+     "title": "商务经理",
+     "email": "jiangwen@xinghe-data.com",
+     "org": "星河数据"
+    },
+    {
+     "key": "luobin",
+     "name": "骆斌",
+     "title": "交付项目经理",
+     "email": "luobin@xinghe-data.com",
+     "org": "星河数据"
+    }
+   ]
+  },
+  {
+   "name": "天枢云",
+   "full": "天枢云计算有限公司",
+   "type": "vendor",
+   "domain": "tianshu-cloud.com",
+   "industry": "云服务",
+   "city": "杭州",
+   "note": "云资源供应商。2026年5月签订云资源服务合同 YF-TS-2026-012。",
+   "contacts": [
+    {
+     "key": "pengbo",
+     "name": "彭博",
+     "title": "客户经理",
+     "email": "pengbo@tianshu-cloud.com",
+     "org": "天枢云"
+    },
+    {
+     "key": "wanli",
+     "name": "万里",
+     "title": "技术支持工程师",
+     "email": "wanli@tianshu-cloud.com",
+     "org": "天枢云"
+    }
+   ]
+  },
+  {
+   "name": "智图科技",
+   "full": "智图空间信息科技有限公司",
+   "type": "partner",
+   "domain": "zhitu-tech.com",
+   "industry": "GIS/地图",
+   "city": "武汉",
+   "contacts": [
+    {
+     "key": "wuhaoran",
+     "name": "伍浩然",
+     "title": "渠道合作经理",
+     "email": "wuhaoran@zhitu-tech.com",
+     "org": "智图科技"
+    }
+   ]
+  },
+  {
+   "name": "远见咨询",
+   "full": "远见管理咨询有限公司",
+   "type": "partner",
+   "domain": "yuanjian-consulting.com",
+   "industry": "咨询",
+   "city": "上海",
+   "contacts": [
+    {
+     "key": "daiwen",
+     "name": "戴文",
+     "title": "合伙人",
+     "email": "daiwen@yuanjian-consulting.com",
+     "org": "远见咨询"
+    }
+   ]
+  }
+ ],
+ "services": [
+  {
+   "name": "星辰银行",
+   "kind": "bank",
+   "sender": "星辰银行信用卡中心",
+   "email": "creditcard@xingchen-bank.com",
+   "note": "主力信用卡 **** 6411，账单日每月5日，到期还款日每月25日；另有储蓄卡 **** 3390（工资卡）"
+  },
+  {
+   "name": "海川银行",
+   "kind": "bank",
+   "sender": "海川银行信用卡",
+   "email": "service@haichuan-bank.com",
+   "note": "副卡信用卡 **** 2087，账单日每月12日，到期还款日次月1日；以及房贷还款账户"
+  },
+  {
+   "name": "安康体检中心",
+   "kind": "health",
+   "sender": "安康体检中心",
+   "email": "report@ankang-health.com",
+   "note": "公司年度体检合作机构，每年4月体检"
+  },
+  {
+   "name": "蓝鲸航空",
+   "kind": "airline",
+   "sender": "蓝鲸航空",
+   "email": "noreply@bluewhale-air.com",
+   "code": "JW"
+  },
+  {
+   "name": "悦庭酒店",
+   "kind": "hotel",
+   "sender": "悦庭酒店集团",
+   "email": "reservation@yueting-hotels.com"
+  },
+  {
+   "name": "云购商城",
+   "kind": "ecommerce",
+   "sender": "云购商城",
+   "email": "service@yungou-mall.com"
+  },
+  {
+   "name": "极速快递",
+   "kind": "express",
+   "sender": "极速快递",
+   "email": "notice@jisu-express.com"
+  },
+  {
+   "name": "育才实验小学",
+   "kind": "school",
+   "sender": "育才实验小学家校通",
+   "email": "notice@yucai-school.edu.cn",
+   "note": "林小禾所在学校；2026-2027学年 四年级3班，班主任何静（语文），数学老师黄晓东"
+  },
+  {
+   "name": "康宁人寿",
+   "kind": "insurance",
+   "sender": "康宁人寿保险",
+   "email": "service@kangning-life.com",
+   "note": "家庭重疾险、医疗险；车险也在康宁财险"
+  },
+  {
+   "name": "畅联通信",
+   "kind": "telecom",
+   "sender": "畅联通信",
+   "email": "bill@changlian-tel.com"
+  },
+  {
+   "name": "京华燃气",
+   "kind": "utility",
+   "sender": "京华燃气",
+   "email": "service@jinghua-gas.com"
+  },
+  {
+   "name": "城市电力服务",
+   "kind": "utility",
+   "sender": "城市电力服务",
+   "email": "ebill@city-power.cn"
+  },
+  {
+   "name": "嘉禾物业",
+   "kind": "property",
+   "sender": "嘉禾物业服务中心",
+   "email": "notice@jiahe-pm.com"
+  },
+  {
+   "name": "速达出行",
+   "kind": "ride",
+   "sender": "速达出行",
+   "email": "receipt@suda-go.com"
+  },
+  {
+   "name": "饭点外卖",
+   "kind": "food",
+   "sender": "饭点外卖",
+   "email": "noreply@fandian-waimai.com"
+  },
+  {
+   "name": "青柚视频",
+   "kind": "media",
+   "sender": "青柚视频",
+   "email": "vip@qingyou-video.com"
+  },
+  {
+   "name": "畅行火车票",
+   "kind": "rail",
+   "sender": "畅行火车票",
+   "email": "ticket@changxing-rail.com"
+  },
+  {
+   "name": "云盘",
+   "kind": "app",
+   "sender": "鲸云盘",
+   "email": "no-reply@jingyunpan.com"
+  },
+  {
+   "name": "启明星少儿编程",
+   "kind": "training",
+   "sender": "启明星少儿编程",
+   "email": "promo@qimingxing-kids.com"
+  },
+  {
+   "name": "乐思英语",
+   "kind": "training",
+   "sender": "乐思英语",
+   "email": "hello@lesi-english.com"
+  },
+  {
+   "name": "动力健身",
+   "kind": "fitness",
+   "sender": "动力健身",
+   "email": "club@dongli-fitness.com"
+  },
+  {
+   "name": "远途汽车",
+   "kind": "auto",
+   "sender": "远途汽车北京望京4S店",
+   "email": "service@yuantu-auto.com"
+  },
+  {
+   "name": "书香书城",
+   "kind": "books",
+   "sender": "书香书城",
+   "email": "promo@shuxiang-books.com"
+  }
+ ],
+ "newsletters": [
+  {
+   "name": "智运观察",
+   "email": "newsletter@zhiyun-guancha.com",
+   "freq": "weekly",
+   "topic": "物流科技、智能调度、仓储自动化、供应链"
+  },
+  {
+   "name": "CIO内参",
+   "email": "weekly@cio-neican.com",
+   "freq": "weekly",
+   "topic": "企业数字化转型、CIO管理、IT预算与采购"
+  },
+  {
+   "name": "AI前沿速递",
+   "email": "digest@ai-frontier.cn",
+   "freq": "weekly",
+   "topic": "大模型、AI工程化、AI应用落地"
+  },
+  {
+   "name": "晨读财经",
+   "email": "morning@chendu-finance.com",
+   "freq": "daily",
+   "topic": "宏观经济、资本市场、行业财经新闻"
+  },
+  {
+   "name": "极客晚报",
+   "email": "news@geek-evening.com",
+   "freq": "daily",
+   "topic": "科技公司动态、开发者工具、开源"
+  },
+  {
+   "name": "云帆内刊",
+   "email": "neikan@yunfan-tech.cn",
+   "freq": "biweekly",
+   "topic": "公司内部新闻、项目喜报、员工风采"
+  },
+  {
+   "name": "华夏物流科技联盟",
+   "email": "info@hxlst.org.cn",
+   "freq": "monthly",
+   "topic": "行业会议、标准发布、会员活动"
+  },
+  {
+   "name": "供应链早报",
+   "email": "daily@scm-zaobao.com",
+   "freq": "daily",
+   "topic": "供应链、货运价格、港口与航运、仓储地产"
+  },
+  {
+   "name": "运筹与优化",
+   "email": "letter@or-youhua.org",
+   "freq": "weekly",
+   "topic": "运筹优化算法、车辆路径问题、求解器、学术动态"
+  },
+  {
+   "name": "数据智能周报",
+   "email": "weekly@data-zhineng.com",
+   "freq": "weekly",
+   "topic": "数据平台、数据治理、实时计算、向量数据库"
+  },
+  {
+   "name": "管理者读书会",
+   "email": "club@guanli-dushu.com",
+   "freq": "weekly",
+   "topic": "管理类书籍解读、领导力、组织管理"
+  },
+  {
+   "name": "亲子成长周刊",
+   "email": "weekly@qinzi-chengzhang.com",
+   "freq": "weekly",
+   "topic": "小学教育、亲子沟通、儿童阅读、升学资讯"
+  },
+  {
+   "name": "跑者周报",
+   "email": "news@paozhe-weekly.com",
+   "freq": "weekly",
+   "topic": "跑步训练、赛事报名、运动健康"
+  },
+  {
+   "name": "智聘网职位推荐",
+   "email": "jobs@zhipin-wang.com",
+   "freq": "weekly",
+   "topic": "高端职位推荐（解决方案总监、售前VP等）、薪酬报告"
+  },
+  {
+   "name": "健康生活指南",
+   "email": "tips@jiankang-zhinan.com",
+   "freq": "weekly",
+   "topic": "饮食营养、慢病预防、体检解读、睡眠"
+  }
+ ],
+ "systems": [
+  {
+   "name": "云帆OA",
+   "email": "oa@yunfan-tech.cn"
+  },
+  {
+   "name": "云帆日历",
+   "email": "calendar@yunfan-tech.cn"
+  },
+  {
+   "name": "IT服务台",
+   "email": "itservice@yunfan-tech.cn"
+  },
+  {
+   "name": "项目管理平台",
+   "email": "pm-system@yunfan-tech.cn"
+  },
+  {
+   "name": "云帆差旅平台",
+   "email": "travel@yunfan-tech.cn"
+  },
+  {
+   "name": "费用报销系统",
+   "email": "expense@yunfan-tech.cn"
+  },
+  {
+   "name": "云帆人力系统",
+   "email": "hr-system@yunfan-tech.cn"
+  }
+ ],
+ "projects": [
+  {
+   "name": "瀚海物流·运输可视化平台",
+   "org": "瀚海物流",
+   "pm": "fengtao",
+   "sales": "wanglei",
+   "lead": "fangyu",
+   "start": "2024-03-01",
+   "end": "2024-12-20",
+   "amount": "¥2,450,000",
+   "desc": "为瀚海物流干线运输车辆搭建在途可视化与异常预警平台，接入约3200台车载终端。"
+  },
+  {
+   "name": "瀚海物流·WMS升级",
+   "org": "瀚海物流",
+   "pm": "shaomin",
+   "sales": "wanglei",
+   "lead": "fangyu",
+   "start": "2026-02-20",
+   "end": "2026-07-31",
+   "amount": "¥1,980,000",
+   "desc": "瀚海物流仓储管理系统升级：波次策略优化、库位推荐、与自动化分拣线对接。"
+  },
+  {
+   "name": "瀚海物流·华东智能调度平台（一期）",
+   "org": "瀚海物流",
+   "pm": "zhouheng",
+   "sales": "wanglei",
+   "lead": "linzhou",
+   "start": "2026-08-17",
+   "end": "2026-12-31",
+   "amount": "¥3,280,000",
+   "needle": true,
+   "desc": "华东区运输智能调度：订单-车辆匹配、路径优化、空驶率控制；一期覆盖上海嘉定、苏州昆山、杭州萧山三仓。"
+  },
+  {
+   "name": "远洋港务·智慧堆场规划",
+   "org": "远洋港务",
+   "pm": "fengtao",
+   "sales": "wanglei",
+   "lead": "gucheng",
+   "start": "2026-09-01",
+   "end": "2027-03-31",
+   "amount": "¥2,760,000",
+   "desc": "集装箱堆场智能规划：堆位分配、翻箱率优化、岸桥-集卡协同调度。"
+  },
+  {
+   "name": "华川制造·MES数据中台",
+   "org": "华川制造",
+   "pm": "shaomin",
+   "sales": "zhongling",
+   "lead": "qinchuan",
+   "start": "2025-03-10",
+   "end": "2025-11-28",
+   "amount": "¥2,150,000",
+   "desc": "整合华川5条产线MES、ERP、质检数据，建设数据中台与生产驾驶舱。"
+  },
+  {
+   "name": "华川制造·设备预测性维护",
+   "org": "华川制造",
+   "pm": "fengtao",
+   "sales": "zhongling",
+   "lead": "qinchuan",
+   "start": "2026-03-16",
+   "end": "2026-10-30",
+   "amount": "¥1,620,000",
+   "desc": "基于振动与温度传感器的关键设备故障预警，覆盖二号、三号产线共46台设备。"
+  },
+  {
+   "name": "青禾医疗·智能分诊问答",
+   "org": "青禾医疗",
+   "pm": "shaomin",
+   "sales": "shenhang",
+   "lead": "songjia",
+   "start": "2025-06-02",
+   "end": "2026-02-27",
+   "amount": "¥1,380,000",
+   "desc": "门诊智能分诊与患者问答助手，接入HIS预约挂号，覆盖青禾医疗3家院区。"
+  },
+  {
+   "name": "北辰能源·能耗监测平台",
+   "org": "北辰能源",
+   "pm": "zhouheng",
+   "sales": "zhongling",
+   "lead": "tangyue",
+   "start": "2024-03-18",
+   "end": "2024-10-31",
+   "amount": "¥1,760,000",
+   "desc": "集团12个厂站能耗数据采集、分析与碳排放报表。"
+  },
+  {
+   "name": "北辰能源·场站巡检AI",
+   "org": "北辰能源",
+   "pm": "zhouheng",
+   "sales": "zhongling",
+   "lead": "tangyue",
+   "start": "2026-06-22",
+   "end": "2027-01-29",
+   "amount": "¥2,040,000",
+   "desc": "光伏/风电场站无人机巡检图像缺陷识别与工单闭环。"
+  },
+  {
+   "name": "金穗农业·冷链溯源",
+   "org": "金穗农业",
+   "pm": "fengtao",
+   "sales": "zhongling",
+   "lead": "yezihan",
+   "start": "2025-01-06",
+   "end": "2025-08-29",
+   "amount": "¥980,000",
+   "desc": "生鲜冷链温控数据采集与批次溯源系统。"
+  },
+  {
+   "name": "南湖文旅·智慧景区",
+   "org": "南湖文旅",
+   "pm": "shaomin",
+   "sales": "shenhang",
+   "lead": "yezihan",
+   "start": "2024-06-03",
+   "end": "2025-04-30",
+   "amount": "¥1,250,000",
+   "desc": "景区客流预测、票务分析与智能导览。"
+  },
+  {
+   "name": "明德教育·智能排课",
+   "org": "明德教育",
+   "pm": "zhouheng",
+   "sales": "shenhang",
+   "lead": "tangyue",
+   "start": "2025-04-14",
+   "end": "2025-09-30",
+   "amount": "¥860,000",
+   "desc": "集团18所学校的智能排课与教室资源调度。"
+  },
+  {
+   "name": "东岳化工·安全巡检",
+   "org": "东岳化工",
+   "pm": "fengtao",
+   "sales": "zhongling",
+   "lead": "qinchuan",
+   "start": "2024-09-02",
+   "end": "2025-03-31",
+   "amount": "¥1,120,000",
+   "desc": "化工园区巡检路线优化与隐患识别。"
+  },
+  {
+   "name": "星河数据·数据服务采购",
+   "org": "星河数据",
+   "pm": "zhouheng",
+   "sales": null,
+   "lead": "linzhou",
+   "start": "2026-07-06",
+   "end": "2027-06-30",
+   "amount": "¥1,860,000",
+   "needle": true,
+   "desc": "采购星河数据的道路路网与货运时效数据服务，用于调度引擎训练与评估（合同 YF-XH-2026-031）。"
+  },
+  {
+   "name": "天枢云·云资源采购",
+   "org": "天枢云",
+   "pm": null,
+   "sales": null,
+   "lead": "linzhou",
+   "start": "2026-04-13",
+   "end": "2027-05-31",
+   "amount": "¥960,000",
+   "desc": "解决方案部演示与压测环境云资源（合同 YF-TS-2026-012）。"
+  },
+  {
+   "name": "云帆调度引擎3.0产品化",
+   "org": null,
+   "pm": "xuekai",
+   "sales": null,
+   "lead": "chenmo",
+   "start": "2025-09-01",
+   "end": "2026-06-30",
+   "amount": null,
+   "desc": "把各物流项目中的调度算法沉淀为标准产品，统一API与配置中心。"
+  },
+  {
+   "name": "解决方案知识库建设",
+   "org": null,
+   "pm": null,
+   "sales": null,
+   "lead": "gucheng",
+   "start": "2024-04-01",
+   "end": "2026-12-31",
+   "amount": null,
+   "desc": "部门方案、案例、报价模板的知识库与检索。"
+  },
+  {
+   "name": "瀚海物流·华南推广",
+   "org": "瀚海物流",
+   "pm": "zhouheng",
+   "sales": "wanglei",
+   "lead": "linzhou",
+   "start": "2026-11-01",
+   "end": "2027-06-30",
+   "amount": null,
+   "needle": true,
+   "desc": "华东调度平台模式向瀚海华南区复制的前期沟通。"
+  }
+ ],
+ "hotels": {
+  "深圳": "悦庭酒店深圳南山店（深圳市南山区科技园科苑南路2188号）",
+  "上海": "悦庭酒店上海虹桥店（上海市闵行区申长路899号）",
+  "杭州": "悦庭酒店杭州滨江店（杭州市滨江区江南大道1166号）",
+  "苏州": "悦庭酒店苏州园区店（苏州市工业园区星湖街328号）",
+  "西安": "悦庭酒店西安高新店（西安市雁塔区锦业路66号）",
+  "天津": "悦庭酒店天津滨海店（天津市滨海新区第二大街18号）",
+  "郑州": "悦庭酒店郑州郑东店（郑州市郑东新区商务外环路20号）"
+ },
+ "airports": {
+  "北京大兴": "PKX",
+  "北京首都": "PEK",
+  "深圳宝安": "SZX",
+  "上海虹桥": "SHA",
+  "上海浦东": "PVG",
+  "杭州萧山": "HGH",
+  "西安咸阳": "XIY",
+  "天津滨海": "TSN",
+  "郑州新郑": "CGO",
+  "扬州泰州": "YTY",
+  "成都天府": "TFU"
+ },
+ "note": "全部人物、机构、品牌、项目、号码均为虚构；卡号与手机号已脱敏。"
+}

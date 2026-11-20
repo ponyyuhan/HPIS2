@@ -1,0 +1,332 @@
+{
+  "environment": {
+    "os": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+    "distribution": "Ubuntu 24.04.4 LTS",
+    "cpu": "aarch64 (implementer 0x61, part 0x000)",
+    "cpu_count_visible": 4,
+    "architecture": "aarch64",
+    "python": "3.12.3",
+    "versions": {
+      "numpy": "2.5.5",
+      "aiohttp": "3.14.5",
+      "cryptography": "50.0.2",
+      "PyNaCl": "1.6.2",
+      "msgpack": "1.2.4",
+      "h5py": "3.16.0"
+    },
+    "blas": [
+      {
+        "internal_api": "openblas",
+        "version": "0.3.34.237.2",
+        "num_threads": 1,
+        "architecture": "neoversen1"
+      }
+    ]
+  },
+  "dataset": {
+    "file": "hpis-attribution-data.h5",
+    "source": null,
+    "full_shape": {
+      "train": [
+        100000,
+        100
+      ],
+      "test": [
+        1040,
+        100
+      ]
+    },
+    "selection": "first train rows, contiguous test rows; warmups use subsequent test rows",
+    "first_test_index": 512,
+    "rows": 20000,
+    "dimensions": 100,
+    "distance": "unit-vector cosine"
+  },
+  "parameters": {
+    "rows": 20000,
+    "queries": 512,
+    "query_start": 512,
+    "k": 10,
+    "rounds": 4,
+    "seed": 20261120,
+    "beta": 0.25
+  },
+  "boundary": "terminal SDK through two authenticated services and validated record bodies; protected refinement receives all publicly selected metadata before completing",
+  "conditions": {
+    "global": "search all vectors",
+    "filtered10": "one posting list, ten eligible records and k=10",
+    "filtered20": "union of two posting lists, twenty eligible records and k=10"
+  },
+  "results": {
+    "global": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1530.8763627929688,
+          "p50": 1474.9105,
+          "p95": 2215.64085
+        },
+        "sdk_us": {
+          "mean": 1525.4801137695313,
+          "p50": 1469.452,
+          "p95": 2209.1908499999995
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.791015625,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 8.76483447265625,
+          "store_us": 475.28687939453124,
+          "vector_rows": 20000.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 4910.014610351562,
+          "p50": 4855.048,
+          "p95": 7068.119549999998
+        },
+        "sdk_us": {
+          "mean": 4903.106731445312,
+          "p50": 4848.2564999999995,
+          "p95": 7061.050049999998
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5372.791015625,
+          "body_rows": 10.0,
+          "candidate_bytes": 723393.771484375,
+          "candidate_rows": 1690.17236328125,
+          "candidate_stream_bytes": 743874.478515625,
+          "candidate_wire_data_bytes": 743675.83984375,
+          "open_and_filter_us": 25.896841796875,
+          "refine_us": 457.5221748046875,
+          "refined_rows": 300.05126953125,
+          "store_us": 2335.739976074219,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 220.7322766022469,
+          "p50": 229.17577032640284,
+          "p95": 219.01016583982909
+        },
+        "round_mean_overhead_pct": [
+          219.09739733529494,
+          214.52507783200966,
+          229.0566897583678,
+          220.09518800495238
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              213.9404670610863,
+              228.3636107458146
+            ],
+            "p50": [
+              224.50507035167792,
+              235.81162354964172
+            ],
+            "p95": [
+              206.32118345172358,
+              225.71785381933896
+            ]
+          }
+        }
+      }
+    },
+    "filtered10": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 926.185400390625,
+          "p50": 842.675,
+          "p95": 1480.10865
+        },
+        "sdk_us": {
+          "mean": 922.105828125,
+          "p50": 839.05,
+          "p95": 1475.24855
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5091.61181640625,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 7.26722607421875,
+          "store_us": 109.584017578125,
+          "vector_rows": 10.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1024.4534448242186,
+          "p50": 935.2805000000001,
+          "p95": 1668.6276500000001
+        },
+        "sdk_us": {
+          "mean": 1020.3044340820312,
+          "p50": 931.7595,
+          "p95": 1660.2294999999995
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5371.61181640625,
+          "body_rows": 10.0,
+          "candidate_bytes": 4280.0,
+          "candidate_rows": 10.0,
+          "candidate_wire_data_bytes": 4280.0,
+          "certified_one_round": 1.0,
+          "open_and_filter_us": 17.60985595703125,
+          "refine_us": 72.49593896484376,
+          "refined_rows": 10.0,
+          "store_us": 71.6283232421875,
+          "vector_rows": 10.0
+        },
+        "overhead_pct": {
+          "mean": 10.60997553968659,
+          "p50": 10.989468063013641,
+          "p95": 12.73683523165683
+        },
+        "round_mean_overhead_pct": [
+          10.135661333819135,
+          10.103681942456856,
+          10.839239223373664,
+          11.45975792387346
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              9.065028187787775,
+              12.175035237037358
+            ],
+            "p50": [
+              9.181298389171458,
+              12.780033700129621
+            ],
+            "p95": [
+              6.774790715471886,
+              18.247225881830428
+            ]
+          }
+        }
+      }
+    },
+    "filtered20": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1017.123634765625,
+          "p50": 942.822,
+          "p95": 1662.281149999999
+        },
+        "sdk_us": {
+          "mean": 1012.7973671875,
+          "p50": 938.8225,
+          "p95": 1653.5932999999998
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5091.73876953125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 7.891076660156251,
+          "store_us": 151.20695849609376,
+          "vector_rows": 20.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1455.3782905273438,
+          "p50": 1333.6174999999998,
+          "p95": 2252.880349999999
+        },
+        "sdk_us": {
+          "mean": 1450.8122021484373,
+          "p50": 1329.8675,
+          "p95": 2246.705449999999
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5371.73876953125,
+          "body_rows": 10.0,
+          "candidate_bytes": 8415.80078125,
+          "candidate_rows": 19.6630859375,
+          "candidate_stream_bytes": 8840.7578125,
+          "candidate_wire_data_bytes": 8651.7578125,
+          "open_and_filter_us": 20.10667236328125,
+          "refine_us": 88.2485419921875,
+          "refined_rows": 19.6630859375,
+          "store_us": 173.47322705078125,
+          "vector_rows": 20.0
+        },
+        "overhead_pct": {
+          "mean": 43.08764842168922,
+          "p50": 41.44955251362396,
+          "p95": 35.52944097332755
+        },
+        "round_mean_overhead_pct": [
+          44.150668620248304,
+          44.25566114363679,
+          42.390188738099695,
+          41.40893367945515
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              41.32340545766452,
+              45.14660857604729
+            ],
+            "p50": [
+              39.964921292416186,
+              43.872398721731656
+            ],
+            "p95": [
+              31.15960065415603,
+              42.85383150844862
+            ]
+          }
+        }
+      }
+    }
+  }
+}

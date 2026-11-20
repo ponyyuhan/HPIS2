@@ -1,0 +1,4 @@
+dd449f84423f06ecff334bed82746a122e529e49c178714ce4599dc2a73afaf5  /root/code.tgz
+544af1d5e84e112cd4749571dcfd8ca109818a572f850af75a3a09e093a953c4  /root/data/glove-100-angular.hdf5
+c3baf6f330424fcb165b405df8e041332d46d2f5edf0a7c3a168cb72ffee92b5  /root/data/glove-100-angular-first100k.hdf5
+1ac5c8c45619f6f6f74e6c7e0e2c85ce8eb49977d7c402d7a05aa8c0d4a8aa5e  /root/data/embeddings-business-25776x512.f32

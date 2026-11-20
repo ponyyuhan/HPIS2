@@ -1,0 +1,1625 @@
+{
+ "schema": "hpis2-acceptance-rollup/1",
+ "generated_utc": "2026-11-20T12:48:01+00:00",
+ "requirement": "同一 Linux 服务器上：明文存储+明文目标查询 vs 密文存储+密文目标查询，端到端时延增加 < 10%（SSE 精确/关键词检索；基于 PPE 与 TEE 的密态向量检索）",
+ "headline": {
+  "title": "4 个验收场景（SSE 精确/关键词、TEE、PPE）的平均时延损耗在全部复核中均低于 10%",
+  "subtitle": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor · GloVe-100 angular 20,000 条 · 512 个查询 × 8 轮，明密文成对交错；最大平均损耗 +4.77%，95% 区间上限最高 +6.61%",
+  "worst_overhead_pct": 4.77,
+  "worst_ci95_upper_pct": 6.61,
+  "core_scenarios_below_10pct_everywhere": true,
+  "all_rows_and_checks_below_10pct": false,
+  "at_or_above_10pct": [
+   {
+    "key": "vec_ppe_rerank",
+    "scenario": "向量 Top-10 · 纯密码学 PPE 粗排 40 + HPIC 精排",
+    "main_run_overhead_pct": 26.03,
+    "worst_check_pct": 30.14
+   }
+  ]
+ },
+ "environment": {
+  "platform": "Linux x86_64 (vast.ai container)",
+  "cpu": "AMD EPYC 7452 32-Core Processor",
+  "os": "Debian GNU/Linux 12 (bookworm) · kernel 6.8.0-111-generic",
+  "cpu_flags": [
+   "aes",
+   "avx2",
+   "fma",
+   "sha_ni"
+  ],
+  "cgroup_cpu_max": "768000 100000",
+  "memory": "131750940 kB",
+  "python": "3.12.16",
+  "numpy": "2.5.5",
+  "blas": "openblas 0.3.34.237.2 (Haswell), threads=1",
+  "openssl": "OpenSSL 3.0.22 25 Aug 2026",
+  "dataset": "GloVe-100 angular · 20,000 条 × 100 维",
+  "pinning": null,
+  "code_sha256": {
+   "hpis": {
+    "sha256": "5d69e526cd0411a85b2bf3739bbdd312b913e7a1914ce6dc2f8886d112857b3c",
+    "files": 11
+   },
+   "acceptance": {
+    "sha256": "6e1d3dac49f21f89ed6f3f0044bfa201f835cc1900b616f6a7a959969f0d1f9f",
+    "files": 8
+   }
+  }
+ },
+ "parameters": {
+  "rows": 20000,
+  "queries": 512,
+  "rounds": 8,
+  "k": 10,
+  "beta": 0.25,
+  "body_bytes": 128,
+  "warmup_pairs_per_block": 32,
+  "run_length": 1,
+  "rerank_k": 40
+ },
+ "method": {
+  "topology": "SDK client, HPIC and HPIS as three processes on one host; two loopback TLS 1.3 hops (HPIC->HPIS mutual TLS); all tenants in one HPIS process / one SQLite file; one shared persistent client connection; concurrency 1",
+  "timing": "SDK entry with the raw query -> SDK returns decoded plaintext records; result checks and FP64 reference outside the timer",
+  "design": "per round: scenario blocks in random order; per block: warm-up, then every query once in random order, grouped into runs of 1 query; within a run each arm issues the run's queries back to back and every arm order (AB/BA, or all 6 for three arms) occurs once per consecutive group of runs; no two arms share a tenant; client cyclic GC frozen between blocks and paused within a block (servers unchanged)",
+  "vector_kernel": "FP32 GEMV (data @ q, single-thread BLAS) + np.partition top-K + (score, id) stable tie-break via hpis.codec.nearest; PPE adds RAP norm projection",
+  "ppe_rerank": "HPIS: production PPE fast search for Top-40 (bodies stay AES-GCM); HPIC: decrypts them with the DEK it already holds, re-ranks with the same FP32 kernel on the normalized vector stored inside each body (holder-signed grant field scan={kind: rerank, q, k}, applied by make_hpic_app's post-decryption filter hook); returns Top-k",
+  "blas_threads": 1,
+  "storage": "one SQLite file for all tenants, memory-mapped with a 256 MiB page cache (PRAGMA mmap_size=2147418112; PRAGMA cache_size=-262144), identical for both arms",
+  "record": "field ref=item-<id>, keyword g<id//10>, vector, ~128 B UTF-8 memo text; the SDK also stores the raw vector inside the body",
+  "oracle": "exhaustive FP64 cosine on the stored unit FP32 vectors, ties by id (0.1s, untimed)"
+ },
+ "scenarios": [
+  {
+   "key": "sse_exact",
+   "name_zh": "精确字段 SSE（命中 1 条）",
+   "tag": "SSE",
+   "desc_zh": "按唯一字段值查 1 条。明文：明文字段值查明文倒排、取明文正文；密文：HMAC-SHA256 令牌查密文倒排、取 AES-256-GCM 正文，HPIC 解密。 复核：10 万条 +2.61%，业务邮件向量 +2.84%，缓存热口径 +1.95%，另一批查询 +1.57%。",
+   "correctness_label": "正确性",
+   "rows": 20000,
+   "dims": 100,
+   "dataset": "GloVe-100 angular",
+   "run_length": 1,
+   "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+   "queries": 512,
+   "rounds": 8,
+   "plaintext_mean_ms": 2.4639,
+   "cipher_mean_ms": 2.5143,
+   "overhead_pct": 2.05,
+   "ci95": [
+    1.0,
+    3.08
+   ],
+   "p95_overhead_pct": 2.15,
+   "delta_us": 50.4,
+   "pairs": 4096,
+   "correctness": "命中结果与明文一致 100%（4096/4096）",
+   "body_bytes": {
+    "plaintext": 586.0,
+    "cipher": 614.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": true,
+   "scale": {
+    "rows": 100000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.3705,
+    "cipher_mean_ms": 2.4324,
+    "overhead_pct": 2.61,
+    "ci95": [
+     0.99,
+     4.75
+    ],
+    "p95_overhead_pct": 2.13,
+    "delta_us": 61.9,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 586.0,
+     "cipher": 614.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "business_vectors": {
+    "rows": 25232,
+    "dims": 512,
+    "dataset": "真实业务邮件向量（bge-small-zh-v1.5）",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 1.9424,
+    "cipher_mean_ms": 1.9976,
+    "overhead_pct": 2.84,
+    "ci95": [
+     0.84,
+     4.47
+    ],
+    "p95_overhead_pct": 2.5,
+    "delta_us": 55.2,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 2234.0,
+     "cipher": 2262.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "warm_cache": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 16,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 8,
+    "plaintext_mean_ms": 2.1065,
+    "cipher_mean_ms": 2.1477,
+    "overhead_pct": 1.95,
+    "ci95": [
+     0.74,
+     3.19
+    ],
+    "p95_overhead_pct": 1.99,
+    "delta_us": 41.2,
+    "pairs": 4096,
+    "correctness": "命中结果与明文一致 100%（4096/4096）",
+    "body_bytes": {
+     "plaintext": 586.0,
+     "cipher": 614.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "replicate": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.2243,
+    "cipher_mean_ms": 2.2591,
+    "overhead_pct": 1.57,
+    "ci95": [
+     -0.25,
+     3.29
+    ],
+    "p95_overhead_pct": 1.27,
+    "delta_us": 34.8,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 586.0,
+     "cipher": 614.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "secondary_platform": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "macOS arm64 (Apple M4, shared workstation) · Apple M4",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.1743,
+    "cipher_mean_ms": 3.1817,
+    "overhead_pct": 0.23,
+    "ci95": [
+     0.08,
+     0.4
+    ],
+    "p95_overhead_pct": 0.84,
+    "delta_us": 7.3,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 586.0,
+     "cipher": 614.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "earlier_runs": [
+    {
+     "run": "superseded_linux_x86_glove20k_v0",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 2.1857,
+     "cipher_mean_ms": 2.2242,
+     "overhead_pct": 1.76,
+     "ci95": [
+      1.0,
+      2.47
+     ],
+     "p95_overhead_pct": 2.27,
+     "delta_us": 38.5,
+     "pairs": 4096,
+     "correctness": "命中结果与明文一致 100%（4096/4096）",
+     "body_bytes": {
+      "plaintext": 586.0,
+      "cipher": 614.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    },
+    {
+     "run": "linux_x86_glove20k_pre_rerank",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 2.1976,
+     "cipher_mean_ms": 2.2473,
+     "overhead_pct": 2.26,
+     "ci95": [
+      1.28,
+      3.26
+     ],
+     "p95_overhead_pct": 2.4,
+     "delta_us": 49.7,
+     "pairs": 4096,
+     "correctness": "命中结果与明文一致 100%（4096/4096）",
+     "body_bytes": {
+      "plaintext": 586.0,
+      "cipher": 614.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    }
+   ],
+   "pass_all_linux_checks": true,
+   "headline": true
+  },
+  {
+   "key": "sse_keyword",
+   "name_zh": "关键词 SSE（命中 10 条）",
+   "tag": "SSE",
+   "desc_zh": "按关键词查 10 条，其余同上。 复核：10 万条 +3.99%，业务邮件向量 +3.84%，缓存热口径 +3.26%，另一批查询 +4.26%。",
+   "correctness_label": "正确性",
+   "rows": 20000,
+   "dims": 100,
+   "dataset": "GloVe-100 angular",
+   "run_length": 1,
+   "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+   "queries": 512,
+   "rounds": 8,
+   "plaintext_mean_ms": 2.2074,
+   "cipher_mean_ms": 2.3074,
+   "overhead_pct": 4.53,
+   "ci95": [
+    2.81,
+    6.61
+   ],
+   "p95_overhead_pct": 3.9,
+   "delta_us": 100.0,
+   "pairs": 4096,
+   "correctness": "命中结果与明文一致 100%（4096/4096）",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": true,
+   "scale": {
+    "rows": 100000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.5839,
+    "cipher_mean_ms": 2.6868,
+    "overhead_pct": 3.99,
+    "ci95": [
+     2.9,
+     5.14
+    ],
+    "p95_overhead_pct": 3.12,
+    "delta_us": 103.0,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 5862.0,
+     "cipher": 6142.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "business_vectors": {
+    "rows": 25232,
+    "dims": 512,
+    "dataset": "真实业务邮件向量（bge-small-zh-v1.5）",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.4013,
+    "cipher_mean_ms": 2.4936,
+    "overhead_pct": 3.84,
+    "ci95": [
+     3.11,
+     4.61
+    ],
+    "p95_overhead_pct": 3.5,
+    "delta_us": 92.3,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 22340.0,
+     "cipher": 22620.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "warm_cache": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 16,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 8,
+    "plaintext_mean_ms": 2.4118,
+    "cipher_mean_ms": 2.4905,
+    "overhead_pct": 3.26,
+    "ci95": [
+     1.72,
+     4.72
+    ],
+    "p95_overhead_pct": 2.66,
+    "delta_us": 78.7,
+    "pairs": 4096,
+    "correctness": "命中结果与明文一致 100%（4096/4096）",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "replicate": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 1.8037,
+    "cipher_mean_ms": 1.8806,
+    "overhead_pct": 4.26,
+    "ci95": [
+     3.27,
+     5.34
+    ],
+    "p95_overhead_pct": 4.0,
+    "delta_us": 76.9,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "secondary_platform": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "macOS arm64 (Apple M4, shared workstation) · Apple M4",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.2071,
+    "cipher_mean_ms": 3.2185,
+    "overhead_pct": 0.35,
+    "ci95": [
+     0.24,
+     0.48
+    ],
+    "p95_overhead_pct": 0.7,
+    "delta_us": 11.4,
+    "pairs": 2048,
+    "correctness": "命中结果与明文一致 100%（2048/2048）",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "earlier_runs": [
+    {
+     "run": "superseded_linux_x86_glove20k_v0",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 2.5306,
+     "cipher_mean_ms": 2.6474,
+     "overhead_pct": 4.61,
+     "ci95": [
+      3.47,
+      5.76
+     ],
+     "p95_overhead_pct": 3.93,
+     "delta_us": 116.8,
+     "pairs": 4096,
+     "correctness": "命中结果与明文一致 100%（4096/4096）",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    },
+    {
+     "run": "linux_x86_glove20k_pre_rerank",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 2.2316,
+     "cipher_mean_ms": 2.2982,
+     "overhead_pct": 2.99,
+     "ci95": [
+      0.9,
+      4.91
+     ],
+     "p95_overhead_pct": 4.14,
+     "delta_us": 66.6,
+     "pairs": 4096,
+     "correctness": "命中结果与明文一致 100%（4096/4096）",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    }
+   ],
+   "pass_all_linux_checks": true,
+   "headline": true
+  },
+  {
+   "key": "vec_tee",
+   "name_zh": "向量 Top-10 · 软硬协同精确（TEE）",
+   "tag": "TEE",
+   "desc_zh": "向量索引以 AES-256-GCM 存储，只在 HPIS 可信计算区内解开，用与明文完全相同的排序内核，结果与明文逐条同序。 复核：10 万条 +0.34%，业务邮件向量 -0.31%，缓存热口径 +2.55%，另一批查询 +3.60%。",
+   "correctness_label": "正确性",
+   "rows": 20000,
+   "dims": 100,
+   "dataset": "GloVe-100 angular",
+   "run_length": 1,
+   "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+   "queries": 512,
+   "rounds": 8,
+   "plaintext_mean_ms": 3.2552,
+   "cipher_mean_ms": 3.3434,
+   "overhead_pct": 2.71,
+   "ci95": [
+    1.17,
+    4.15
+   ],
+   "p95_overhead_pct": 2.42,
+   "delta_us": 88.2,
+   "pairs": 4096,
+   "correctness": "Top-10 与明文逐条同序一致 100.00%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": true,
+   "scale": {
+    "rows": 100000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 6.765,
+    "cipher_mean_ms": 6.7882,
+    "overhead_pct": 0.34,
+    "ci95": [
+     -1.01,
+     1.83
+    ],
+    "p95_overhead_pct": 0.33,
+    "delta_us": 23.2,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 5862.0,
+     "cipher": 6142.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "business_vectors": {
+    "rows": 25232,
+    "dims": 512,
+    "dataset": "真实业务邮件向量（bge-small-zh-v1.5）",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 7.3912,
+    "cipher_mean_ms": 7.3684,
+    "overhead_pct": -0.31,
+    "ci95": [
+     -1.22,
+     0.56
+    ],
+    "p95_overhead_pct": -0.36,
+    "delta_us": -22.9,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 22340.0,
+     "cipher": 22620.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "warm_cache": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 16,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 8,
+    "plaintext_mean_ms": 2.9914,
+    "cipher_mean_ms": 3.0677,
+    "overhead_pct": 2.55,
+    "ci95": [
+     0.61,
+     4.43
+    ],
+    "p95_overhead_pct": 3.63,
+    "delta_us": 76.3,
+    "pairs": 4096,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "replicate": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.7879,
+    "cipher_mean_ms": 2.8883,
+    "overhead_pct": 3.6,
+    "ci95": [
+     2.42,
+     4.79
+    ],
+    "p95_overhead_pct": 4.59,
+    "delta_us": 100.4,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "secondary_platform": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "macOS arm64 (Apple M4, shared workstation) · Apple M4",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.5471,
+    "cipher_mean_ms": 3.5497,
+    "overhead_pct": 0.07,
+    "ci95": [
+     -0.08,
+     0.24
+    ],
+    "p95_overhead_pct": 0.19,
+    "delta_us": 2.6,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序一致 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "earlier_runs": [
+    {
+     "run": "superseded_linux_x86_glove20k_v0",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 3.4112,
+     "cipher_mean_ms": 3.5122,
+     "overhead_pct": 2.96,
+     "ci95": [
+      2.56,
+      3.37
+     ],
+     "p95_overhead_pct": 2.3,
+     "delta_us": 101.0,
+     "pairs": 4096,
+     "correctness": "Top-10 与明文逐条同序一致 100.00%",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    },
+    {
+     "run": "linux_x86_glove20k_pre_rerank",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 3.2395,
+     "cipher_mean_ms": 3.3272,
+     "overhead_pct": 2.71,
+     "ci95": [
+      2.02,
+      3.46
+     ],
+     "p95_overhead_pct": 1.95,
+     "delta_us": 87.7,
+     "pairs": 4096,
+     "correctness": "Top-10 与明文逐条同序一致 100.00%",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    }
+   ],
+   "pass_all_linux_checks": true,
+   "headline": true
+  },
+  {
+   "key": "vec_ppe",
+   "name_zh": "向量 Top-10 · 纯密码学 PPE",
+   "tag": "PPE",
+   "desc_zh": "HPIS 只持有 RAP 扰动表示 h = xR + e（β=0.25），不依赖可信硬件；同一排序内核，近似检索。 复核：10 万条 +2.51%，业务邮件向量 +3.56%，缓存热口径 +6.92%，另一批查询 +4.04%。",
+   "correctness_label": "正确性",
+   "rows": 20000,
+   "dims": 100,
+   "dataset": "GloVe-100 angular",
+   "run_length": 1,
+   "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+   "queries": 512,
+   "rounds": 8,
+   "plaintext_mean_ms": 3.241,
+   "cipher_mean_ms": 3.3956,
+   "overhead_pct": 4.77,
+   "ci95": [
+    4.15,
+    5.44
+   ],
+   "p95_overhead_pct": 4.49,
+   "delta_us": 154.6,
+   "pairs": 4096,
+   "correctness": "Recall@10 89.22%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": true,
+   "scale": {
+    "rows": 100000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 6.9259,
+    "cipher_mean_ms": 7.0997,
+    "overhead_pct": 2.51,
+    "ci95": [
+     1.53,
+     3.51
+    ],
+    "p95_overhead_pct": 4.5,
+    "delta_us": 173.8,
+    "pairs": 2048,
+    "correctness": "Recall@10 87.67%",
+    "body_bytes": {
+     "plaintext": 5862.0,
+     "cipher": 6142.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "business_vectors": {
+    "rows": 25232,
+    "dims": 512,
+    "dataset": "真实业务邮件向量（bge-small-zh-v1.5）",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 7.6279,
+    "cipher_mean_ms": 7.8995,
+    "overhead_pct": 3.56,
+    "ci95": [
+     2.76,
+     4.35
+    ],
+    "p95_overhead_pct": 5.61,
+    "delta_us": 271.6,
+    "pairs": 2048,
+    "correctness": "Recall@10 91.19%",
+    "body_bytes": {
+     "plaintext": 22340.0,
+     "cipher": 22620.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "warm_cache": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 16,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 8,
+    "plaintext_mean_ms": 2.9465,
+    "cipher_mean_ms": 3.1503,
+    "overhead_pct": 6.92,
+    "ci95": [
+     5.24,
+     8.76
+    ],
+    "p95_overhead_pct": 5.98,
+    "delta_us": 203.8,
+    "pairs": 4096,
+    "correctness": "Recall@10 89.22%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "replicate": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.0878,
+    "cipher_mean_ms": 3.2124,
+    "overhead_pct": 4.04,
+    "ci95": [
+     2.57,
+     5.63
+    ],
+    "p95_overhead_pct": 4.24,
+    "delta_us": 124.6,
+    "pairs": 2048,
+    "correctness": "Recall@10 89.57%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "secondary_platform": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "macOS arm64 (Apple M4, shared workstation) · Apple M4",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.6047,
+    "cipher_mean_ms": 3.6455,
+    "overhead_pct": 1.13,
+    "ci95": [
+     0.85,
+     1.4
+    ],
+    "p95_overhead_pct": 1.43,
+    "delta_us": 40.8,
+    "pairs": 2048,
+    "correctness": "Recall@10 88.96%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 6139.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "earlier_runs": [
+    {
+     "run": "superseded_linux_x86_glove20k_v0",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 3.2571,
+     "cipher_mean_ms": 3.3858,
+     "overhead_pct": 3.95,
+     "ci95": [
+      3.08,
+      4.82
+     ],
+     "p95_overhead_pct": 4.15,
+     "delta_us": 128.6,
+     "pairs": 4096,
+     "correctness": "Recall@10 89.18%",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    },
+    {
+     "run": "linux_x86_glove20k_pre_rerank",
+     "rows": 20000,
+     "dims": 100,
+     "dataset": "GloVe-100 angular",
+     "run_length": 1,
+     "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+     "queries": 512,
+     "rounds": 8,
+     "plaintext_mean_ms": 2.9428,
+     "cipher_mean_ms": 3.0683,
+     "overhead_pct": 4.27,
+     "ci95": [
+      2.82,
+      5.5
+     ],
+     "p95_overhead_pct": 4.32,
+     "delta_us": 125.6,
+     "pairs": 4096,
+     "correctness": "Recall@10 88.96%",
+     "body_bytes": {
+      "plaintext": 5859.0,
+      "cipher": 6139.0
+     },
+     "pass": true,
+     "ci_upper_below_10pct": true
+    }
+   ],
+   "pass_all_linux_checks": true,
+   "headline": true
+  },
+  {
+   "key": "vec_ppe_rerank",
+   "name_zh": "向量 Top-10 · 纯密码学 PPE 粗排 40 + HPIC 精排",
+   "tag": "PPE+HPIC",
+   "desc_zh": "HPIS 用 PPE 快速检索取 40 条密文正文；HPIC 用已持有的 DEK 解密，按正文里的原向量以同一内核精排出 Top-10。不依赖可信硬件。 复核：10 万条 +12.01%，业务邮件向量 +19.26%，缓存热口径 +30.14%，另一批查询 +23.22%。",
+   "correctness_label": "正确性",
+   "rows": 20000,
+   "dims": 100,
+   "dataset": "GloVe-100 angular",
+   "run_length": 1,
+   "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+   "queries": 512,
+   "rounds": 8,
+   "plaintext_mean_ms": 3.3584,
+   "cipher_mean_ms": 4.2324,
+   "overhead_pct": 26.03,
+   "ci95": [
+    25.5,
+    26.52
+   ],
+   "p95_overhead_pct": 25.2,
+   "delta_us": 874.0,
+   "pairs": 4096,
+   "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 24556.0
+   },
+   "pass": false,
+   "ci_upper_below_10pct": false,
+   "scale": {
+    "rows": 100000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 6.8418,
+    "cipher_mean_ms": 7.6635,
+    "overhead_pct": 12.01,
+    "ci95": [
+     10.94,
+     13.05
+    ],
+    "p95_overhead_pct": 10.13,
+    "delta_us": 821.7,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+    "body_bytes": {
+     "plaintext": 5862.0,
+     "cipher": 24568.0
+    },
+    "pass": false,
+    "ci_upper_below_10pct": false
+   },
+   "business_vectors": {
+    "rows": 25232,
+    "dims": 512,
+    "dataset": "真实业务邮件向量（bge-small-zh-v1.5）",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 7.3825,
+    "cipher_mean_ms": 8.8047,
+    "overhead_pct": 19.26,
+    "ci95": [
+     18.07,
+     20.31
+    ],
+    "p95_overhead_pct": 21.33,
+    "delta_us": 1422.2,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序 99.02%，Recall@10 99.80%",
+    "body_bytes": {
+     "plaintext": 22340.0,
+     "cipher": 90482.0
+    },
+    "pass": false,
+    "ci_upper_below_10pct": false
+   },
+   "warm_cache": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 16,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 8,
+    "plaintext_mean_ms": 3.0082,
+    "cipher_mean_ms": 3.915,
+    "overhead_pct": 30.14,
+    "ci95": [
+     27.88,
+     32.39
+    ],
+    "p95_overhead_pct": 26.72,
+    "delta_us": 906.8,
+    "pairs": 4096,
+    "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 24556.0
+    },
+    "pass": false,
+    "ci_upper_below_10pct": false
+   },
+   "replicate": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "Linux x86_64 (vast.ai container) · AMD EPYC 7452 32-Core Processor",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 2.9617,
+    "cipher_mean_ms": 3.6494,
+    "overhead_pct": 23.22,
+    "ci95": [
+     20.87,
+     25.63
+    ],
+    "p95_overhead_pct": 22.15,
+    "delta_us": 687.7,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 24556.0
+    },
+    "pass": false,
+    "ci_upper_below_10pct": false
+   },
+   "secondary_platform": {
+    "rows": 20000,
+    "dims": 100,
+    "dataset": "GloVe-100 angular",
+    "run_length": 1,
+    "platform": "macOS arm64 (Apple M4, shared workstation) · Apple M4",
+    "queries": 512,
+    "rounds": 4,
+    "plaintext_mean_ms": 3.4964,
+    "cipher_mean_ms": 3.7168,
+    "overhead_pct": 6.3,
+    "ci95": [
+     6.12,
+     6.5
+    ],
+    "p95_overhead_pct": 7.03,
+    "delta_us": 220.4,
+    "pairs": 2048,
+    "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+    "body_bytes": {
+     "plaintext": 5859.0,
+     "cipher": 24556.0
+    },
+    "pass": true,
+    "ci_upper_below_10pct": true
+   },
+   "pass_all_linux_checks": false,
+   "headline": false
+  }
+ ],
+ "io": {
+  "title": "每次查询 HPIS 读取并发往 HPIC 的正文字节",
+  "desc": "同一密文租户，20,000 条记录。1.0 方式每次取回并解密整个 AID；2.0 在 HPIS 内选出命中，只读命中的正文。向量检索仍在内存中扫描全部 8.0 MB 向量索引，节省的是正文读取、传输与解密。",
+  "rows": [
+   {
+    "label": "HPIS 1.0 方式：整个 AID 全量读取并传给 HPIC 解密",
+    "bytes": 12278110
+   },
+   {
+    "label": "2.0 精确字段：只读命中的 1 条",
+    "bytes": 614
+   },
+   {
+    "label": "2.0 关键词：只读命中的 10 条",
+    "bytes": 6143
+   },
+   {
+    "label": "2.0 向量 Top-10：只读命中的 10 条",
+    "bytes": 6139
+   }
+  ],
+  "full_fetch_mean_ms": 211.0,
+  "partial_fetch_mean_ms": {
+   "field": 2.705,
+   "word": 2.064,
+   "vector": 3.197
+  },
+  "detail": {
+   "1.0_field": {
+    "requests": 16,
+    "mean_ms": 210.98855,
+    "body_rows": 20000.0,
+    "body_bytes": 12278110.0
+   },
+   "1.0_vector": {
+    "requests": 16,
+    "mean_ms": 225.68874375000001,
+    "body_rows": 20000.0,
+    "body_bytes": 12278110.0,
+    "exact_top_k": 1.0
+   },
+   "2.0_field": {
+    "requests": 16,
+    "mean_ms": 2.7054812499999996,
+    "body_rows": 1.0,
+    "body_bytes": 614.375,
+    "reduction_vs_1.0_body_bytes": 19984.71617497457
+   },
+   "2.0_word": {
+    "requests": 16,
+    "mean_ms": 2.0640437499999997,
+    "body_rows": 10.0,
+    "body_bytes": 6143.125,
+    "reduction_vs_1.0_body_bytes": 1998.6749414996439
+   },
+   "2.0_vector": {
+    "requests": 16,
+    "mean_ms": 3.19674375,
+    "body_rows": 10.0,
+    "body_bytes": 6139.625,
+    "reduction_vs_1.0_body_bytes": 1999.8143209072216
+   }
+  },
+  "note": "1.0-style = op 'scan': HPIS reads every record of the AID and ships it to HPIC, which decrypts all and filters (the keyword case reads the same whole AID). 2.0 = HPIS selects inside the AID and ships only the hits. The vector query still scans the in-memory index each time (20000 x 100 x 4 B = 8000000 B of RAM); what 2.0 removes is the per-query body read, transfer and decryption."
+ },
+ "appendix": {
+  "three_arm": {
+   "name_zh": "旧口径对照：明文 FP64 复核 vs 明文同核 vs PPE（同一批查询，三路交叉）",
+   "arms_mean_ms": {
+    "plaintext_fp64_recheck": 3.1954,
+    "plaintext": 3.0871,
+    "ppe": 3.2273
+   },
+   "hpis_search_mean_us": {
+    "plaintext_fp64_recheck": 1007.9,
+    "plaintext": 886.0,
+    "ppe": 904.6
+   },
+   "recall_at_10": {
+    "plaintext_fp64_recheck": 100.0,
+    "plaintext": 100.0,
+    "ppe": 89.04
+   },
+   "ppe_vs_plaintext_fp64_recheck": {
+    "baseline_mean_ms": 3.1954,
+    "other_mean_ms": 3.2273,
+    "overhead_pct": 1.0,
+    "ci95": [
+     0.42,
+     1.6
+    ],
+    "p95_overhead_pct": -0.14,
+    "delta_us": 31.8
+   },
+   "ppe_vs_plaintext_same_kernel": {
+    "baseline_mean_ms": 3.0871,
+    "other_mean_ms": 3.2273,
+    "overhead_pct": 4.54,
+    "ci95": [
+     3.25,
+     5.6
+    ],
+    "p95_overhead_pct": 5.05,
+    "delta_us": 140.1
+   },
+   "plaintext_same_kernel_vs_fp64_recheck": {
+    "baseline_mean_ms": 3.1954,
+    "other_mean_ms": 3.0871,
+    "overhead_pct": -3.39,
+    "ci95": [
+     -4.35,
+     -2.17
+    ],
+    "p95_overhead_pct": -4.94,
+    "delta_us": -108.3
+   }
+  },
+  "refine_strict": {
+   "plaintext_mean_ms": 3.4402,
+   "cipher_mean_ms": 11.9709,
+   "overhead_pct": 247.97,
+   "ci95": [
+    244.27,
+    251.5
+   ],
+   "p95_overhead_pct": 321.79,
+   "delta_us": 8530.7,
+   "pairs": 4096,
+   "correctness": "Top-10 与 FP64 穷举真值同序 100.00%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": false,
+   "ci_upper_below_10pct": false,
+   "name_zh": "纯密码学严格精排 Top-10（refine=True，HPIS 发送候选密文、HPIC 精排、二次取正文）",
+   "cand_rows_per_query": 1684.0,
+   "cand_bytes_per_query": 720788.0,
+   "cand_wire_bytes_per_query": 740997.0,
+   "refined_rows_per_query": 293.0
+  },
+  "mapped_exact": {
+   "plaintext_mean_ms": 3.1315,
+   "cipher_mean_ms": 3.4433,
+   "overhead_pct": 9.96,
+   "ci95": [
+    8.83,
+    11.09
+   ],
+   "p95_overhead_pct": 8.47,
+   "delta_us": 311.8,
+   "pairs": 4096,
+   "correctness": "Top-10 与 FP64 穷举真值同序 100.00%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": false,
+   "name_zh": "HPIC 预置密态索引严格 Top-10（integration.mapped_index，需 HPIC 预先持有索引副本）",
+   "setup": {
+    "ingest_s": {
+     "plain": 5.550928791286424,
+     "mapped_ppe": 9.722108907066286
+    },
+    "first_query_us_including_index_publication": 122970.371,
+    "index_publication_bytes": 16720256,
+    "index_publication_us": 89521.509,
+    "native_ranker": true,
+    "pipeline": true
+   }
+  },
+  "ppe_b0125": {
+   "plaintext_mean_ms": 3.032,
+   "cipher_mean_ms": 3.1721,
+   "overhead_pct": 4.62,
+   "ci95": [
+    3.72,
+    5.54
+   ],
+   "p95_overhead_pct": 3.9,
+   "delta_us": 140.1,
+   "pairs": 4096,
+   "correctness": "Recall@10 93.95%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 6139.0
+   },
+   "pass": true,
+   "ci_upper_below_10pct": true,
+   "name_zh": "向量 Top-10·PPE（β=0.125）"
+  },
+  "ppe_b0125_rerank": {
+   "plaintext_mean_ms": 3.1768,
+   "cipher_mean_ms": 3.6683,
+   "overhead_pct": 15.47,
+   "ci95": [
+    14.44,
+    16.5
+   ],
+   "p95_overhead_pct": 13.17,
+   "delta_us": 491.5,
+   "pairs": 4096,
+   "correctness": "Top-10 与明文逐条同序 100.00%，Recall@10 100.00%",
+   "body_bytes": {
+    "plaintext": 5859.0,
+    "cipher": 12278.0
+   },
+   "pass": false,
+   "ci_upper_below_10pct": false,
+   "name_zh": "向量 Top-10·PPE（β=0.125）粗排 20 + HPIC 精排"
+  }
+ },
+ "notes": [
+  {
+   "title": "为什么旧报告里快速向量是 −1.14%",
+   "text": "旧表的明文侧多做了一步 FP64 复核排序，PPE 侧没有。同一批查询三路交叉（三路各用一份数据，互不共享缓存）：PPE 对“明文+FP64复核”为 +1.00%（[+0.42, +1.60]），对同一 FP32 内核的明文为 +4.54%（[+3.25, +5.60]）；去掉复核让明文本身快 3.39%。本报告主表一律用同一内核。"
+  },
+  {
+   "title": "严格精排",
+   "text": "纯密码学、无需可信硬件的精确 Top-10：PPE 粗排 40 条 + HPIC 精排，Top-10 与明文逐条同序 100.00%，Recall@10 100.00%，开销 +26.03%（[+25.50, +26.52]），代价是每次多读、多解密 30 条正文。 原有 refine 严格精排（有界证明，与 FP64 真值同序 100.00%）为 +248.0%（每次约 1,684 条候选向量密文、约 721 KB 发往 HPIC，再二次取正文），不达 10%，列附录。 HPIC 预置密态索引副本（mapped）严格 Top-10 为 +9.96%（[+8.83, +11.09]），HPIC 授权范围随之扩大。 TEE 路径（主表第 3 行）在可信计算区内直接得到与明文完全相同的结果。"
+  }
+ ],
+ "runs": {
+  "main": "acceptance/results/linux_x86_glove20k",
+  "scale": "acceptance/results/linux_x86_glove100k",
+  "business_vectors": "acceptance/results/linux_x86_business",
+  "warm_cache": "acceptance/results/linux_x86_glove20k_warm",
+  "replicate": "acceptance/results/linux_x86_glove20k_holdout",
+  "secondary_platform": "acceptance/results/macos_arm64_glove20k"
+ },
+ "earlier_runs": {
+  "superseded_linux_x86_glove20k_v0": "first full x86 run; its 3-arm appendix let two arms share one plaintext matrix (warm-cache carry-over), fixed with a separate identical tenant; pairwise main rows kept as a replicate",
+  "linux_x86_glove20k_pre_rerank": "second full x86 run with the fixed 3-arm design, before vec_ppe_rerank was added; kept as a replicate"
+ },
+ "scale_io": {
+  "title": "每次查询 HPIS 读取并发往 HPIC 的正文字节",
+  "desc": "同一密文租户，100,000 条记录。1.0 方式每次取回并解密整个 AID；2.0 在 HPIS 内选出命中，只读命中的正文。向量检索仍在内存中扫描全部 40.0 MB 向量索引，节省的是正文读取、传输与解密。",
+  "rows": [
+   {
+    "label": "HPIS 1.0 方式：整个 AID 全量读取并传给 HPIC 解密",
+    "bytes": 61420030
+   },
+   {
+    "label": "2.0 精确字段：只读命中的 1 条",
+    "bytes": 614
+   },
+   {
+    "label": "2.0 关键词：只读命中的 10 条",
+    "bytes": 6143
+   },
+   {
+    "label": "2.0 向量 Top-10：只读命中的 10 条",
+    "bytes": 6140
+   }
+  ],
+  "full_fetch_mean_ms": 1366.2,
+  "partial_fetch_mean_ms": {
+   "field": 3.531,
+   "word": 8.195,
+   "vector": 11.746
+  },
+  "detail": {
+   "1.0_field": {
+    "requests": 8,
+    "mean_ms": 1366.1582374999998,
+    "body_rows": 100000.0,
+    "body_bytes": 61420030.0
+   },
+   "1.0_vector": {
+    "requests": 8,
+    "mean_ms": 1545.1078875,
+    "body_rows": 100000.0,
+    "body_bytes": 61420030.0,
+    "exact_top_k": 1.0
+   },
+   "2.0_field": {
+    "requests": 8,
+    "mean_ms": 3.53105,
+    "body_rows": 1.0,
+    "body_bytes": 614.5,
+    "reduction_vs_1.0_body_bytes": 99951.22864117168
+   },
+   "2.0_word": {
+    "requests": 8,
+    "mean_ms": 8.194775,
+    "body_rows": 10.0,
+    "body_bytes": 6143.5,
+    "reduction_vs_1.0_body_bytes": 9997.563278261578
+   },
+   "2.0_vector": {
+    "requests": 8,
+    "mean_ms": 11.7464,
+    "body_rows": 10.0,
+    "body_bytes": 6140.875,
+    "reduction_vs_1.0_body_bytes": 10001.836871781301
+   }
+  },
+  "note": "1.0-style = op 'scan': HPIS reads every record of the AID and ships it to HPIC, which decrypts all and filters (the keyword case reads the same whole AID). 2.0 = HPIS selects inside the AID and ships only the hits. The vector query still scans the in-memory index each time (100000 x 100 x 4 B = 40000000 B of RAM); what 2.0 removes is the per-query body read, transfer and decryption."
+ },
+ "scale_appendix": {
+  "three_arm": {
+   "name_zh": "旧口径对照：明文 FP64 复核 vs 明文同核 vs PPE（同一批查询，三路交叉）",
+   "arms_mean_ms": {
+    "plaintext_fp64_recheck": 6.9361,
+    "plaintext": 6.8702,
+    "ppe": 7.0732
+   },
+   "hpis_search_mean_us": {
+    "plaintext_fp64_recheck": 4129.9,
+    "plaintext": 4074.5,
+    "ppe": 4088.3
+   },
+   "recall_at_10": {
+    "plaintext_fp64_recheck": 100.0,
+    "plaintext": 100.0,
+    "ppe": 88.01
+   },
+   "ppe_vs_plaintext_fp64_recheck": {
+    "baseline_mean_ms": 6.9361,
+    "other_mean_ms": 7.0732,
+    "overhead_pct": 1.98,
+    "ci95": [
+     0.81,
+     3.25
+    ],
+    "p95_overhead_pct": 3.15,
+    "delta_us": 137.0
+   },
+   "ppe_vs_plaintext_same_kernel": {
+    "baseline_mean_ms": 6.8702,
+    "other_mean_ms": 7.0732,
+    "overhead_pct": 2.95,
+    "ci95": [
+     1.54,
+     4.43
+    ],
+    "p95_overhead_pct": 1.15,
+    "delta_us": 202.9
+   },
+   "plaintext_same_kernel_vs_fp64_recheck": {
+    "baseline_mean_ms": 6.9361,
+    "other_mean_ms": 6.8702,
+    "overhead_pct": -0.95,
+    "ci95": [
+     -2.03,
+     0.12
+    ],
+    "p95_overhead_pct": 1.98,
+    "delta_us": -65.9
+   }
+  },
+  "refine_strict": {
+   "plaintext_mean_ms": 6.6602,
+   "cipher_mean_ms": 24.4421,
+   "overhead_pct": 266.99,
+   "ci95": [
+    260.15,
+    274.16
+   ],
+   "p95_overhead_pct": 400.72,
+   "delta_us": 17781.9,
+   "pairs": 2048,
+   "correctness": "Top-10 与 FP64 穷举真值同序 100.00%",
+   "body_bytes": {
+    "plaintext": 5862.0,
+    "cipher": 6142.0
+   },
+   "pass": false,
+   "ci_upper_below_10pct": false,
+   "name_zh": "纯密码学严格精排 Top-10（refine=True，HPIS 发送候选密文、HPIC 精排、二次取正文）",
+   "cand_rows_per_query": 3567.0,
+   "cand_bytes_per_query": 1526463.0,
+   "cand_wire_bytes_per_query": 1569261.0,
+   "refined_rows_per_query": 457.0
+  }
+ },
+ "business_io": {
+  "title": "每次查询 HPIS 读取并发往 HPIC 的正文字节",
+  "desc": "同一密文租户，25,232 条记录。1.0 方式每次取回并解密整个 AID；2.0 在 HPIS 内选出命中，只读命中的正文。向量检索仍在内存中扫描全部 51.7 MB 向量索引，节省的是正文读取、传输与解密。",
+  "rows": [
+   {
+    "label": "HPIS 1.0 方式：整个 AID 全量读取并传给 HPIC 解密",
+    "bytes": 57074334
+   },
+   {
+    "label": "2.0 精确字段：只读命中的 1 条",
+    "bytes": 2262
+   },
+   {
+    "label": "2.0 关键词：只读命中的 10 条",
+    "bytes": 22624
+   },
+   {
+    "label": "2.0 向量 Top-10：只读命中的 10 条",
+    "bytes": 22621
+   }
+  ],
+  "full_fetch_mean_ms": 585.0,
+  "partial_fetch_mean_ms": {
+   "field": 3.105,
+   "word": 7.592,
+   "vector": 7.69
+  },
+  "detail": {
+   "1.0_field": {
+    "requests": 4,
+    "mean_ms": 584.96965,
+    "body_rows": 25232.0,
+    "body_bytes": 57074334.0
+   },
+   "1.0_vector": {
+    "requests": 4,
+    "mean_ms": 708.16275,
+    "body_rows": 25232.0,
+    "body_bytes": 57074334.0,
+    "exact_top_k": 1.0
+   },
+   "2.0_field": {
+    "requests": 4,
+    "mean_ms": 3.104925,
+    "body_rows": 1.0,
+    "body_bytes": 2262.5,
+    "reduction_vs_1.0_body_bytes": 25226.22497237569
+   },
+   "2.0_word": {
+    "requests": 4,
+    "mean_ms": 7.591925,
+    "body_rows": 10.0,
+    "body_bytes": 22624.5,
+    "reduction_vs_1.0_body_bytes": 2522.6782470330836
+   },
+   "2.0_vector": {
+    "requests": 4,
+    "mean_ms": 7.690375,
+    "body_rows": 10.0,
+    "body_bytes": 22621.0,
+    "reduction_vs_1.0_body_bytes": 2523.0685646081074
+   }
+  },
+  "note": "1.0-style = op 'scan': HPIS reads every record of the AID and ships it to HPIC, which decrypts all and filters (the keyword case reads the same whole AID). 2.0 = HPIS selects inside the AID and ships only the hits. The vector query still scans the in-memory index each time (25232 x 512 x 4 B = 51675136 B of RAM); what 2.0 removes is the per-query body read, transfer and decryption."
+ },
+ "business_appendix": {
+  "three_arm": {
+   "name_zh": "旧口径对照：明文 FP64 复核 vs 明文同核 vs PPE（同一批查询，三路交叉）",
+   "arms_mean_ms": {
+    "plaintext_fp64_recheck": 8.1624,
+    "plaintext": 7.4273,
+    "ppe": 7.6808
+   },
+   "hpis_search_mean_us": {
+    "plaintext_fp64_recheck": 5263.8,
+    "plaintext": 4512.0,
+    "ppe": 4518.8
+   },
+   "recall_at_10": {
+    "plaintext_fp64_recheck": 100.0,
+    "plaintext": 99.94,
+    "ppe": 91.12
+   },
+   "ppe_vs_plaintext_fp64_recheck": {
+    "baseline_mean_ms": 8.1624,
+    "other_mean_ms": 7.6808,
+    "overhead_pct": -5.9,
+    "ci95": [
+     -7.0,
+     -4.8
+    ],
+    "p95_overhead_pct": -26.2,
+    "delta_us": -481.7
+   },
+   "ppe_vs_plaintext_same_kernel": {
+    "baseline_mean_ms": 7.4273,
+    "other_mean_ms": 7.6808,
+    "overhead_pct": 3.41,
+    "ci95": [
+     2.48,
+     4.24
+    ],
+    "p95_overhead_pct": 4.39,
+    "delta_us": 253.4
+   },
+   "plaintext_same_kernel_vs_fp64_recheck": {
+    "baseline_mean_ms": 8.1624,
+    "other_mean_ms": 7.4273,
+    "overhead_pct": -9.01,
+    "ci95": [
+     -10.18,
+     -7.81
+    ],
+    "p95_overhead_pct": -29.31,
+    "delta_us": -735.1
+   }
+  }
+ },
+ "business_dataset": {
+  "file": "embeddings-business-25776x512.f32",
+  "sha256": "1ac5c8c45619f6f6f74e6c7e0e2c85ce8eb49977d7c402d7a05aa8c0d4a8aa5e",
+  "bytes": 52789248,
+  "format": "raw float32 matrix",
+  "name": "embeddings-business-25776x512",
+  "file_shape": [
+   25776,
+   512
+  ],
+  "distance": "cosine",
+  "selection": "rows[0:25232] inserted; held-out rows[25232:25744] queried",
+  "rows": 25232,
+  "dims": 512,
+  "queries": 512,
+  "warmups": 32
+ }
+}

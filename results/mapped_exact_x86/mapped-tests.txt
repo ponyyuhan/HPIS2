@@ -1,0 +1,6 @@
+test_exact_scope_ciphertext_and_updates (integration.mapped_index.tests.MappedProtocolTest.test_exact_scope_ciphertext_and_updates) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.683s
+
+OK

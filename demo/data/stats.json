@@ -1,0 +1,115 @@
+{
+ "emails": 100000,
+ "attachments": 15383,
+ "emails_with_attachments": 15217,
+ "attachment_binary_bytes": 4779643501,
+ "body_bytes": 161249997,
+ "attachment_text_bytes": 47263804,
+ "text_bytes": 208513801,
+ "file_bytes": 274490306,
+ "date_range": [
+  "2024-01-01T07:06:00+08:00",
+  "2026-11-20T17:55:58+08:00"
+ ],
+ "as_of": "2026-11-20T18:00:00+08:00",
+ "categories": {
+  "work": 39458,
+  "promotion": 17336,
+  "notification": 15344,
+  "family": 9500,
+  "system": 4858,
+  "newsletter": 4739,
+  "client": 4665,
+  "finance": 3255,
+  "school": 583,
+  "travel": 244,
+  "health": 18
+ },
+ "folders": {
+  "archive": 50544,
+  "sent": 22871,
+  "inbox": 26585
+ },
+ "threads": 60706,
+ "orgs": {
+  "云购商城": 11361,
+  "星辰银行": 4316,
+  "极速快递": 3644,
+  "华川制造": 3638,
+  "瀚海物流": 3372,
+  "饭点外卖": 2731,
+  "北辰能源": 2470,
+  "南湖文旅": 2452,
+  "青禾医疗": 1967,
+  "速达出行": 1935,
+  "金穗农业": 1726,
+  "东岳化工": 1553,
+  "蓝鲸航空": 1370,
+  "青柚视频": 1361,
+  "明德教育": 1276,
+  "海川银行": 1184,
+  "极客晚报": 1048,
+  "供应链早报": 1047,
+  "晨读财经": 1040,
+  "书香书城": 1037,
+  "电子发票服务平台": 844,
+  "畅联通信": 797,
+  "悦庭酒店": 769,
+  "天枢云": 708,
+  "乐思英语": 691,
+  "启明星少儿编程": 685,
+  "育才实验小学": 583,
+  "动力健身": 482,
+  "安澜水务": 477,
+  "智图科技": 440,
+  "海纳零售": 426,
+  "百川食品": 416,
+  "鼎盛精工": 415,
+  "宏远建材": 410,
+  "远洋港务": 407,
+  "云岭电力": 393,
+  "德茂纺织": 388,
+  "通达冷链": 388,
+  "长风航运": 382,
+  "江海港口集团": 382
+ },
+ "attachment_kinds": {
+  "slides": 343,
+  "doc": 5923,
+  "sheet": 3585,
+  "pdf": 5464,
+  "image": 68
+ },
+ "by_year": {
+  "2024": 34128,
+  "2025": 36263,
+  "2026": 29609
+ },
+ "llm_written_emails": 60376,
+ "llm_written_note": "unique LLM-written emails: threads + needle storylines + newsletter issues + school notices + weekly reports + distinct promotion texts (promotions are re-sent several times)",
+ "llm_cost": {
+  "by_model": {
+   "google/gemma-4-26b-a4b-it": {
+    "calls": 9977,
+    "usd": 3.4041
+   },
+   "deepseek/deepseek-v3.2": {
+    "calls": 1,
+    "usd": 0.0014
+   },
+   "qwen/qwen3.6-flash": {
+    "calls": 8327,
+    "usd": 10.1928
+   },
+   "qwen/qwen3.6-plus": {
+    "calls": 65,
+    "usd": 0.0582
+   },
+   "qwen/qwen3.5-flash-02-23": {
+    "calls": 18294,
+    "usd": 7.2161
+   }
+  },
+  "usd": 20.8725
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "instance": 61635465,
+ "offer": 59431050,
+ "gpu": "A100 SXM4",
+ "dph": 1.227111111111111,
+ "image": "vllm/vllm-openai:v0.34.0",
+ "ready_after_s": 278,
+ "smoke": "endpoint http://104.37.174.11:26471/v1: serves ['hpis-gemma-4']\nmodel hpis-gemma-4: max_model_len=32768 root=google/gemma-4-31B-it\nrun 1 (per-request enable_thinking=false): PASS ttft=2149.1 ms total=3316.4 ms decode=25.1 tok/s tokens in/out=218/28 reasoning_chars=0 finish=stop\n    天枢项目交付日期由原定的12月8日[1]调整为12月15日[2]。\nrun 2 (per-request enable_thinking=false): PASS ttft=405.7 ms total=1574.1 ms decode=25.2 tok/s tokens in/out=218/28 reasoning_chars=0 finish=stop\n    天枢项目交付日期由原定的12月8日[1]调整为12月15日[2]。\nrun 3 (per-request enable_thinking=false): PASS ttft=391.6 ms total=1573.1 ms decode=25.2 tok/s tokens in/out=218/28 reasoning_chars=0 finish=stop\n    天枢项目交付日期由原定的12月8日[1]调整为12月15日[2]。\nrun 4 (server default only): PASS ttft=399.1 ms total=1573.6 ms decode=25.3 tok/s tokens in/out=218/28 reasoning_chars=0 finish=stop\n    天枢项目交付日期由原定的12月8日[1]调整为12月15日[2]。\nSMOKE PASS\n",
+ "minutes": 5.8,
+ "approx_cost_usd": 0.12
+}

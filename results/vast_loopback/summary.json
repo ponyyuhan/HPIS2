@@ -1,0 +1,622 @@
+{
+  "parameters": {
+    "queries": 512,
+    "rounds": 4,
+    "k": 10,
+    "beta": 0.25,
+    "seed": 20261120,
+    "conditions": [
+      "exact",
+      "keyword",
+      "vector_fast",
+      "vector_refined",
+      "vector_trusted"
+    ],
+    "transport": "loopback"
+  },
+  "environment": {
+    "terminal": {
+      "os": "Linux-6.8.0-65-generic-x86_64-with-glibc2.36",
+      "distribution": "Debian GNU/Linux 12 (bookworm)",
+      "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+      "cpu_count_visible": 12,
+      "architecture": "x86_64",
+      "python": "3.12.16",
+      "versions": {
+        "numpy": "2.5.5",
+        "aiohttp": "3.14.5",
+        "cryptography": "50.0.2",
+        "PyNaCl": "1.6.2",
+        "msgpack": "1.2.4",
+        "h5py": "3.16.0"
+      },
+      "blas": [
+        {
+          "internal_api": "openblas",
+          "version": "0.3.34.237.2",
+          "num_threads": 1,
+          "architecture": "Haswell"
+        }
+      ]
+    },
+    "server": {
+      "os": "Linux-6.8.0-65-generic-x86_64-with-glibc2.36",
+      "distribution": "Debian GNU/Linux 12 (bookworm)",
+      "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+      "cpu_count_visible": 12,
+      "architecture": "x86_64",
+      "python": "3.12.16",
+      "versions": {
+        "numpy": "2.5.5",
+        "aiohttp": "3.14.5",
+        "cryptography": "50.0.2",
+        "PyNaCl": "1.6.2",
+        "msgpack": "1.2.4",
+        "h5py": "3.16.0"
+      },
+      "blas": [
+        {
+          "internal_api": "openblas",
+          "version": "0.3.34.237.2",
+          "num_threads": 1,
+          "architecture": "Haswell"
+        }
+      ]
+    }
+  },
+  "dataset": {
+    "file": "glove-100-angular.hdf5",
+    "source": "https://ann-benchmarks.com/glove-100-angular.hdf5",
+    "full_shape": {
+      "train": [
+        1183514,
+        100
+      ],
+      "test": [
+        10000,
+        100
+      ]
+    },
+    "selection": "first train and first test rows; warmups use subsequent test rows",
+    "rows": 20000,
+    "dimensions": 100,
+    "distance": "unit-vector cosine",
+    "test_queries": 512
+  },
+  "timing": {
+    "boundary": "SDK entry (including query normalization, token or sketch generation) through two service hops, authentication, decoding and terminal record-ID/body validation",
+    "sdk_us": "SDK entry to decoded SDK response, before benchmark record checks",
+    "topology": "SDK, HPIC and HPIS on the same host, two loopback TLS hops",
+    "concurrency": 1,
+    "connections": "persistent TLS 1.3",
+    "design": "independent condition blocks; shuffled block and query order each round; balanced randomized AB/BA pairs, identical inputs",
+    "warmup_pairs_per_condition_per_round": 8,
+    "oracle": "exhaustive reference and recall comparison outside timed interval",
+    "first_query": "first request observed in this run per endpoint; includes connection setup; index/OS cache state depends on prior service use"
+  },
+  "setup": {
+    "plain": {
+      "ingest_s": 2.243543808814138,
+      "sqlite_and_wal_bytes": 55471952
+    },
+    "encrypted": {
+      "ingest_s": 5.725748172029853,
+      "sqlite_and_wal_bytes": 66374176
+    },
+    "trusted-process": {
+      "ingest_s": 5.315290576778352,
+      "sqlite_and_wal_bytes": 57412368
+    }
+  },
+  "first_vector_observed_us": {
+    "plain": 29250.282,
+    "encrypted": 30343.419,
+    "trusted-process": 50379.065
+  },
+  "results": {
+    "exact": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1675.8317338867187,
+          "p50": 1771.2185,
+          "p95": 1909.1164999999999
+        },
+        "sdk_us": {
+          "mean": 1670.3445893554688,
+          "p50": 1765.2730000000001,
+          "p95": 1902.465
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 509.216796875,
+          "body_rows": 1.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 4.07830810546875,
+          "store_us": 53.60610693359375,
+          "vector_rows": 0.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1725.5043505859376,
+          "p50": 1818.2375,
+          "p95": 1953.5822999999998
+        },
+        "sdk_us": {
+          "mean": 1719.968808105469,
+          "p50": 1812.1275,
+          "p95": 1946.96615
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 537.216796875,
+          "body_rows": 1.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 21.355396972656248,
+          "store_us": 54.800700683593746,
+          "vector_rows": 0.0
+        },
+        "overhead_pct": {
+          "mean": 2.964057530048936,
+          "p50": 2.654613194250177,
+          "p95": 2.3291297309514514
+        },
+        "round_mean_overhead_pct": [
+          3.169664877743772,
+          2.821762070206635,
+          2.94676127827318,
+          2.928338271254627
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              2.253255481812264,
+              3.675725793072202
+            ],
+            "p50": [
+              1.8288221407431382,
+              3.183945926232251
+            ],
+            "p95": [
+              0.704913622333524,
+              3.2252822703530892
+            ]
+          }
+        }
+      }
+    },
+    "keyword": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1657.2548701171877,
+          "p50": 1825.0030000000002,
+          "p95": 1922.4175
+        },
+        "sdk_us": {
+          "mean": 1647.4457065429688,
+          "p50": 1814.0729999999999,
+          "p95": 1911.4455
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5091.6064453125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 16.42963232421875,
+          "store_us": 92.701318359375,
+          "vector_rows": 0.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 1726.0044633789062,
+          "p50": 1903.9270000000001,
+          "p95": 1997.586
+        },
+        "sdk_us": {
+          "mean": 1716.1500292968751,
+          "p50": 1892.9814999999999,
+          "p95": 1986.6915000000001
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5371.6064453125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 53.640333496093746,
+          "store_us": 94.92300634765625,
+          "vector_rows": 0.0
+        },
+        "overhead_pct": {
+          "mean": 4.148401944768887,
+          "p50": 4.3245956308016975,
+          "p95": 3.9101027742412864
+        },
+        "round_mean_overhead_pct": [
+          3.574131621930854,
+          4.323209987595145,
+          3.311936394639714,
+          5.214693962219297
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              3.583260857204298,
+              4.908341878625275
+            ],
+            "p50": [
+              4.102106025427288,
+              4.585919483014874
+            ],
+            "p95": [
+              3.3157858049721844,
+              4.379049955408088
+            ]
+          }
+        }
+      }
+    },
+    "vector_fast": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 2106.9081157226565,
+          "p50": 2406.826,
+          "p95": 2543.8453499999996
+        },
+        "sdk_us": {
+          "mean": 2096.598521484375,
+          "p50": 2394.866,
+          "p95": 2531.5605
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.498046875,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 17.109525390625002,
+          "store_us": 491.2626967773437,
+          "vector_rows": 20000.0
+        }
+      },
+      "encrypted": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 2128.648447265625,
+          "p50": 2387.861,
+          "p95": 2611.659
+        },
+        "sdk_us": {
+          "mean": 2118.236870117187,
+          "p50": 2376.126,
+          "p95": 2598.5775000000003
+        },
+        "recall": 0.8896972656250002,
+        "exact_order": 0.00927734375,
+        "average": {
+          "body_bytes": 5372.3994140625,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 54.641585937500004,
+          "store_us": 425.63796484375,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 1.0318594997443142,
+          "p50": -0.7879672232226187,
+          "p95": 2.6657929500313537
+        },
+        "round_mean_overhead_pct": [
+          1.9319255069668806,
+          1.7932446237682864,
+          -1.4916094752057019,
+          2.4919668509070014
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              0.3823492184464805,
+              1.832925267525851
+            ],
+            "p50": [
+              -1.2064400007802902,
+              -0.44680460885733864
+            ],
+            "p95": [
+              1.086079863042927,
+              3.5507696874249994
+            ]
+          }
+        }
+      }
+    },
+    "vector_refined": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 2671.77358203125,
+          "p50": 2760.326,
+          "p95": 3296.5534999999995
+        },
+        "sdk_us": {
+          "mean": 2660.485613769531,
+          "p50": 2747.7565,
+          "p95": 3283.0934999999995
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.498046875,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 20.850759277343748,
+          "store_us": 632.0414301757813,
+          "vector_rows": 20000.0
+        }
+      },
+      "refined": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 8746.293336914063,
+          "p50": 8422.402,
+          "p95": 13592.745849999996
+        },
+        "sdk_us": {
+          "mean": 8734.614484374999,
+          "p50": 8412.912,
+          "p95": 13582.609849999995
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5372.498046875,
+          "body_rows": 10.0,
+          "candidate_bytes": 723632.22265625,
+          "candidate_rows": 1690.7294921875,
+          "candidate_wire_data_bytes": 743920.9765625,
+          "open_and_filter_us": 57.61760742187499,
+          "refine_us": 1039.8932797851562,
+          "refined_rows": 293.49658203125,
+          "store_us": 3591.5355258789064,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 227.35907697180616,
+          "p50": 205.12345280955944,
+          "p95": 312.3320264633957
+        },
+        "round_mean_overhead_pct": [
+          227.44774667290892,
+          238.87110891314046,
+          231.80274922941214,
+          211.46953153108888
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              222.46547530916735,
+              232.3794838213978
+            ],
+            "p50": [
+              197.4454121739286,
+              212.31408215936665
+            ],
+            "p95": [
+              304.9120704142668,
+              322.8534391505274
+            ]
+          }
+        }
+      }
+    },
+    "vector_trusted": {
+      "plain": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 2305.5378408203123,
+          "p50": 2472.565,
+          "p95": 2572.21485
+        },
+        "sdk_us": {
+          "mean": 2294.5590244140626,
+          "p50": 2460.2605000000003,
+          "p95": 2560.4035
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.498046875,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 18.627134765625,
+          "store_us": 523.099263671875,
+          "vector_rows": 20000.0
+        }
+      },
+      "trusted-process": {
+        "queries": 2048,
+        "e2e_us": {
+          "mean": 2347.7573168945314,
+          "p50": 2526.379,
+          "p95": 2630.62535
+        },
+        "sdk_us": {
+          "mean": 2336.7692495117185,
+          "p50": 2514.5545,
+          "p95": 2618.66135
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5372.498046875,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 58.40843798828125,
+          "store_us": 522.1272871093751,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 1.8312202613511408,
+          "p50": 2.1764442997453948,
+          "p95": 2.270825082904726
+        },
+        "round_mean_overhead_pct": [
+          2.1043303621389287,
+          0.7784618641375252,
+          1.4322860489782263,
+          3.1560795023706234
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              1.2294429485606913,
+              2.332713731553689
+            ],
+            "p50": [
+              2.0262820118939224,
+              2.343974021877172
+            ],
+            "p95": [
+              1.9387225566563089,
+              2.7122600132734207
+            ]
+          }
+        }
+      }
+    }
+  },
+  "full_scan_control": {
+    "description": "HPIS2 implementation of complete AID read and HPIC decryption; I/O is logical record/candidate bytes. Separate historical-source benchmark measures the original HPIS1 services.",
+    "per_query": {
+      "exact": {
+        "full_scan_us": 172912.479,
+        "full_scan": {
+          "body_rows": 20000,
+          "body_bytes": 10743940,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 27203.138,
+          "open_and_filter_us": 70041.135
+        },
+        "indexed": {
+          "body_rows": 1,
+          "body_bytes": 527,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 58.139,
+          "open_and_filter_us": 18.71
+        }
+      },
+      "vector_fast": {
+        "full_scan_us": 120803.275,
+        "full_scan": {
+          "body_rows": 20000,
+          "body_bytes": 10743940,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 13759.342,
+          "open_and_filter_us": 76922.541
+        },
+        "indexed": {
+          "body_rows": 10,
+          "body_bytes": 5368,
+          "vector_rows": 20000,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 775.421,
+          "open_and_filter_us": 54.299
+        }
+      },
+      "vector_refined": {
+        "full_scan_us": 131430.445,
+        "full_scan": {
+          "body_rows": 20000,
+          "body_bytes": 10743940,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 19939.006,
+          "open_and_filter_us": 84546.728
+        },
+        "indexed": {
+          "body_rows": 10,
+          "body_bytes": 5368,
+          "vector_rows": 20000,
+          "candidate_rows": 2159,
+          "candidate_bytes": 924052,
+          "candidate_wire_data_bytes": 949960,
+          "store_us": 3713.265,
+          "refined_rows": 403,
+          "refine_us": 826.61,
+          "open_and_filter_us": 34.15
+        }
+      }
+    }
+  }
+}

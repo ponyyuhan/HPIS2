@@ -1,0 +1,38 @@
+{
+  "started_utc": "2026-11-20T10:18:32.176329+00:00",
+  "endpoint_type": "OpenRouter",
+  "scope": "one real chat-completions request per listed profile; synthetic email and attachment only",
+  "observations": [
+    {
+      "profile": "qwen",
+      "requested_model": "qwen/qwen3.6-27b",
+      "requested_question": "星澜项目最终的上线时间是什么？",
+      "retrieved_synthetic_email_ids": [
+        2
+      ],
+      "verified_model_answer": true,
+      "verified_model_quotes": [
+        {
+          "id": 2,
+          "attachment": "试点上线排期.csv",
+          "text": "2026 年 12 月 15 日 20:00（北京时间）启动试点上线。"
+        }
+      ],
+      "model_call": {
+        "engine": "qwen/qwen3.6-27b · 引文问答",
+        "profile": "qwen",
+        "status": "verified",
+        "elapsedMs": 2852.0007501356304,
+        "requestBytes": 1476,
+        "responseBytes": 1026,
+        "configuredModel": "qwen/qwen3.6-27b",
+        "servedModel": "qwen/qwen3.6-27b",
+        "finishReason": "stop",
+        "inputTokens": 315,
+        "outputTokens": 83,
+        "model": "qwen/qwen3.6-27b"
+      }
+    }
+  ],
+  "finished_utc": "2026-11-20T10:18:35.028840+00:00"
+}

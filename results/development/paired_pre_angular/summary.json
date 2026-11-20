@@ -1,0 +1,500 @@
+{
+  "parameters": {
+    "queries": 256,
+    "rounds": 3,
+    "k": 10,
+    "beta": 0.25,
+    "seed": 20261120,
+    "conditions": [
+      "exact",
+      "keyword",
+      "vector_fast",
+      "vector_trusted"
+    ],
+    "transport": "loopback"
+  },
+  "environment": {
+    "terminal": {
+      "os": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+      "distribution": "Ubuntu 24.04.4 LTS",
+      "cpu": "aarch64",
+      "cpu_count_visible": 4,
+      "architecture": "aarch64",
+      "python": "3.12.3",
+      "versions": {
+        "numpy": "2.5.5",
+        "aiohttp": "3.14.5",
+        "cryptography": "50.0.2",
+        "PyNaCl": "1.6.2",
+        "msgpack": "1.2.4",
+        "h5py": "3.16.0"
+      },
+      "blas": [
+        {
+          "internal_api": "openblas",
+          "version": "0.3.34.237.2",
+          "num_threads": 1,
+          "architecture": "neoversen1"
+        }
+      ]
+    },
+    "server": {
+      "os": "Linux-6.8.0-117-generic-aarch64-with-glibc2.39",
+      "distribution": "Ubuntu 24.04.4 LTS",
+      "cpu": "aarch64",
+      "cpu_count_visible": 4,
+      "architecture": "aarch64",
+      "python": "3.12.3",
+      "versions": {
+        "numpy": "2.5.5",
+        "aiohttp": "3.14.5",
+        "cryptography": "50.0.2",
+        "PyNaCl": "1.6.2",
+        "msgpack": "1.2.4",
+        "h5py": "3.16.0"
+      },
+      "blas": [
+        {
+          "internal_api": "openblas",
+          "version": "0.3.34.237.2",
+          "num_threads": 1,
+          "architecture": "neoversen1"
+        }
+      ]
+    }
+  },
+  "dataset": {
+    "file": "hpis-glove-100-angular.hdf5",
+    "source": "https://ann-benchmarks.com/glove-100-angular.hdf5",
+    "full_shape": {
+      "train": [
+        1183514,
+        100
+      ],
+      "test": [
+        10000,
+        100
+      ]
+    },
+    "selection": "first train and first test rows; warmups use subsequent test rows",
+    "rows": 20000,
+    "dimensions": 100,
+    "distance": "unit-vector cosine",
+    "test_queries": 256
+  },
+  "timing": {
+    "boundary": "SDK entry (including query normalization, token or sketch generation) through two service hops, authentication, decoding and terminal record-ID/body validation",
+    "sdk_us": "SDK entry to decoded SDK response, before benchmark record checks",
+    "topology": "SDK, HPIC and HPIS on the same host, two loopback TLS hops",
+    "concurrency": 1,
+    "connections": "persistent TLS 1.3",
+    "design": "independent condition blocks; shuffled block and query order each round; balanced randomized AB/BA pairs, identical inputs",
+    "warmup_pairs_per_condition_per_round": 8,
+    "oracle": "exhaustive reference and recall comparison outside timed interval",
+    "first_query": "first request observed in this run per endpoint; includes connection setup; index/OS cache state depends on prior service use"
+  },
+  "setup": {
+    "plain": {
+      "ingest_s": 1.4521241620000183,
+      "sqlite_and_wal_bytes": 55578448
+    },
+    "encrypted": {
+      "ingest_s": 2.6684376210000664,
+      "sqlite_and_wal_bytes": 66283584
+    },
+    "trusted-process": {
+      "ingest_s": 2.3974727360000543,
+      "sqlite_and_wal_bytes": 57790088
+    }
+  },
+  "first_vector_observed_us": {
+    "plain": 19997.772,
+    "encrypted": 22745.761,
+    "trusted-process": 42330.608
+  },
+  "results": {
+    "exact": {
+      "plain": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 522.83473828125,
+          "p50": 512.337,
+          "p95": 609.0330999999999
+        },
+        "sdk_us": {
+          "mean": 521.3932135416667,
+          "p50": 511.02099999999996,
+          "p95": 607.2916499999999
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 509.2200520833333,
+          "body_rows": 1.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 1.1887747395833335,
+          "store_us": 14.542121093750003,
+          "vector_rows": 0.0
+        }
+      },
+      "encrypted": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 529.2802695312499,
+          "p50": 518.265,
+          "p95": 618.20625
+        },
+        "sdk_us": {
+          "mean": 527.8335195312501,
+          "p50": 516.9290000000001,
+          "p95": 616.2040999999999
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 537.2200520833334,
+          "body_rows": 1.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 5.3382499999999995,
+          "store_us": 15.665282552083335,
+          "vector_rows": 0.0
+        },
+        "overhead_pct": {
+          "mean": 1.2328047044442236,
+          "p50": 1.1570509254650752,
+          "p95": 1.506182504694742
+        },
+        "round_mean_overhead_pct": [
+          1.1187642448769575,
+          1.1112907299134278,
+          1.4778204531857186
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              0.7472554610952925,
+              1.769997355842098
+            ],
+            "p50": [
+              0.7676392540868987,
+              1.6997112304927628
+            ],
+            "p95": [
+              -0.8767680454034751,
+              5.3407781860577375
+            ]
+          }
+        }
+      }
+    },
+    "keyword": {
+      "plain": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 609.59866015625,
+          "p50": 571.492,
+          "p95": 807.7345499999997
+        },
+        "sdk_us": {
+          "mean": 606.5274401041667,
+          "p50": 568.5709999999999,
+          "p95": 804.7604499999997
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5091.80078125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 5.030717447916667,
+          "store_us": 31.243078124999997,
+          "vector_rows": 0.0
+        }
+      },
+      "encrypted": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 636.2572083333333,
+          "p50": 592.319,
+          "p95": 880.0574999999998
+        },
+        "sdk_us": {
+          "mean": 633.1920989583333,
+          "p50": 589.4839999999999,
+          "p95": 876.7556499999998
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5371.80078125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 17.273505208333333,
+          "store_us": 32.970128906250004,
+          "vector_rows": 0.0
+        },
+        "overhead_pct": {
+          "mean": 4.373131031857946,
+          "p50": 3.644320480426666,
+          "p95": 8.953801716170261
+        },
+        "round_mean_overhead_pct": [
+          5.050571358774114,
+          4.150824846503243,
+          3.882692312027003
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              3.2356721605909606,
+              5.450902940954656
+            ],
+            "p50": [
+              2.5455815812735505,
+              4.678714588566119
+            ],
+            "p95": [
+              -1.6203022951601556,
+              19.140551120748604
+            ]
+          }
+        }
+      }
+    },
+    "vector_fast": {
+      "plain": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 1155.3733359374999,
+          "p50": 969.2560000000001,
+          "p95": 2014.7980499999992
+        },
+        "sdk_us": {
+          "mean": 1151.5727473958334,
+          "p50": 965.825,
+          "p95": 1994.9347499999997
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.328125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 6.483345052083334,
+          "store_us": 376.27798828125,
+          "vector_rows": 20000.0
+        }
+      },
+      "encrypted": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 1381.1103007812499,
+          "p50": 1001.239,
+          "p95": 2107.1142999999997
+        },
+        "sdk_us": {
+          "mean": 1376.9419427083333,
+          "p50": 998.0954999999999,
+          "p95": 2102.8976999999995
+        },
+        "recall": 0.8832031250000001,
+        "exact_order": 0.006510416666666667,
+        "average": {
+          "body_bytes": 5372.19921875,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 38.51358333333334,
+          "store_us": 390.13064973958336,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 19.538010599888157,
+          "p50": 3.2997474351461165,
+          "p95": 4.581910827241509
+        },
+        "round_mean_overhead_pct": [
+          4.784611755961254,
+          3.80813082766851,
+          41.618299670761004
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              1.9343749828792884,
+              49.878884320558335
+            ],
+            "p50": [
+              1.5713283076718698,
+              4.74552751885948
+            ],
+            "p95": [
+              -8.403632581616657,
+              18.95157758656415
+            ]
+          }
+        }
+      }
+    },
+    "vector_trusted": {
+      "plain": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 949.2741223958333,
+          "p50": 906.289,
+          "p95": 1219.4801499999999
+        },
+        "sdk_us": {
+          "mean": 945.9455312499999,
+          "p50": 903.1575,
+          "p95": 1216.6748
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5092.328125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 5.67138671875,
+          "store_us": 332.9161119791666,
+          "vector_rows": 20000.0
+        }
+      },
+      "trusted-process": {
+        "queries": 768,
+        "e2e_us": {
+          "mean": 961.7376028645832,
+          "p50": 920.7280000000001,
+          "p95": 1284.9947499999998
+        },
+        "sdk_us": {
+          "mean": 958.4311197916667,
+          "p50": 917.309,
+          "p95": 1280.9599999999998
+        },
+        "recall": 1.0,
+        "exact_order": 1.0,
+        "average": {
+          "body_bytes": 5372.328125,
+          "body_rows": 10.0,
+          "candidate_bytes": 0.0,
+          "candidate_rows": 0.0,
+          "open_and_filter_us": 19.829537760416667,
+          "store_us": 332.27861067708335,
+          "vector_rows": 20000.0
+        },
+        "overhead_pct": {
+          "mean": 1.3129485124163898,
+          "p50": 1.5932004029619806,
+          "p95": 5.372338368935314
+        },
+        "round_mean_overhead_pct": [
+          1.9736287223702575,
+          1.2197316747025733,
+          0.7836290838831861
+        ],
+        "paired_interval": {
+          "method": "paired circular moving blocks in collection order, stratified by round",
+          "confidence": 0.95,
+          "replicates": 2000,
+          "block_pairs_per_round": [
+            16,
+            16,
+            16
+          ],
+          "overhead_pct": {
+            "mean": [
+              0.351480110413504,
+              2.216203698914626
+            ],
+            "p50": [
+              0.6028862047758782,
+              2.242533150834301
+            ],
+            "p95": [
+              -2.0416986290868753,
+              8.466492998599731
+            ]
+          }
+        }
+      }
+    }
+  },
+  "full_scan_control": {
+    "description": "HPIS2 implementation of complete AID read and HPIC decryption; I/O is logical record/candidate bytes. Separate historical-source benchmark measures the original HPIS1 services.",
+    "per_query": {
+      "exact": {
+        "full_scan_us": 127384.593,
+        "full_scan": {
+          "body_rows": 20000,
+          "body_bytes": 10743940,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 30498.437,
+          "open_and_filter_us": 48603.295
+        },
+        "indexed": {
+          "body_rows": 1,
+          "body_bytes": 527,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 82.296,
+          "open_and_filter_us": 22.264
+        }
+      },
+      "vector_fast": {
+        "full_scan_us": 79473.498,
+        "full_scan": {
+          "body_rows": 20000,
+          "body_bytes": 10743940,
+          "vector_rows": 0,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 9248.493,
+          "open_and_filter_us": 52131.173
+        },
+        "indexed": {
+          "body_rows": 10,
+          "body_bytes": 5371,
+          "vector_rows": 20000,
+          "candidate_rows": 0,
+          "candidate_bytes": 0,
+          "store_us": 480.59,
+          "open_and_filter_us": 31.98
+        }
+      }
+    }
+  }
+}

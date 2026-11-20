@@ -1,0 +1,9 @@
+# 演示主视觉与素材
+
+主视觉使用内置 ImageGen 生成，导出 2172 × 724 WebP 存放在 [vault-hero.webp](static/assets/vault-hero.webp)。下列为实际生成提示。
+
+```text
+Use case: stylized-concept. Make a single ultra-wide 3:1 landscape hero photograph, 2400 by 800 if possible, for a sophisticated enterprise encrypted search demonstration projected on a large screen. One expertly art-directed, photoreal, physically based CGI studio product shot, not an interface. Against a nearly black deep evergreen/teal (#061b17) infinite tabletop, a beautifully machined standing emerald optical-glass padlock with substantial translucent jade beveled body, a clearly legible tiny deep dark keyhole cut through its polished face, and a satin pale silver-green closed metal shackle. Below it are three horizontally layered precisely machined slim square glass data plates with etched microtraces, delicately floated above a smoky graphite interposer. A few cool mint reflections and subdued diagonal traces on the tabletop; understated light deposition behind the object. Realistic optical refraction, edge absorption, controlled mint rim lighting and a broad softbox highlight, emerald caustics, bright readable silhouette, premium engineering object and cinematic stillness. Three-quarter front view, slightly from above, level studio lens. Position the padlock centered at 70% across the canvas, with stack and shackle fully contained between 13% and 87% of the frame height. Right half holds the clearly defined sculpture; left 45% is dark, smooth and very quiet negative space for a live heading. Background extends naturally across all edges; soft shadow, clean. No typography, words, letters, badges, labels, logos, images of pages, watermark, particles, floating numbers, people or oversaturated neon.
+```
+
+界面图标来自 Lucide。拉丁字与数据使用本地打包的 DM Sans 可变字体。中文使用系统字体。[图标许可](static/assets/Lucide-LICENSE.txt) · [字体许可](static/assets/DM-Sans-LICENSE.txt)

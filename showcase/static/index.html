@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#073b2e" />
+    <title>HPIS 2.0 · 隐私计算演示中心</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/brand.svg" />
+    <link rel="preload" href="/assets/vault-hero.webp" as="image" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="mast">
+      <div class="mast-inner">
+        <a class="brand" href="#workbench" aria-label="HPIS 2.0 演示工作台"
+          ><img src="/assets/brand.svg" alt="" width="36" height="36" /><strong
+            >HPIS</strong
+          ><b class="version">2.0</b></a
+        >
+        <span class="mast-rule"></span
+        ><span class="product-name">隐私计算演示中心</span>
+        <nav class="navigation" aria-label="主导航">
+          <button
+            class="nav-link active"
+            data-view="workbench"
+            aria-current="page"
+          >
+            演示工作台
+          </button>
+          <button class="nav-link" data-view="library">邮件证据库</button>
+          <button class="nav-link" data-view="research">检索实测</button>
+        </nav>
+        <div class="mast-actions">
+          <span class="connection" id="connection"
+            ><i class="dot"></i><span>连接中</span></span
+          >
+          <button class="button projection" id="project">
+            <i data-icon="presentation"></i><span>投屏模式</span>
+          </button>
+        </div>
+      </div>
+    </header>
+    <main class="page">
+      <section id="workbench" class="view">
+        <div class="hero">
+          <div class="hero-art" aria-hidden="true"></div>
+          <div class="hero-copy">
+            <div class="hero-eyebrow">
+              <span class="beacon"></span>现场演示<span
+                class="hero-slash"
+              ></span
+              ><span lang="en">LIVE DEMO</span>
+            </div>
+            <h1>个人邮件密态问答</h1>
+            <p>向同一个邮箱提问，看两种检索路径如何流转数据、引用证据。</p>
+            <div class="hero-meta">
+              <span
+                ><i data-icon="inbox"></i
+                ><strong data-total>—</strong> 封模拟邮件</span
+              >
+              <b></b><span><i data-icon="lock-keyhole"></i>AES-256-GCM</span>
+              <b></b
+              ><span class="hero-local"
+                ><i data-icon="server"></i>本地双服务</span
+              >
+            </div>
+          </div>
+        </div>
+        <form id="query-form" class="question-card">
+          <div class="question-top">
+            <div class="question-label-group">
+              <label for="question"
+                ><i data-icon="messages-square"></i>演示提问</label
+              >
+              <div class="engine-picker">
+                <i data-icon="cpu"></i
+                ><select id="inline-engine" aria-label="回答引擎">
+                  <option value="extractive">本地证据抽取</option></select
+                ><i data-icon="chevron-down"></i>
+              </div>
+            </div>
+            <div class="presets" id="presets" aria-label="示例问题"></div>
+          </div>
+          <div class="query-line">
+            <div class="query-input">
+              <i data-icon="search"></i
+              ><textarea
+                id="question"
+                name="question"
+                maxlength="600"
+                rows="1"
+                autocomplete="off"
+                placeholder="输入你希望从邮件中查证的问题"
+                enterkeyhint="send"
+              ></textarea
+              ><kbd title="在输入框内按回车运行">↵</kbd>
+            </div>
+            <button
+              class="button primary run-button"
+              type="submit"
+              id="run-button"
+              disabled
+            >
+              <i data-icon="play"></i><span>运行对比</span>
+            </button>
+          </div>
+          <div id="form-hint" class="form-hint" role="status" hidden></div>
+        </form>
+        <section class="compare-section" aria-labelledby="compare-title">
+          <div class="section-head">
+            <div class="section-title">
+              <i class="section-mark"></i>
+              <h2 id="compare-title">双路检索对比</h2>
+            </div>
+            <div class="section-ops">
+              <span class="run-stamp" id="run-stamp" aria-live="polite"></span
+              ><button type="button" class="text-button" id="replay">
+                <i data-icon="rotate-ccw"></i>回放流程</button
+              ><button class="text-button" id="methods">
+                <i data-icon="sliders-horizontal"></i>对比口径
+              </button>
+            </div>
+          </div>
+          <div class="path-grid" id="path-grid"></div>
+          <div class="insight" id="insight" hidden></div>
+        </section>
+        <section class="answer-section" aria-labelledby="answer-title">
+          <div class="section-head">
+            <div class="section-title">
+              <i class="section-mark"></i>
+              <h2 id="answer-title">回答与证据</h2>
+            </div>
+            <div class="answer-tabs" aria-label="选择答案来源">
+              <button data-answer="protected" class="on">HPIS 密态</button
+              ><button data-answer="plain">普通云</button>
+            </div>
+          </div>
+          <div class="answer-layout">
+            <article class="panel answer-panel" id="answer-panel"></article>
+            <aside class="panel sources-panel">
+              <div class="panel-heading">
+                <h3><i data-icon="folder-open"></i>引用邮件</h3>
+                <span class="count" id="source-count">—</span>
+              </div>
+              <div id="sources"></div>
+            </aside>
+          </div>
+        </section>
+      </section>
+      <section id="library" class="view secondary-view" hidden>
+        <div class="page-intro">
+          <div class="intro-icon"><i data-icon="inbox"></i></div>
+          <div>
+            <h1>邮件证据库</h1>
+            <p>浏览本次演示的合成邮箱，查看原件与附件。</p>
+          </div>
+        </div>
+        <article class="panel library-panel">
+          <div class="library-toolbar">
+            <div class="searchbox">
+              <i data-icon="search"></i
+              ><input
+                id="library-query"
+                placeholder="搜索主题、发件人或项目"
+                aria-label="搜索邮件"
+              />
+            </div>
+            <span id="library-count"></span>
+          </div>
+          <div class="library-table" id="library-list"></div>
+          <div class="page-nav">
+            <span id="library-page"></span>
+            <div>
+              <button class="button outline" id="library-prev">
+                <i data-icon="chevron-left"></i>上一页</button
+              ><button class="button outline" id="library-next">
+                下一页<i data-icon="chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+      <section id="research" class="view secondary-view" hidden>
+        <div class="page-intro">
+          <div class="intro-icon"><i data-icon="chart-no-axes-column"></i></div>
+          <div>
+            <h1>检索实测</h1>
+            <p>Linux 独立检索基准 · 与现场邮件问答分开计时</p>
+          </div>
+        </div>
+        <div id="research-body" class="research-body"></div>
+      </section>
+    </main>
+    <footer class="foot">
+      <div>
+        <i data-icon="shield-check"></i><strong>HPIS 2.0</strong
+        ><span>个人智能存储</span>
+      </div>
+      <span>合成数据 · 本地演示环境</span>
+    </footer>
+
+    <dialog id="details" class="details-dialog" aria-labelledby="sheet-label">
+      <div class="sheet">
+        <div class="sheet-header">
+          <div class="sheet-label" id="sheet-label"></div>
+          <button class="icon-button" id="close-details" aria-label="关闭详情">
+            <i data-icon="x"></i>
+          </button>
+        </div>
+        <div id="sheet-content" class="sheet-content"></div>
+      </div>
+    </dialog>
+
+    <dialog id="presenter" class="presenter" aria-label="投屏讲解">
+      <div class="present-shell">
+        <div class="present-head">
+          <div class="brand light">
+            <img src="/assets/brand.svg" alt="" width="37" height="37" /><strong
+              >HPIS</strong
+            ><b class="version">2.0</b>
+          </div>
+          <span class="present-label">现场讲解</span
+          ><button class="button exit-present" id="exit-present">
+            <i data-icon="minimize"></i>退出投屏
+          </button>
+        </div>
+        <div class="slide-content" id="slide-content"></div>
+        <div class="present-foot">
+          <div class="slide-tabs" id="slide-tabs">
+            <button data-slide="0">问题</button
+            ><button data-slide="1">路径对比</button
+            ><button data-slide="2">答案与证据</button>
+          </div>
+          <div class="slide-actions">
+            <span id="slide-num"></span
+            ><button class="icon-button" id="slide-prev" aria-label="上一幕">
+              <i data-icon="chevron-left"></i></button
+            ><button class="icon-button" id="slide-next" aria-label="下一幕">
+              <i data-icon="chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+    <div id="toast" role="status"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

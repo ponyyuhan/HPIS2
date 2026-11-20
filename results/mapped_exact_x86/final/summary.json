@@ -1,0 +1,115 @@
+{
+  "system": {
+    "os": "Linux-6.8.0-51-generic-x86_64-with-glibc2.36",
+    "distribution": "Debian GNU/Linux 12 (bookworm)",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "cpu_count_visible": 12,
+    "architecture": "x86_64",
+    "python": "3.12.16",
+    "versions": {
+      "numpy": "2.5.5",
+      "aiohttp": "3.14.5",
+      "cryptography": "50.0.2",
+      "PyNaCl": "1.6.2",
+      "msgpack": "1.2.4",
+      "h5py": "3.16.0"
+    },
+    "blas": [
+      {
+        "internal_api": "openblas",
+        "version": "0.3.34.237.2",
+        "num_threads": 1,
+        "architecture": "Haswell"
+      }
+    ]
+  },
+  "rows": 20000,
+  "dimensions": 100,
+  "unique_queries": 512,
+  "same_hpic_and_hpis_processes": true,
+  "native_fused": true,
+  "query_offset": 0,
+  "k": 10,
+  "rounds": 4,
+  "beta": 0.25,
+  "top_k_order": 1.0,
+  "setup": {
+    "plain": {
+      "ingest_s": 2.685430983,
+      "mapped_image_bytes": 8160256
+    },
+    "encrypted": {
+      "ingest_s": 3.6448583,
+      "mapped_image_bytes": 16720256
+    }
+  },
+  "first_query_including_snapshot_us": {
+    "mapped_plain": {
+      "e2e_us": 49554.375,
+      "snapshot_bytes": 8160256,
+      "snapshot_build_us": 39672.672
+    },
+    "mapped_encrypted": {
+      "e2e_us": 64825.056,
+      "snapshot_bytes": 16720256,
+      "snapshot_build_us": 47838.656
+    },
+    "native_plain": {
+      "e2e_us": 25925.584,
+      "snapshot_bytes": 0,
+      "snapshot_build_us": 0
+    }
+  },
+  "results": {
+    "native_plain": {
+      "n": 2048,
+      "mean_us": 1443.80384375,
+      "p50_us": 1402.3585,
+      "p95_us": 1487.3614999999998,
+      "opened_mean": 0.0,
+      "rank_mean_us": 384.99897851562497
+    },
+    "mapped_plain": {
+      "n": 2048,
+      "mean_us": 1408.2372509765623,
+      "p50_us": 1366.824,
+      "p95_us": 1450.86485,
+      "opened_mean": 0.0,
+      "rank_mean_us": 235.60836279296876
+    },
+    "mapped_encrypted": {
+      "n": 2048,
+      "mean_us": 1504.7867006835936,
+      "p50_us": 1457.473,
+      "p95_us": 1543.93465,
+      "opened_mean": 67.4453125,
+      "rank_mean_us": 287.10343359374997
+    },
+    "versus_native_plain": {
+      "mean_overhead_pct": 4.22376330396812,
+      "round_overhead_pct": [
+        4.646161169478447,
+        4.942324460534353,
+        3.6468205773209306,
+        3.7173087612271782
+      ],
+      "mean_ci95_block_pairs_16": [
+        3.7716099145940234,
+        5.018695186987196
+      ]
+    },
+    "versus_mapped_plain": {
+      "mean_overhead_pct": 6.8560499759594995,
+      "round_overhead_pct": [
+        6.6278057180515715,
+        7.760509052096443,
+        6.537260799664857,
+        6.534875626080372
+      ],
+      "mean_ci95_block_pairs_16": [
+        6.436812851544539,
+        7.608829785232147
+      ]
+    }
+  }
+}
