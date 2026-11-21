@@ -1069,7 +1069,13 @@ function init() {
   $("#question").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
   $("#question").addEventListener("input", () => $$(".preset").forEach((b) => b.classList.remove("active")));
   $("#presets").addEventListener("click", (e) => { const b = e.target.closest(".preset"); if (b) selectPreset(Number(b.dataset.i)); });
-  $("#model").addEventListener("change", (e) => { state.model = e.target.value; for (const L of Object.values(state.lanes)) $("[data-model]", L.el).textContent = modelLabel(); });
+  $("#model").addEventListener("change", (e) => {
+    state.model = e.target.value;
+    // An answer on screen keeps the name of the model that wrote it; the new one shows from the next run.
+    for (const L of Object.values(state.lanes)) {
+      if (!L.el.classList.contains("running") && !L.el.classList.contains("done")) $("[data-model]", L.el).textContent = modelLabel();
+    }
+  });
   $("#lanes").addEventListener("click", (e) => {
     const c = e.target.closest(".cite");
     const laneEl = e.target.closest(".lane");

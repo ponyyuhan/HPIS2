@@ -17,3 +17,6 @@ demo/data/cache/
 demo/data/gen/
 demo/data/logs/
 demo/data/models/*/.cache/
+
+# Recorded demo videos (large; shared directly, not through git)
+演示视频/
