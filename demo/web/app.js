@@ -210,7 +210,7 @@ function buildLanes() {
         <span class="pill" data-pill>待命</span>
       </header>
       <div class="flow" data-flow></div>
-      <ol class="rail">${cfg.stages.map(([k, l], i) => `<li data-stage="${k}">${i ? '<i class="rail__op">+</i>' : ""}<span>${l}</span><b>—</b></li>`).join("")}<li class="rail__total" data-total><i class="rail__op">=</i><span>完整回答</span><b>—</b></li></ol>
+      <ol class="rail">${cfg.stages.map(([k, l]) => `<li data-stage="${k}"><span>${l}</span><b>—</b></li>`).join("")}<li class="rail__total" data-total><span>完整回答</span><b>—</b></li></ol>
       <div class="metrics">
         <div class="metric ${id === "plain" ? "bad" : id === "v2" ? "good" : ""}"><label>${ICON("signal")}上传云端</label><output data-m="edge">—</output></div>
         <div class="metric ${id === "v1" ? "v1" : id === "v2" ? "good" : ""}"><label>${ICON("server")}云云传输</label><output data-m="cloud">—</output></div>
