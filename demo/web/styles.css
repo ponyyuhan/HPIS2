@@ -562,7 +562,6 @@ body.scoreboard main { padding-bottom: 1rem; }
 .prov__cmp p i.bad { color: var(--plain); }
 .prov__cmp p i.good { color: var(--v2); }
 .prov__cmp p small { font-size: .8rem; color: var(--muted); }
-.prov__note { grid-column: 1 / -1; margin-top: .55rem; padding-top: .5rem; border-top: 1px dashed var(--line-2); font-size: .82rem; color: var(--muted); line-height: 1.5; }
 .io__ratio { font-style: normal; font-weight: 650; color: var(--v2); margin-left: .6rem; font-size: .8rem; }
 .notes { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: .92rem; line-height: 1.95; }
 .bio-gap { height: 0; }

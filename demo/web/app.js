@@ -206,7 +206,7 @@ function buildLanes() {
       <div class="flow" data-flow></div>
       <ol class="rail">${cfg.stages.map(([k, l]) => `<li data-stage="${k}"><span>${l}</span><b>—</b></li>`).join("")}</ol>
       <div class="metrics">
-        <div class="metric ${id === "plain" ? "bad" : id === "v2" ? "good" : ""}"><label>${ICON("signal")}端云传输</label><output data-m="edge">—</output></div>
+        <div class="metric ${id === "plain" ? "bad" : id === "v2" ? "good" : ""}"><label>${ICON("signal")}上传云端</label><output data-m="edge">—</output></div>
         <div class="metric ${id === "v1" ? "v1" : id === "v2" ? "good" : ""}"><label>${ICON("server")}云云传输</label><output data-m="cloud">—</output></div>
         <div class="metric"><label>${ICON("zap")}首字响应</label><output data-m="ttft">—</output></div>
         <div class="metric"><label>${ICON("clock")}完整回答</label><output data-m="total">—</output></div>
@@ -550,7 +550,7 @@ function handle(ev, question) {
       stage(id, "generate", "end", t);
       metric(id, "ttft", ev.ttft_ms);
       metric(id, "total", ev.total_ms);
-      metric(id, "edge", ev.edge_up + ev.edge_down, "bytes");
+      metric(id, "edge", ev.edge_up, "bytes");
       if (L.m.cloud == null) metric(id, "cloud", id === "plain" ? 0 : null, "bytes");
       L.final = ev;
       L.q = quality(id, question);
@@ -589,8 +589,9 @@ function verdict() {
   const P = lane("plain"), V2 = lane("v2");
   if (!P?.final || !V2?.final) return;
   const tiles = [];
-  const pe = P.final.edge_up + P.final.edge_down, ve = V2.final.edge_up + V2.final.edge_down;
-  tiles.push({ big: fold(pe / ve), title: "端云传输减少", sub: `普通云 ${bytesText(pe)} → ${bytesText(ve)}，含上传与回传` });
+  // Upload per question, the measure the cover, the flow diagram and the cloud view all use.
+  const pe = P.final.edge_up, ve = V2.final.edge_up;
+  tiles.push({ big: fold(pe / ve), title: "上传云端减少", sub: `普通云 ${bytesText(pe)} → ${bytesText(ve)}` });
   if (V2.decryptRows && state.status?.mailbox?.emails) {
     const share = (100 * V2.decryptRows) / state.status.mailbox.emails;
     tiles.push({ big: `${share < 0.1 ? share.toFixed(2) : share.toFixed(1)}<small>%</small>`, title: "HPIS 只读命中密文", sub: `${V2.decryptRows} / ${intText(state.status.mailbox.emails)} 封 · 云内 ${bytesText(V2.m.cloud)}` });
@@ -667,17 +668,15 @@ function renderProv() {
   if (!b || !b.deployments) return;
   const tee = b.deployments.tee || {};
   const up = b.upload || {};
-  // Upload per question: the whole mailbox versus one sealed request of about 3 KB (over 10,000x either way).
-  // The live comparison's ratio also counts the answer coming back, so it is measured per question and differs.
+  // Upload per question: the whole mailbox versus one sealed request of about 3 KB.
   $("#prov").innerHTML = `
     <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>邮箱只在开通时加密上传一次</small></div></div>
     <div><b>${intText(b.emails)}</b><span>封邮件在终端加密后存入 HPIS</span></div>
     <div><b>${tee.seconds ? tee.seconds.toFixed(0) + " s" : "—"}</b><span>一次性预置用时：加密全部邮件，生成检索令牌与向量密文</span></div>
     <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 中的全部存储：邮件密文与密文索引</span></div>
-    <div class="prov__x"><b>万倍+</b><div class="prov__cmp"><em>每次提问上传到云端的数据量</em>
+    <div class="prov__x"><b>万倍+</b><div class="prov__cmp"><em>每次提问上传云端的数据量</em>
       <p><span>端侧直传普通云</span><i class="bad">${up.bytes ? bytesText(up.bytes) : "—"}</i><small>整个邮箱</small></p>
-      <p><span>端侧+HPIC+HPIS</span><i class="good">约 3 KB</i><small>一次密封请求</small></p></div>
-      <div class="prov__note">「现场对比」页的倍数还计入了回传的答案，按每个问题实测，所以数值会不同</div></div>`;
+      <p><span>端侧+HPIC+HPIS</span><i class="good">约 3 KB</i><small>一次密封请求</small></p></div></div>`;
 }
 async function loadCloudView() {
   renderProv();
@@ -824,6 +823,7 @@ async function poll() {
     if (s.mailbox) {
       $("#mailbox-meta").innerHTML = `<span>${ICON("mail")} <b>${intText(s.mailbox.emails)}</b> 封邮件</span><span>${ICON("paperclip")} <b>${intText(s.mailbox.attachments)}</b> 个附件</span><span>${ICON("clock")} ${s.mailbox.first.slice(0, 7)} ~ ${s.mailbox.last.slice(0, 7)}</span>`;
       $("[data-cover=emails]").textContent = intText(s.mailbox.emails);
+      if (s.build?.upload?.bytes) $("[data-cover=upload]").textContent = bytesText(s.build.upload.bytes);
     }
     if (first || (s.presets && s.presets.length !== state.presets.length)) initPresets(s);
     if (first) initModels(s);

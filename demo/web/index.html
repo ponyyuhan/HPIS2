@@ -8,7 +8,7 @@
 <script>/* theme before first paint: ?theme=light|dark, else the last choice, else dark */
 try { var t = new URLSearchParams(location.search).get("theme") || localStorage.getItem("hpis-theme"); document.documentElement.dataset.theme = t === "light" ? "light" : "dark"; } catch (e) {}
 </script>
-<link rel="stylesheet" href="/styles.css?v=13">
+<link rel="stylesheet" href="/styles.css?v=14">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -23,7 +23,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
     <div class="cover__stats">
       <div class="stat"><b data-cover="emails">100,000</b><span>封真实规模邮件，全程密文存储</span></div>
       <div class="stat"><b>&lt;10<small>%</small></b><span>密态检索相对明文的时延损耗</span></div>
-      <div class="stat"><b>≈3<small> KB</small></b><span>每次提问的端云传输（直传普通云需数百 MB）</span></div>
+      <div class="stat"><b>≈3<small> KB</small></b><span>每次提问上传云端的数据（直传普通云 <span data-cover="upload">275 MB</span>）</span></div>
     </div>
     <button class="btn btn--primary btn--xl" id="enter">进入现场演示 <svg class="i"><use href="/assets/icons.svg#arrow-right"/></svg></button>
   </div>
@@ -180,6 +180,6 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=13"></script>
+<script type="module" src="/app.js?v=14"></script>
 </body>
 </html>
