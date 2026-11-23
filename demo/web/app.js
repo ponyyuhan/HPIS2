@@ -54,13 +54,17 @@ function tweenTo(el, value, render, dur = 650) {
 })();
 const renderBytes = (el, v) => { const [a, b] = bytes(v); el.innerHTML = `${a}<small>${b}</small>`; };
 const renderSecs = (el, v) => { const [a, b] = secs(v); el.innerHTML = `${a}<small>${b}</small>`; };
+// Stage times: each boundary is rounded to 0.01 s once and a stage is the gap between two rounded
+// boundaries, so the stages on screen add up exactly to the total.
+const cs = (ms) => Math.round(ms / 10);
+const csText = (c) => `${(c / 100).toFixed(2)} s`;
 
 // ------------------------------------------------------------------ lane config
 const LANES = {
   plain: {
     title: "端侧直传普通云", en: "Plain upload", icon: "cloud-upload",
     desc: "每次提问把整个邮箱上传到普通云，由云端明文检索并回答",
-    stages: [["upload", "上传邮箱"], ["retrieve", "云端解析与检索"], ["generate", "模型生成"]],
+    stages: [["upload", "上传邮箱"], ["retrieve", "云端检索"], ["generate", "模型作答"]],
     nodes: [["dev", 70, "smartphone", "终端", "10 万封邮件"], ["cloud", 486, "cloud", "普通云", "明文处理"]],
     links: [["edge", "dev", "cloud", "邮件与附件 · 分批上传"]],
   },
@@ -74,7 +78,7 @@ const LANES = {
   v2: {
     title: "端侧+HPIC+HPIS", en: "Encrypted search", icon: "shield-check",
     desc: "SSE 在密文索引上精确筛选，向量在可信计算区内精确排序，只取回命中的几封密文",
-    stages: [["request", "密封请求"], ["search", "密态检索"], ["decrypt", "按需解密"], ["generate", "模型生成"]],
+    stages: [["request", "加密上传"], ["search", "密态检索"], ["generate", "模型作答"]],
     nodes: [["dev", 56, "smartphone", "终端", "掌控密钥"], ["hpic", 290, "cpu", "HPIC", "可信计算"], ["hpis", 512, "database", "HPIS", "SSE + 密态向量"]],
     links: [["edge", "dev", "hpic", "推理请求 + 目标索引密文"], ["cloudl", "hpic", "hpis", "部分数据密文"]],
   },
@@ -206,12 +210,10 @@ function buildLanes() {
         <span class="pill" data-pill>待命</span>
       </header>
       <div class="flow" data-flow></div>
-      <ol class="rail">${cfg.stages.map(([k, l]) => `<li data-stage="${k}"><span>${l}</span><b>—</b></li>`).join("")}</ol>
+      <ol class="rail">${cfg.stages.map(([k, l], i) => `<li data-stage="${k}">${i ? '<i class="rail__op">+</i>' : ""}<span>${l}</span><b>—</b></li>`).join("")}<li class="rail__total" data-total><i class="rail__op">=</i><span>完整回答</span><b>—</b></li></ol>
       <div class="metrics">
         <div class="metric ${id === "plain" ? "bad" : id === "v2" ? "good" : ""}"><label>${ICON("signal")}上传云端</label><output data-m="edge">—</output></div>
         <div class="metric ${id === "v1" ? "v1" : id === "v2" ? "good" : ""}"><label>${ICON("server")}云云传输</label><output data-m="cloud">—</output></div>
-        <div class="metric"><label>${ICON("zap")}首字响应</label><output data-m="ttft">—</output></div>
-        <div class="metric"><label>${ICON("clock")}完整回答</label><output data-m="total">—</output></div>
       </div>
       <div class="sees ${seesCls}"><span class="sees__label">${seesLabel}</span><div class="ticker"><span class="ticker__track ${id === "plain" ? "bad" : "mono"}" data-ticker></span></div></div>
       <div class="answer">
@@ -222,12 +224,21 @@ function buildLanes() {
       </div>`;
     host.appendChild(el);
     const flow = new Flow($("[data-flow]", el), cfg);
-    state.lanes[id] = { id, el, cfg, flow, text: "", evidence: [], stageT: {}, m: {} };
+    state.lanes[id] = { id, el, cfg, flow, text: "", evidence: [], stageT: {}, ends: {}, m: {} };
     setTicker(id);
   }
 }
 
 function lane(id) { return state.lanes[id]; }
+function setTotal(id, ms) {
+  const li = $("[data-total]", lane(id).el);
+  const b = $("b", li);
+  li.classList.add("done");
+  b.classList.remove("ticking", "pop");
+  b.textContent = csText(cs(ms));
+  void b.offsetWidth;
+  b.classList.add("pop");
+}
 function pill(id, text, cls = "") {
   const p = $("[data-pill]", lane(id).el);
   p.textContent = text;
@@ -263,8 +274,10 @@ function stage(id, key, phase, t, label) {
     li.classList.remove("run");
     li.classList.add("done");
     li.style.setProperty("--p", "100%");
-    const start = L.stageT[key] ?? t;
-    $("b", li).textContent = label ?? secsText(Math.max(0, t - start));
+    L.ends[key] = t;
+    const keys = L.cfg.stages.map(([k]) => k);
+    const prev = keys.slice(0, keys.indexOf(key)).reverse().map((k) => L.ends[k]).find((v) => v != null) ?? 0;
+    $("b", li).textContent = csText(Math.max(0, cs(t) - cs(prev)));
   }
 }
 function setTicker(id, text) {
@@ -292,10 +305,18 @@ function resetLanes() {
     L.text = "";
     L.evidence = [];
     L.stageT = {};
+    L.ends = {};
     L.m = {};
     L.done = false;
     L.el.classList.remove("running", "done");
-    for (const li of $$(".rail li", L.el)) { li.className = ""; li.style.removeProperty("--p"); $("b", li).textContent = "—"; clearInterval(L["sp_" + li.dataset.stage]); }
+    for (const li of $$(".rail li", L.el)) {
+      li.className = li.hasAttribute("data-total") ? "rail__total" : "";
+      li.style.removeProperty("--p");
+      const b = $("b", li);
+      b.textContent = "—";
+      b.classList.remove("ticking", "pop");
+      clearInterval(L["sp_" + li.dataset.stage]);
+    }
     for (const o of $$("output", L.el)) { o.textContent = "—"; o.dataset.v = 0; }
     $("[data-answer]", L.el).innerHTML = `<div class="ph ph--idle"><i></i><b>等待提问</b><span>点击「开始对比」，两条路径会同时检索并作答</span></div>`;
     $("[data-evlist]", L.el).innerHTML = "";
@@ -390,8 +411,9 @@ async function run() {
     for (const id of lanes) {
       const L = lane(id);
       if (!L || L.done) continue;
-      if (L.m.ttft == null) { const o = $('[data-m="ttft"]', L.el); renderSecs(o, el); o.dataset.v = el; o.classList.add("ticking"); }
-      const o2 = $('[data-m="total"]', L.el); renderSecs(o2, el); o2.dataset.v = el; o2.classList.add("ticking");
+      const b = $("[data-total] b", L.el);
+      b.textContent = csText(cs(el));
+      b.classList.add("ticking");
     }
   }, 60);
   try {
@@ -469,7 +491,6 @@ function handle(ev, question) {
         metric(id, "edge", ev.edge_up, "bytes");
         f.linkValue("edge", bytesText(ev.edge_up), "small");
       } else if (ev.stage === "generate" && ev.state === "first") {
-        metric(id, "ttft", ev.ttft_ms);
         stage(id, "generate", "start", L.stageT.generate ?? t);
       }
       break;
@@ -509,8 +530,7 @@ function handle(ev, question) {
       } else {
         L.flow.node("hpis", "active", `搬出 ${intText(ev.rows)} 封密文`, "bad");
       }
-      stage(id, key, "end", t, secsText(ev.hop_ms));
-      stage(id, "decrypt", "start", t);
+      if (id === "v1") { stage(id, key, "end", t); stage(id, "decrypt", "start", t); }
       L.flow.node("hpic", "active", "解密中…");
       break;
     }
@@ -524,15 +544,15 @@ function handle(ev, question) {
       break;
     }
     case "search": {  // plain cloud
-      stage(id, "retrieve", "end", t, secsText(ev.search_ms));
       L.flow.node("cloud", "alert", `解析 ${intText(ev.scanned)} 封 · 现算向量 ${intText(ev.candidates)} 封`, "bad");
-      $(`[data-stage="retrieve"] b`, L.el).textContent = secsText(ev.search_ms);
       break;
     }
     case "evidence": {
       L.evidence = ev.items;
       renderEvidence(id);
-      if (id !== "plain") stage(id, "decrypt", "end", t, secsText((L.decryptMs || 0) + (ev.rank_ms || 0)));
+      // retrieval (whatever it took in this lane) ends when the evidence is ready; the model's part starts here
+      const keys = L.cfg.stages.map(([k]) => k);
+      stage(id, keys[keys.indexOf("generate") - 1], "end", t);
       stage(id, "generate", "start", t);
       $("[data-answer]", L.el).innerHTML = `<span class="ph">模型生成中…</span>`;
       break;
@@ -549,9 +569,9 @@ function handle(ev, question) {
     case "finish": {
       L.done = true;
       renderAnswer(id, true);
-      stage(id, "generate", "end", t);
-      metric(id, "ttft", ev.ttft_ms);
-      metric(id, "total", ev.total_ms);
+      const end = ev.total_ms ?? t;
+      stage(id, "generate", "end", end);
+      setTotal(id, end);
       metric(id, "edge", ev.edge_up, "bytes");
       if (L.m.cloud == null) metric(id, "cloud", id === "plain" ? 0 : null, "bytes");
       L.final = ev;
@@ -598,8 +618,9 @@ function verdict() {
     const share = (100 * V2.decryptRows) / state.status.mailbox.emails;
     tiles.push({ big: `${share < 0.1 ? share.toFixed(2) : share.toFixed(1)}<small>%</small>`, title: "HPIS 只读命中密文", sub: `${V2.decryptRows} / ${intText(state.status.mailbox.emails)} 封 · 云内 ${bytesText(V2.m.cloud)}` });
   }
-  if (P.final.ttft_ms && V2.final.ttft_ms) {
-    tiles.push({ big: fold(P.final.ttft_ms / V2.final.ttft_ms), title: "首字响应更快", sub: `普通云 ${secsText(P.final.ttft_ms)} → ${secsText(V2.final.ttft_ms)}` });
+  if (P.final.total_ms && V2.final.total_ms) {
+    const pt = cs(P.final.total_ms), vt = cs(V2.final.total_ms);
+    tiles.push({ big: fold(pt / vt), title: "完整回答更快", sub: `普通云 ${csText(pt)} → ${csText(vt)}` });
   }
   const vf = state.verify;
   if (vf && vf.plain_ms) {

@@ -272,8 +272,8 @@ body.results .answer__text { font-size: 1.02rem; }
 .flow .packet.cipher { fill: var(--packet-cipher); }
 .flow .packet.plaintext { fill: var(--plain); }
 
-/* stage rail: a segmented progress bar */
-.rail { list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: .7rem; margin: .45rem 0 .85rem; padding: 0; }
+/* stage rail: a segmented progress bar that reads as an equation, stage + stage + stage = total */
+.rail { list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1.9rem; margin: .45rem 0 .85rem; padding: 0; }
 .rail li { position: relative; padding: .75rem 0 0; min-width: 0; }
 .rail li::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; border-radius: 99px; background: var(--track); }
 .rail li::before { content: ""; position: absolute; left: 0; top: 0; z-index: 1; height: 5px; width: var(--p, 0%); border-radius: 99px; background: var(--lg); transition: width .25s linear; }
@@ -281,11 +281,18 @@ body.results .answer__text { font-size: 1.02rem; }
 .rail span { font-size: .82rem; color: var(--muted); }
 .rail li.run span { color: var(--c); font-weight: 650; }
 .rail li.done span { color: var(--ink-soft); }
-.rail b { font-family: var(--num); font-size: 1.02rem; font-weight: 700; margin-top: .12rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.rail b { font-family: var(--num); font-size: 1.12rem; font-weight: 700; margin-top: .12rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .rail li.run b, .rail li.done b { color: var(--text); }
+.rail__op { position: absolute; left: -1.38rem; bottom: .05rem; width: .9rem; text-align: center; font-style: normal; font-family: var(--num); font-size: 1.2rem; font-weight: 700; line-height: 1.2; color: var(--dim); }
+.rail li.rail__total span { color: var(--text); font-weight: 700; }
+.rail li.rail__total b { font-size: 1.34rem; font-weight: 800; color: var(--c); transform-origin: left center; }
+.rail li.rail__total b.ticking { color: var(--dim); }
+.rail li.rail__total b.pop { animation: pop .7s cubic-bezier(.2,.8,.2,1); }
+.rail li.rail__total.done { --p: 100%; }
+.rail li.rail__total .rail__op { color: var(--c); }
 
 /* metrics: one strip, four columns */
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; padding: .6rem 0; border-radius: var(--radius-sm); background: var(--well); border: 1px solid var(--line); }
+.metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; padding: .6rem 0; border-radius: var(--radius-sm); background: var(--well); border: 1px solid var(--line); }
 .metric { padding: .05rem 1rem; min-width: 0; border-left: 1px solid var(--line); }
 .metric:first-child { border-left: 0; }
 .metric label { display: flex; align-items: center; gap: .35rem; font-size: .8rem; color: var(--muted); }
@@ -531,7 +538,8 @@ body.scoreboard main { padding-bottom: 1rem; }
 }
 @media (max-height: 860px) {
   /* short screens (laptops at 125-150 % scaling): after a run the answer needs the room */
-  body.results.scoreboard .rail, body.results.scoreboard .sees { display: none; }
+  /* keep the time equation; the data strip repeats in the scoreboard */
+  body.results.scoreboard .metrics, body.results.scoreboard .sees { display: none; }
   body.results.scoreboard .answer { margin-top: .6rem; }
 }
 @media (max-width: 1180px) {
