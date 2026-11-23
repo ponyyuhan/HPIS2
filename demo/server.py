@@ -340,11 +340,22 @@ async def spy(request):
     return web.json_response(cache[q], dumps=lambda o: json.dumps(o, ensure_ascii=False))
 
 
+async def revalidate_static(request, response):
+    """Static files: the browser checks for a newer copy on every load (a 304 when unchanged).
+
+    Without a Cache-Control header browsers guess a freshness period and keep using an old file
+    after `git pull`, e.g. an icon sprite without the icons the new page asks for.
+    """
+    if request.method in ("GET", "HEAD") and not request.path.startswith("/api/") and "Cache-Control" not in response.headers:
+        response.headers["Cache-Control"] = "no-cache"
+
+
 def make_app():
     app = web.Application()
     app[STATE] = {}
     app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
+    app.on_response_prepare.append(revalidate_static)
     app.router.add_get("/", index)
     app.router.add_get("/api/status", status)
     app.router.add_post("/api/run", run)

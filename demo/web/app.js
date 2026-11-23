@@ -2,7 +2,9 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const NS = "http://www.w3.org/2000/svg";
-const ICON = (id, cls = "i") => `<svg class="${cls}"><use href="/assets/icons.svg#${id}"/></svg>`;
+// The icon sprite carries the same ?v= as this script, so an update never leaves the browser on an old sprite.
+const SPRITE = `/assets/icons.svg${new URL(import.meta.url).search}`;
+const ICON = (id, cls = "i") => `<svg class="${cls}"><use href="${SPRITE}#${id}"/></svg>`;
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const state = {
@@ -106,7 +108,7 @@ class Flow {
       const g = this.el("g", { class: "node", transform: `translate(${x - 36} ${y - 28})` });
       this.el("rect", { width: 72, height: 56, rx: 16, class: "ripple" }, g);
       this.el("rect", { width: 72, height: 56, rx: 16, class: "box" }, g);
-      const use = this.el("use", { href: `/assets/icons.svg#${icon}`, x: 22, y: 14, width: 28, height: 28 }, g);
+      const use = this.el("use", { href: `${SPRITE}#${icon}`, x: 22, y: 14, width: 28, height: 28 }, g);
       use.setAttribute("style", "fill:none;stroke:currentColor");
       const l = this.el("text", { x: 36, y: 76, class: "nlabel" }, g);
       l.textContent = label;
