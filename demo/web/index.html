@@ -1,11 +1,14 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>面向个人敏感数据的智能问答</title>
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/styles.css?v=12">
+<script>/* theme before first paint: ?theme=light|dark, else the last choice, else dark */
+try { var t = new URLSearchParams(location.search).get("theme") || localStorage.getItem("hpis-theme"); document.documentElement.dataset.theme = t === "light" ? "light" : "dark"; } catch (e) {}
+</script>
+<link rel="stylesheet" href="/styles.css?v=13">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -34,7 +37,7 @@
       <span class="orb__chip c4">匿名标识 AID</span>
       <svg class="orb__lock" viewBox="0 0 120 140"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14a88d"/><stop offset="1" stop-color="#2f6fd1"/></linearGradient></defs>
         <path d="M30 62V44a30 30 0 0 1 60 0v18" fill="none" stroke="url(#lg)" stroke-width="9" stroke-linecap="round"/>
-        <rect x="14" y="60" width="92" height="72" rx="16" fill="rgba(255,255,255,.85)" stroke="url(#lg)" stroke-width="4"/>
+        <rect class="lock-body" x="14" y="60" width="92" height="72" rx="16" fill="rgba(255,255,255,.85)" stroke="url(#lg)" stroke-width="4"/>
         <circle cx="60" cy="92" r="9" fill="url(#lg)"/><rect x="56" y="96" width="8" height="18" rx="4" fill="url(#lg)"/></svg>
     </div>
   </div>
@@ -56,6 +59,7 @@
     <div class="select" id="model-select"><svg class="i"><use href="/assets/icons.svg#cpu"/></svg><select id="model"></select></div>
     <button class="chip-btn" id="net-btn" title="统一网络条件"><svg class="i"><use href="/assets/icons.svg#signal"/></svg><span id="net-label">端云 1 Gbps · 云云 50 Gbps</span></button>
     <button class="chip-btn rec-btn" id="rec-btn" title="把演示过程录成视频"><i class="rec-dot"></i><span id="rec-label">录制视频</span></button>
+    <button class="icon-btn theme-btn" id="theme-btn" type="button" title="切换到浅色" aria-label="切换到浅色"><svg class="i i-sun"><use href="/assets/icons.svg#sun"/></svg><svg class="i i-moon"><use href="/assets/icons.svg#moon"/></svg></button>
     <span class="status" id="status"><i></i><span>连接中</span></span>
   </div>
 </header>
@@ -176,6 +180,6 @@
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=12"></script>
+<script type="module" src="/app.js?v=13"></script>
 </body>
 </html>

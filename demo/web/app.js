@@ -590,7 +590,7 @@ function verdict() {
   if (!P?.final || !V2?.final) return;
   const tiles = [];
   const pe = P.final.edge_up + P.final.edge_down, ve = V2.final.edge_up + V2.final.edge_down;
-  tiles.push({ big: fold(pe / ve), title: "端云传输减少", sub: `普通云 ${bytesText(pe)} → ${bytesText(ve)}` });
+  tiles.push({ big: fold(pe / ve), title: "端云传输减少", sub: `普通云 ${bytesText(pe)} → ${bytesText(ve)}，含上传与回传` });
   if (V2.decryptRows && state.status?.mailbox?.emails) {
     const share = (100 * V2.decryptRows) / state.status.mailbox.emails;
     tiles.push({ big: `${share < 0.1 ? share.toFixed(2) : share.toFixed(1)}<small>%</small>`, title: "HPIS 只读命中密文", sub: `${V2.decryptRows} / ${intText(state.status.mailbox.emails)} 封 · 云内 ${bytesText(V2.m.cloud)}` });
@@ -667,13 +667,17 @@ function renderProv() {
   if (!b || !b.deployments) return;
   const tee = b.deployments.tee || {};
   const up = b.upload || {};
-  const per = 3.2e3;
+  // Upload per question: the whole mailbox versus one sealed request of about 3 KB (over 10,000x either way).
+  // The live comparison's ratio also counts the answer coming back, so it is measured per question and differs.
   $("#prov").innerHTML = `
-    <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>终端加密后上传一次，之后每次提问只发几 KB</small></div></div>
-    <div><b>${intText(b.emails)}</b><span>封邮件加密入库</span></div>
-    <div><b>${tee.seconds ? tee.seconds.toFixed(0) + " s" : "—"}</b><span>本机预置用时（含 SSE 令牌与向量密文）</span></div>
-    <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 侧密文与索引存储</span></div>
-    <div><b>${up.bytes ? fold(up.bytes / per).replace(/<[^>]+>/g, "") : "—"}</b><span>相比每次直传整个邮箱（${bytesText(up.bytes)}），每次提问的端云流量之比</span></div>`;
+    <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>邮箱只在开通时加密上传一次</small></div></div>
+    <div><b>${intText(b.emails)}</b><span>封邮件在终端加密后存入 HPIS</span></div>
+    <div><b>${tee.seconds ? tee.seconds.toFixed(0) + " s" : "—"}</b><span>一次性预置用时：加密全部邮件，生成检索令牌与向量密文</span></div>
+    <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 中的全部存储：邮件密文与密文索引</span></div>
+    <div class="prov__x"><b>万倍+</b><div class="prov__cmp"><em>每次提问上传到云端的数据量</em>
+      <p><span>端侧直传普通云</span><i class="bad">${up.bytes ? bytesText(up.bytes) : "—"}</i><small>整个邮箱</small></p>
+      <p><span>端侧+HPIC+HPIS</span><i class="good">约 3 KB</i><small>一次密封请求</small></p></div>
+      <div class="prov__note">「现场对比」页的倍数还计入了回传的答案，按每个问题实测，所以数值会不同</div></div>`;
 }
 async function loadCloudView() {
   renderProv();
@@ -729,7 +733,7 @@ async function loadBench() {
     const mx = Math.log10(Math.max(...io.rows.map((r) => r.bytes)) + 1);
     const top = Math.max(...io.rows.map((r) => r.bytes));
     html += `<div class="bcard bcard--wide card"><h4>${esc(io.title || "每次查询读出的数据量")}<span class="tag">对数刻度</span></h4>${io.desc ? `<p class="desc">${esc(io.desc)}</p>` : ""}<div class="io">${io.rows
-      .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "linear-gradient(90deg,#0c9a80,#2f6fd1)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
+      .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "var(--io-good)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
       .join("")}</div></div>`;
   }
   for (const n of data.notes || []) {
@@ -754,35 +758,20 @@ function renderArch() {
 `;
 }
 function archSvg() {
-  const box = (x, y, w, h, stroke = "rgba(74,56,24,.16)", fill = "rgba(255,255,255,.78)") =>
-    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="20" fill="${fill}" stroke="${stroke}"/>`;
-  const chip = (x, y, w, text, kind = "") => {
-    const st = {
-      "": ["#ffffff", "rgba(74,56,24,.18)", "#1d2330", 400],
-      new: ["rgba(11,143,120,.08)", "rgba(11,143,120,.5)", "#0a6f5d", 700],
-      model: ["rgba(108,92,224,.08)", "rgba(108,92,224,.45)", "#5443c4", 600],
-      key: ["rgba(47,111,209,.07)", "rgba(47,111,209,.4)", "#2160b5", 600],
-    }[kind];
-    return `<rect x="${x}" y="${y}" width="${w}" height="34" rx="9" fill="${st[0]}" stroke="${st[1]}"/><text x="${x + w / 2}" y="${y + 22}" text-anchor="middle" fill="${st[2]}" font-weight="${st[3]}" font-size="13.5">${text}</text>`;
-  };
+  const box = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="20" class="arch-box"/>`;
+  const chip = (x, y, w, text, kind = "") =>
+    `<g class="arch-chip${kind ? " arch-chip--" + kind : ""}"><rect x="${x}" y="${y}" width="${w}" height="34" rx="9"/><text x="${x + w / 2}" y="${y + 22}" text-anchor="middle" font-size="13.5">${text}</text></g>`;
   const cyl = (cx, y, label) =>
-    `<g fill="#ffffff" stroke="rgba(74,56,24,.22)"><path d="M${cx - 38} ${y}v46a38 10 0 0 0 76 0v-46"/><ellipse cx="${cx}" cy="${y}" rx="38" ry="10"/></g><text x="${cx}" y="${y + 33}" text-anchor="middle" fill="#1d2330" font-size="12.5">${label}</text>`;
+    `<g class="arch-cyl"><path d="M${cx - 38} ${y}v46a38 10 0 0 0 76 0v-46"/><ellipse cx="${cx}" cy="${y}" rx="38" ry="10"/></g><text x="${cx}" y="${y + 33}" text-anchor="middle" class="arch-cyl-label" font-size="12.5">${label}</text>`;
   const flow = (d, label, lx, ly, anchor = "middle", delay = 0) =>
     `<path d="${d}" class="arch-flow" style="animation-delay:${delay}s" marker-end="url(#ah)"/><text x="${lx}" y="${ly}" text-anchor="${anchor}" class="arch-label">${label}</text>`;
   return `<svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif">
   <defs>
-    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2f6fd1"/></marker>
-    <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(11,143,120,.10)"/><stop offset="1" stop-color="rgba(11,143,120,.03)"/></linearGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arch-arrow"/></marker>
+    <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="arch-g0"/><stop offset="1" class="arch-g1"/></linearGradient>
   </defs>
-  <style>
-    .arch-flow{fill:none;stroke:#2f6fd1;stroke-width:2.4;stroke-dasharray:7 7;animation:archdash 1.2s linear infinite}
-    .arch-label{fill:#2160b5;font-size:13px;font-weight:600}
-    .arch-sub{fill:#6b6860;font-size:12.5px}
-    .arch-h{fill:#1d2330;font-size:19px;font-weight:700}
-    @keyframes archdash{to{stroke-dashoffset:-28}}
-  </style>
-  <line x1="20" y1="300" x2="980" y2="300" stroke="rgba(74,56,24,.2)" stroke-dasharray="4 6"/>
-  <text x="26" y="290" fill="#a59f92" font-size="13" font-weight="700">云</text><text x="26" y="324" fill="#a59f92" font-size="13" font-weight="700">端</text>
+  <line x1="20" y1="300" x2="980" y2="300" class="arch-sep"/>
+  <text x="26" y="290" class="arch-side">云</text><text x="26" y="324" class="arch-side">端</text>
 
   ${box(50, 40, 200, 150)}
   <text x="70" y="74" class="arch-h">终端云认证服务</text>
@@ -796,7 +785,7 @@ function archSvg() {
   ${chip(320, 210, 230, "业务模型 Qwen / Gemma", "model")}
   <text x="435" y="204" text-anchor="middle" class="arch-sub">⑤ 上下文 ↓</text>
 
-  <rect x="650" y="40" width="320" height="500" rx="20" fill="url(#hpisg)" stroke="rgba(63,240,200,.35)"/>
+  <rect x="650" y="40" width="320" height="500" rx="20" fill="url(#hpisg)" class="arch-hpis"/>
   <text x="670" y="74" class="arch-h">HPIS 匿名私人智能存储</text>
   <text x="670" y="98" class="arch-sub">只见匿名标识 AID、HMAC 令牌与密文</text>
   ${chip(670, 116, 280, "新增 · SSE 密文索引检索", "new")}
@@ -868,6 +857,21 @@ function initPresets(s) {
   const sens = /体检|账单|合同|学校/;
   $("#presets").innerHTML = state.presets.map((p, i) => `<button class="preset ${sens.test(p.chip) ? "sensitive" : ""}" data-i="${i}"><span class="k">${i + 1}</span>${esc(p.chip)}</button>`).join("");
   if (state.presets.length && !$("#question").value) selectPreset(0);
+}
+// Dark by default; the light theme is one click away for bright rooms. The page sets the theme before first paint.
+function initTheme() {
+  const btn = $("#theme-btn");
+  const root = document.documentElement;
+  const sync = () => {
+    btn.title = root.dataset.theme === "dark" ? "切换到浅色" : "切换到深色";
+    btn.setAttribute("aria-label", btn.title);
+  };
+  btn.addEventListener("click", () => {
+    root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    try { localStorage.setItem("hpis-theme", root.dataset.theme); } catch {}
+    sync();
+  });
+  sync();
 }
 function selectPreset(i) {
   const p = state.presets[i];
@@ -1064,6 +1068,7 @@ function init() {
   initRecording();
   buildLanes();
   renderArch();
+  initTheme();
   $("#enter").addEventListener("click", () => $("#cover").classList.add("off"));
   $("#run").addEventListener("click", run);
   $("#question").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
