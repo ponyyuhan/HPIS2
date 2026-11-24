@@ -775,6 +775,7 @@ function renderArch() {
   <div class="arch__side">
     <div class="tech card"><h4>${ICON("key")}SSE 密文索引检索</h4><p>终端用私有密钥把机构、时间、类别等检索条件变成 <b>HMAC-SHA256 令牌</b>；HPIS 在倒排索引上直接匹配令牌，精确命中且不知道令牌含义。</p></div>
     <div class="tech card"><h4>${ICON("layers")}密态向量检索（软硬协同）</h4><p>向量以 <b>AES-256-GCM</b> 加密存放；目标向量密封给 HPIS 可信计算区，只在 TEE 内解开并精确排序，结果与明文检索<b>完全一致</b>。无硬件信任时可切换纯密码学 PPE 模式。</p></div>
+    <div class="tech card"><h4>${ICON("lock")}纯密码学向量检索（PPE）</h4><p>不依赖可信硬件：终端用私有的随机旋转加有界随机扰动（<b>RAP</b>）变换向量，HPIS 直接在变换后的向量上比较距离、近似排序，全程不解密。实测 Top-10 召回约 <b>89%</b>（β=0.25）；也可多取 40 条交 HPIC 解密后精排，结果与明文<b>完全一致</b>。</p></div>
     <div class="tech card"><h4>${ICON("fingerprint")}匿名与最小暴露</h4><ul><li>HPIS 只见匿名标识 AID、令牌与密文</li><li>HPIC 凭匿名票据转发，仅解密本次命中的几条</li><li>数据密钥、索引密钥、向量密钥始终由终端掌控</li></ul></div>
   </div>
 `;
