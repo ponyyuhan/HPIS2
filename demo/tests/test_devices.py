@@ -410,11 +410,27 @@ class DevicesTest(unittest.TestCase):
             s2 = await (await client.get("/api/spy", params={"q": "慕尼黑"})).json()
             self.assertGreaterEqual(s1["plain_hits"], 4)
             self.assertTrue(any(r["kind"] == "photo" for r in s1["samples"]))
-            self.assertEqual((s1["hpis_hits"], s1["tenants"]), (0, 12))
-            self.assertEqual(s1["hpis_scanned"], hp["docs"])
-            self.assertFalse(any(r["matched"] for r in s1["hpis_rows"]))
-            self.assertNotEqual([(r["aid"], r["rid"]) for r in s1["hpis_rows"]], [(r["aid"], r["rid"]) for r in s2["hpis_rows"]])
-            self.assertIn("命中 0 条", s1["note"])
+            self.assertEqual(s1["tenants"], 12)
+            # HPIS: the phone's own encrypted search, inside the phone's AID; the hits are ciphertext rows
+            h = s1["hpis"]
+            self.assertEqual((h["kind"], h["aid"]), ("photo", phone_aid))
+            hits = [r for r in s1["hpis_rows"] if r["hit"]]
+            others = [r for r in s1["hpis_rows"] if not r["hit"]]
+            self.assertGreater(h["hits"], 0)
+            self.assertEqual(len(hits), h["hits"])
+            self.assertEqual([r["rank"] for r in hits], list(range(1, len(hits) + 1)))
+            self.assertTrue(all(r["aid"] == phone_aid for r in hits))
+            self.assertTrue(h["tokens"])  # 慕尼黑 is a city: the phone sends that city's HMAC token
+            self.assertTrue(all(r["matched"] and set(r["matched"]) <= set(r["tags"]) for r in hits))
+            self.assertTrue(all(r["matched"][0] in h["tokens"] for r in hits))
+            self.assertGreater(h["sealed_bytes"], 100)
+            self.assertGreaterEqual(len({r["aid"] for r in others}), 8)  # other rows of many AIDs, below the hits
+            self.assertFalse({(r["aid"], r["rid"]) for r in hits} & {(r["aid"], r["rid"]) for r in others})
+            # the same search finds the same records; the rows around them are a fresh draw
+            self.assertEqual([r["rid"] for r in s2["hpis_rows"] if r["hit"]], [r["rid"] for r in hits])
+            self.assertNotEqual([(r["aid"], r["rid"]) for r in s2["hpis_rows"] if not r["hit"]], [(r["aid"], r["rid"]) for r in others])
+            body = await (await client.get("/api/spy", params={"q": "体检报告"})).json()
+            self.assertEqual((body["hpis"]["kind"], body["hpis"]["aid"]), ("mail", next(d["aid"] for d in st["devices"] if d["id"] == "pc")))
 
             # POST /api/run, then POST /api/stop while the answer streams.
             resp = await client.post("/api/run", json={"question": "慢慢说：德国的照片", "model": "qwen"})

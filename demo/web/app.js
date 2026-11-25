@@ -10,7 +10,6 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const PARAMS = new URLSearchParams(location.search);
 // A run still going after this long is stopped by the page itself (the server's own limit is 90 s).
 const WATCHDOG_S = Number(PARAMS.get("watchdog")) || 100;
-const MOTION = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Dev-only fixture: ?mock=photo|sport|car renders sample events for the new data kinds before the
 // backend serves them. Nothing is loaded without the parameter.
 if (PARAMS.get("mock")) (await import(`./mock.js${VERSION}`)).install(PARAMS.get("mock"));
@@ -1184,7 +1183,7 @@ function renderTenants() {
   const T = cloud.tenants;
   const mine = T.filter((t) => t.mine);
   $("#hpis-bar").innerHTML = `
-    <div class="tenants">${T.map((t) => `<span class="tchip ${tenantClass(aidKey(t))}${t.mine ? " mine" : ""}" title="${t.records != null ? `${intText(t.records)} 条密文` : ""}"><i></i>AID ${esc(aidKey(t))}${t.mine ? `<b class="own">${esc(ownerOf(t))}</b>` : ""}</span>`).join("")}</div>
+    <div class="tenants">${T.map((t) => `<span class="tchip ${tenantClass(aidKey(t))}${t.mine ? " mine" : ""}" data-aid="${esc(aidKey(t))}" title="${t.records != null ? `${intText(t.records)} 条密文` : ""}"><i></i>AID ${esc(aidKey(t))}${t.mine ? `<b class="own">${esc(ownerOf(t))}</b>` : ""}</span>`).join("")}</div>
     <span class="vbar__tag">${ICON("unlink")}匿名 · 不可关联</span>
     ${mine.length ? `<button class="reveal" id="reveal" type="button" title="揭晓" aria-label="揭晓">${ICON("fingerprint")}</button>` : ""}
     ${mine.length ? `<div class="reveal__note">${ICON("fingerprint")}<span>其中 ${mine.length} 个 AID 来自${OWNER}的 ${mine.length} 台设备，各用独立密钥 —— HPIS 无法把它们关联到同一个人</span></div>` : ""}`;
@@ -1195,16 +1194,30 @@ function renderHpisRows(rows, fresh = false) {
   $("#hpis-rows").innerHTML = rows
     .map((r) => {
       const k = aidKey(r);
-      return `<div class="row hrow ${tenantClass(k)}${mine.has(k) ? " mine" : ""}${fresh ? " fresh" : ""}">
-        <div class="k aidc"><i></i>AID ${esc(k)}… #${esc(r.rid)}</div><div>${esc(r.body)}</div>
-        ${r.tags ? `<div class="k">令牌</div><div>${esc(r.tags.join(" · "))}</div>` : ""}
-        ${r.vector ? `<div class="k">向量</div><div>${esc(r.vector)}</div>` : ""}
-        <span class="miss">${ICON("x")}未命中</span>
+      const matched = new Set(r.matched || []);
+      const tags = (r.tags || []).map((t) => (matched.has(t) ? `<mark>${esc(t)}</mark>` : esc(t))).join(" · ");
+      return `<div class="row hrow ${tenantClass(k)}${mine.has(k) ? " mine" : ""}${r.hit ? " hit" : ""}${fresh ? " fresh" : ""}">
+        <div class="k aidc"><i></i>AID ${esc(k)}… #${esc(r.rid)}</div><div class="hb">${esc(r.body)}</div>
+        ${r.tags ? `<div class="k">令牌</div><div>${tags}</div>` : ""}
+        ${r.vector ? `<div class="k">向量</div><div class="vec">${esc(r.vector)}</div>` : ""}
+        ${r.hit ? `<span class="found">${ICON("check")}命中 ${esc(r.rank)}</span>` : `<span class="miss">${ICON("x")}未命中</span>`}
       </div>`;
     })
     .join("");
 }
-// a band of light down a table; rows it passes get `cls`
+// the AID the encrypted search ran in lights up with its hit count; the other AIDs dim
+function markAid(h) {
+  const bar = $("#hpis-bar .tenants");
+  if (!bar) return;
+  bar.classList.toggle("lit", !!h);
+  for (const c of $$(".tchip", bar)) {
+    const on = !!h && c.dataset.aid === h.aid_short;
+    c.classList.toggle("hit", on);
+    if (on) c.dataset.hits = h.hits;
+    else delete c.dataset.hits;
+  }
+}
+// a band of light down a table; rows it passes get `cls` (a class name, or a function of the row)
 function sweep(host, ms, cls) {
   return new Promise((resolve) => {
     host.classList.add("scanning");
@@ -1218,7 +1231,7 @@ function sweep(host, ms, cls) {
       const p = Math.min(1, (now - t0) / ms);
       const y = top + p * H;
       line.style.transform = `translateY(${y}px)`;
-      if (cls) for (const r of rows) if (!r._swept && r.offsetTop + r.offsetHeight / 2 <= y) { r._swept = true; r.classList.add(cls); }
+      if (cls) for (const r of rows) if (!r._swept && r.offsetTop + r.offsetHeight / 2 <= y) { r._swept = true; r.classList.add(typeof cls === "function" ? cls(r) : cls); }
       if (p < 1) requestAnimationFrame(step);
       else { line.remove(); host.classList.remove("scanning"); resolve(); }
     };
@@ -1234,16 +1247,17 @@ async function spy() {
   $("#spy-result").innerHTML = `<span class="muted">两侧同时检索「${esc(q)}」…</span>`;
   $("#pane-cloud").classList.add("searching");
   $$(".vres", $("#pane-cloud")).forEach((x) => x.remove());
+  markAid(null);
   try {
     await cloud.loading?.catch(() => {}); // the first page of both tables is on screen before a search replaces it
     let answered = false;
     const asked = (async () => {
       const r = await getJSON(`/api/spy?q=${encodeURIComponent(q)}`);
-      // a fresh sample of ciphertext for every query, so the encrypted side visibly reacts;
-      // servers whose /api/spy has no hpis_rows yet: another page of the store, fetched ahead
+      // the encrypted search's hits first, then other stored rows of every AID; if HPIS could not
+      // search (or an older server answered), another page of the store, fetched ahead
       let fresh = r.hpis_rows;
       cloud.ownRows = !fresh?.length;
-      if (cloud.ownRows) fresh = (await (cloud.next || freshSample())) || cloud.hpis?.rows || [];
+      if (cloud.ownRows) fresh = ((await (cloud.next || freshSample())) || cloud.hpis?.rows || []).map((x) => ({ ...x, hit: false }));
       cloud.next = cloud.ownRows ? freshSample() : null;
       return [r, fresh];
     })().finally(() => { answered = true; });
@@ -1259,13 +1273,23 @@ async function spy() {
     const multi = state.devices.size > 0;
     const unit = multi ? "条" : "封";
     plainHost.insertAdjacentHTML("beforebegin", `<div class="vres vres--plain">${ICON("search")}<span>「${esc(q)}」命中 <b>${intText(r.plain_hits)}</b> ${unit}明文，原文与实名一览无余</span></div>`);
-    // HPIS side: new rows, scanned one by one, nothing matches
+    // HPIS side: the same search, run by the device with its keys (tokens + a sealed query vector);
+    // its hits light up as the scan passes them, still ciphertext under an anonymous AID
+    const h = r.hpis;
     renderHpisRows(fresh, true);
     hpisHost.scrollTop = 0;
-    await sweep(hpisHost, 1700, "missed");
-    const scanned = r.hpis_scanned ?? cloud.hpis?.docs;
-    hpisHost.insertAdjacentHTML("beforebegin", `<div class="vres vres--hpis"${r.note ? ` title="${esc(r.note)}"` : ""}><b class="zero">命中 ${intText(r.hpis_hits ?? 0)} 条</b><span>扫描 ${intText(scanned)} 条 · ${bytesText(r.hpis_bytes)} 密文</span><span class="why">${ICON("key")}没有终端密钥，无法生成检索令牌</span></div>`);
-    $("#spy-result").innerHTML = `<span style="color:var(--risk)">普通云：命中 <b class="num">${intText(r.plain_hits)}</b> ${unit}明文</span> &nbsp;·&nbsp; <span style="color:var(--v2)">HPIS：命中 <b class="num">${intText(r.hpis_hits ?? 0)}</b> 条（扫描 ${bytesText(r.hpis_bytes)} 密文）</span>`;
+    const mark = (row) => (row.classList.contains("hit") ? "lit" : "missed");
+    await sweep(hpisHost, 1500, mark);
+    for (const row of $$(".hrow", hpisHost)) if (!row._swept) row.classList.add(mark(row));
+    markAid(h);
+    const tokens = h?.token_count ? ` · 令牌 ${esc(h.tokens[0].slice(0, 8))}…${h.token_count > 1 ? ` 等 ${intText(h.token_count)} 个` : ""}` : "";
+    hpisHost.insertAdjacentHTML(
+      "beforebegin",
+      h
+        ? `<div class="vres vres--hpis"><b class="hitn">${ICON("check-circle")}密态命中 ${intText(h.hits)} 条</b><span class="mono">AID ${esc(h.aid_short)}…${tokens} · 查询向量已密封</span><span class="why">${ICON("eye-off")}只见密文：不知道查的是什么、写了什么、是谁的</span></div>`
+        : `<div class="vres vres--hpis"><span class="why">${ICON("alert")}HPIS 暂时无法检索，请稍后重试</span></div>`,
+    );
+    $("#spy-result").innerHTML = `<span style="color:var(--risk)">普通云：命中 <b class="num">${intText(r.plain_hits)}</b> ${unit}明文</span> &nbsp;·&nbsp; <span style="color:var(--v2)">HPIS：${h ? `密态命中 <b class="num">${intText(h.hits)}</b> 条（只见密文）` : "暂时无法检索"}</span>`;
   } catch (e) {
     $("#spy-result").innerHTML = `<span class="muted">检索失败，请重试</span>`;
     console.warn(e);
@@ -1308,10 +1332,6 @@ async function loadBench() {
       .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "var(--io-good)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
       .join("")}</div></div>`;
   }
-  for (const n of data.notes || []) {
-    const body = n.bullets ? `<ul class="notes">${n.bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : `<div class="note">${n.html || esc(n.text)}</div>`;
-    html += `<div class="bcard ${n.wide ? "bcard--wide" : ""} card"><h4>${esc(n.title)}</h4>${body}</div>`;
-  }
   host.innerHTML = html;
   requestAnimationFrame(() => {
     for (const el of $$("[data-w]", host)) el.style.width = el.dataset.w + "%";
@@ -1330,114 +1350,90 @@ function renderArch() {
   </div>
 `;
 }
-// Four devices, each uploading its own data under its own anonymous AID (bottom), and the question path
-// device → HPIC ⇄ HPIS (top). Colours and lines come from CSS variables, so both themes work.
+// The solution at a glance: cloud above, the user's devices below. Each device uploads its own data
+// once, encrypted, under its own anonymous AID (①); a question then goes device → HPIC ⇄ HPIS → device.
+// Colours come from CSS variables, so both themes work.
 function archSvg() {
-  const use = (id, x, y, s, cls = "") => `<use href="${SPRITE}#${id}" x="${x}" y="${y}" width="${s}" height="${s}" class="ax-ic ${cls}"/>`;
+  const box = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="20" class="arch-box"/>`;
+  const chip = (x, y, w, text, kind = "") =>
+    `<g class="arch-chip${kind ? " arch-chip--" + kind : ""}"><rect x="${x}" y="${y}" width="${w}" height="34" rx="9"/><text x="${x + w / 2}" y="${y + 22}" text-anchor="middle" font-size="13.5">${text}</text></g>`;
+  const cyl = (cx, y, label) =>
+    `<g class="arch-cyl"><path d="M${cx - 38} ${y}v46a38 10 0 0 0 76 0v-46"/><ellipse cx="${cx}" cy="${y}" rx="38" ry="10"/></g><text x="${cx}" y="${y + 33}" text-anchor="middle" class="arch-cyl-label" font-size="12.5">${label}</text>`;
+  const flow = (d, label, lx, ly, anchor = "middle", delay = 0) =>
+    `<path d="${d}" class="arch-flow" style="animation-delay:${delay}s" marker-end="url(#ah)"/><text x="${lx}" y="${ly}" text-anchor="${anchor}" class="arch-label">${label}</text>`;
   const devices = DEVICE_ORDER.map((id, i) => {
-    const d = deviceOf(id);
-    const kind = DEVICES[id].kind;
-    return { ...d, kind, i, aidText: d.aid ? `AID ${d.aid.slice(0, 6)}…` : `匿名 AID ${i + 1}` };
+    const d = deviceOf(id), K = kindOf(d.kind);
+    const n = d.kind === "mail" ? state.status?.mailbox?.emails : d.records;
+    return { ...d, i, K, n, aidText: d.aid ? `AID ${d.aid.slice(0, 6)}…` : `匿名 AID ${i + 1}` };
   });
-  const rowY = (i) => 296 + i * 104; // device and vault rows
-  const RH = 92;
-  const hex = ["9f3a c2e1 77b0 5d4e", "e08b 1c6f a93d 2b70", "4c17 d2a8 0e5f b391", "7a6e 3f02 c8d4 61b9"];
-  const motion = (path, dur, begin, cls, r = 4.2) =>
-    MOTION ? `<circle r="${r}" class="ax-dot ${cls}"><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${path}"/></circle>` : "";
-  // one dot that crosses `path` during [a, b] of a `cycle`-second loop: the question path runs in order ②③④⑤
-  const pulse = (path, cycle, a, b, cls) =>
-    MOTION
-      ? `<circle r="5" class="ax-dot ${cls}" opacity="0"><animateMotion dur="${cycle}s" repeatCount="indefinite" path="${path}" keyPoints="0;0;1;1" keyTimes="0;${a};${b};1" calcMode="linear"/><animate attributeName="opacity" dur="${cycle}s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;${a};${a + 0.02};${b - 0.02};${b};1"/></circle>`
-      : "";
-  const arrow = (d, cls = "") => `<path d="${d}" class="ax-arrow ${cls}" marker-end="url(#ax-head)"/>`;
-  const pipes = devices
+  // device tiles: 4 × 118 wide with gaps of 10, from x = 68
+  const tiles = devices
     .map((d) => {
-      const y = rowY(d.i) + RH / 2;
-      const p = `M236 ${y} H700`;
-      return `<path d="${p}" class="ax-pipe a${d.i + 1}"/><path d="${p}" class="ax-pipe-dash a${d.i + 1}" style="animation-delay:${-d.i * 0.35}s"/>
-        ${motion(p, 3.2, -d.i * 0.8, `a${d.i + 1}`)}
-        <g class="ax-aid a${d.i + 1}"><rect x="404" y="${y - 15}" width="132" height="30" rx="15"/><text x="470" y="${y + 5}" text-anchor="middle">${esc(d.aidText)}</text></g>`;
+      const x = 68 + d.i * 128, y = 412;
+      return `<g class="arch-dev a${d.i + 1}">
+      <rect x="${x}" y="${y}" width="118" height="92" rx="14" class="arch-dev__box"/>
+      <circle cx="${x + 25}" cy="${y + 26}" r="16" class="arch-dev__ring"/>
+      <use href="${SPRITE}#${d.icon}" x="${x + 16}" y="${y + 17}" width="18" height="18" class="arch-ic arch-dev__ic"/>
+      <text x="${x + 50}" y="${y + 31}" class="arch-dev__name">${esc(d.label)}</text>
+      <text x="${x + 13}" y="${y + 59}" class="arch-dev__data">${d.K.short}${d.n ? ` · ${wanText(d.n)}${d.K.unit}` : ""}</text>
+      <g class="arch-aid"><rect x="${x + 10}" y="${y + 66}" width="98" height="19" rx="9.5"/><text x="${x + 59}" y="${y + 79.5}" text-anchor="middle">${esc(d.aidText)}</text></g>
+    </g>`;
     })
     .join("");
-  const unlinks = [0, 1, 2]
-    .map((i) => { const y = rowY(i) + RH + 6; return `<g class="ax-ne"><circle cx="470" cy="${y}" r="11"/><text x="470" y="${y + 5}" text-anchor="middle">≠</text></g>`; })
-    .join("");
-  const devCards = devices
+  // the same AIDs inside HPIS: one partition each, nothing that links them
+  const parts = devices
     .map((d) => {
-      const y = rowY(d.i);
-      const K = kindOf(d.kind);
-      const n = d.kind === "mail" ? state.status?.mailbox?.emails : d.records;
-      return `<g class="ax-dev a${d.i + 1}">
-        <rect x="20" y="${y}" width="216" height="${RH}" rx="18" class="ax-card"/>
-        <circle cx="66" cy="${y + RH / 2}" r="27" class="ax-devring"/>${use(d.icon, 52, y + RH / 2 - 14, 28, "ax-devic")}
-        <text x="106" y="${y + 34}" class="ax-t1">${esc(d.label)}</text>
-        <text x="106" y="${y + 57}" class="ax-t2">${K.short}${n ? ` · ${wanText(n)}${K.unit}` : ""}</text>
-        <text x="106" y="${y + 78}" class="ax-t3">本地计算 · 本地存储</text>
-      </g>`;
+      const x = 670 + (d.i % 2) * 145, y = 512 + Math.floor(d.i / 2) * 42;
+      return `<g class="arch-part a${d.i + 1}"><rect x="${x}" y="${y}" width="135" height="34" rx="9"/><rect x="${x}" y="${y}" width="5" height="34" rx="2.5" class="arch-part__bar"/><text x="${x + 14}" y="${y + 22}" class="arch-part__aid">${esc(d.aidText)}</text><text x="${x + 126}" y="${y + 22}" text-anchor="end" class="arch-part__kind">${d.K.short}</text></g>`;
     })
     .join("");
-  const vaults = devices
-    .map((d) => {
-      const y = rowY(d.i);
-      return `<g class="ax-vault a${d.i + 1}">
-        <rect x="700" y="${y}" width="264" height="${RH}" rx="16" class="ax-vbox"/>
-        <rect x="700" y="${y}" width="6" height="${RH}" rx="3" class="ax-vbar"/>
-        ${use("lock", 722, y + 20, 24, "ax-vic")}
-        <text x="758" y="${y + 38}" class="ax-t1">${kindOf(d.kind).short}</text>
-        <text x="758" y="${y + 62}" class="ax-t3 ax-mono">AES-256-GCM</text>
-        <text x="878" y="${y + 30}" class="ax-hex">${hex[d.i].slice(0, 9)}</text><text x="878" y="${y + 50}" class="ax-hex">${hex[d.i].slice(10)}</text><text x="878" y="${y + 70}" class="ax-hex">${hex[(d.i + 1) % 4].slice(0, 9)}</text>
-      </g>`;
-    })
-    .join("");
-  return `<svg viewBox="0 0 1000 750" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="方案架构：四台设备各以匿名 AID 加密上传，HPIC 机密计算，HPIS 匿名密态存储">
+  return `<svg viewBox="0 0 1000 630" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="方案架构：手机、PC、车机、手表各以独立匿名 AID 加密上传；提问经 HPIC 与 HPIS 密态检索后作答">
   <defs>
-    <marker id="ax-head" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ax-head"/></marker>
-    <linearGradient id="ax-hpic" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="ax-g-hpic0"/><stop offset="1" class="ax-g-hpic1"/></linearGradient>
-    <linearGradient id="ax-hpis" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="ax-g-hpis0"/><stop offset="1" class="ax-g-hpis1"/></linearGradient>
-    <linearGradient id="ax-sdk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="ax-g-sdk0"/><stop offset="1" class="ax-g-sdk1"/></linearGradient>
-    <pattern id="ax-grid" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.1" class="ax-griddot"/></pattern>
+    <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arch-arrow"/></marker>
+    <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="arch-g0"/><stop offset="1" class="arch-g1"/></linearGradient>
   </defs>
-  <rect x="268" y="8" width="724" height="734" rx="26" class="ax-cloudzone"/>
-  <rect x="268" y="8" width="724" height="734" rx="26" fill="url(#ax-grid)" class="ax-cloudgrid"/>
-  <text x="128" y="26" text-anchor="middle" class="ax-zone">端 侧</text>
-  <text x="630" y="34" text-anchor="middle" class="ax-zone">云 侧</text>
+  <line x1="20" y1="300" x2="980" y2="300" class="arch-sep"/>
+  <text x="26" y="290" class="arch-side">云</text><text x="26" y="324" class="arch-side">端</text>
 
-  <!-- device side: the SDK every device runs -->
-  <rect x="20" y="44" width="216" height="210" rx="20" fill="url(#ax-sdk)" class="ax-box ax-box--sdk"/>
-  <rect x="38" y="62" width="40" height="40" rx="12" class="ax-badge ax-badge--sdk"/>${use("key", 47, 71, 22, "ax-on")}
-  <text x="90" y="80" class="ax-h2">端侧 SDK</text><text x="90" y="100" class="ax-t3">每台设备内置</text>
-  <g class="ax-key"><rect x="38" y="118" width="180" height="32" rx="10"/><text x="128" y="139" text-anchor="middle">数据密钥 DEK</text></g>
-  <g class="ax-key"><rect x="38" y="158" width="180" height="32" rx="10"/><text x="128" y="179" text-anchor="middle">检索密钥 SSE</text></g>
-  <g class="ax-key"><rect x="38" y="198" width="180" height="32" rx="10"/><text x="128" y="219" text-anchor="middle">向量密钥 VEK</text></g>
+  ${box(50, 40, 200, 150)}
+  <text x="70" y="74" class="arch-h">终端云认证服务</text>
+  ${chip(70, 92, 160, "认证")}${chip(70, 136, 160, "匿名令牌颁发")}
 
-  <!-- HPIC -->
-  <rect x="316" y="44" width="290" height="210" rx="20" fill="url(#ax-hpic)" class="ax-box ax-box--hpic"/>
-  <rect x="334" y="62" width="40" height="40" rx="12" class="ax-badge ax-badge--hpic"/>${use("cpu", 343, 71, 22, "ax-on")}
-  <text x="386" y="80" class="ax-h1">HPIC</text><text x="386" y="100" class="ax-t3">个人智能计算区 · 无状态</text>
-  <g class="ax-mod ax-mod--tee"><rect x="334" y="120" width="124" height="116" rx="14"/>${use("shield-check", 350, 134, 24, "ax-modic")}<text x="350" y="182" class="ax-t1">机密计算</text><text x="350" y="204" class="ax-t3">只解密命中</text><text x="350" y="223" class="ax-t3">的几条记录</text></g>
-  <g class="ax-mod ax-mod--llm"><rect x="466" y="120" width="124" height="116" rx="14"/>${use("brain", 482, 134, 24, "ax-modic")}<text x="482" y="182" class="ax-t1">业务大模型</text><text x="482" y="204" class="ax-t3">Qwen / Gemma</text><text x="482" y="223" class="ax-t3">可信区内作答</text></g>
+  ${box(300, 40, 270, 220)}
+  <text x="320" y="74" class="arch-h">HPIC 可信计算区</text>
+  <text x="320" y="98" class="arch-sub">无状态 · 只在本次请求内持有密钥</text>
+  ${chip(320, 114, 230, "匿名票据校验 · 转发")}
+  ${chip(320, 158, 230, "解密命中的 K 条记录", "key")}
+  ${chip(320, 210, 230, "业务模型 Qwen / Gemma", "model")}
+  <text x="435" y="204" text-anchor="middle" class="arch-sub">⑥ 上下文 ↓</text>
 
-  <!-- HPIS -->
-  <rect x="682" y="44" width="300" height="666" rx="22" fill="url(#ax-hpis)" class="ax-box ax-box--hpis"/>
-  <rect x="700" y="62" width="40" height="40" rx="12" class="ax-badge ax-badge--hpis"/>${use("database", 709, 71, 22, "ax-on")}
-  <text x="752" y="80" class="ax-h1">HPIS</text><text x="752" y="100" class="ax-t3">匿名私人智能存储</text>
-  <g class="ax-cap"><rect x="700" y="118" width="264" height="42" rx="12"/>${use("key", 714, 129, 20, "ax-capic")}<text x="746" y="145" class="ax-t2b">SSE 密文索引</text></g>
-  <g class="ax-cap"><rect x="700" y="168" width="264" height="42" rx="12"/>${use("layers", 714, 179, 20, "ax-capic")}<text x="746" y="195" class="ax-t2b">密态向量 TEE / PPE</text></g>
-  <text x="832" y="240" text-anchor="middle" class="ax-t3">只见匿名 AID、令牌与密文</text>
+  <rect x="650" y="40" width="320" height="572" rx="20" fill="url(#hpisg)" class="arch-hpis"/>
+  <text x="670" y="74" class="arch-h">HPIS 匿名私人智能存储</text>
+  <text x="670" y="98" class="arch-sub">只见匿名标识 AID、HMAC 令牌与密文</text>
+  ${chip(670, 116, 280, "新增 · SSE 密文索引检索", "new")}
+  ${chip(670, 158, 280, "新增 · 密态向量检索（TEE / PPE）", "new")}
+  ${chip(670, 206, 135, "匿名索引查询")}${chip(815, 206, 135, "匿名身份令牌")}
+  ${chip(670, 248, 135, "令牌所属证明")}${chip(815, 248, 135, "可验证数据删除")}
+  <text x="810" y="318" text-anchor="middle" class="arch-sub">↓ 只读取命中的部分数据密文</text>
+  ${cyl(722, 342, "OBS")}${cyl(810, 342, "GaussDB")}${cyl(898, 342, "ES")}
+  ${chip(670, 412, 135, "非结构化数据")}${chip(815, 412, 135, "结构化数据")}
+  <text x="810" y="470" text-anchor="middle" class="arch-sub">正文与向量均为 AES-256-GCM 密文</text>
+  <text x="810" y="500" text-anchor="middle" class="arch-sub">每台设备一个匿名 AID · 互不关联</text>
+  ${parts}
 
-  <!-- question path: ② sealed request → ③ search → ④ hits → ⑤ answer -->
-  ${arrow("M238 122 H310")}<text x="274" y="110" text-anchor="middle" class="ax-lab">② 提问</text><text x="274" y="142" text-anchor="middle" class="ax-lab ax-mono">≈3 KB</text>
-  ${arrow("M314 204 H242", "back")}<text x="278" y="194" text-anchor="middle" class="ax-lab">⑤ 回答</text>
-  ${arrow("M608 122 H676")}<text x="644" y="110" text-anchor="middle" class="ax-lab">③ 检索</text><text x="644" y="142" text-anchor="middle" class="ax-lab ax-small">令牌·向量</text>
-  ${arrow("M680 204 H612", "back")}<text x="646" y="194" text-anchor="middle" class="ax-lab">④ 命中</text><text x="646" y="224" text-anchor="middle" class="ax-lab ax-small">只取几条</text>
-  ${pulse("M238 122 H310", 5.6, 0.02, 0.16, "q")}${pulse("M608 122 H676", 5.6, 0.22, 0.34, "q")}${pulse("M680 204 H612", 5.6, 0.42, 0.54, "q")}${pulse("M314 204 H242", 5.6, 0.62, 0.76, "q")}
+  ${box(50, 340, 540, 272)}
+  <text x="70" y="374" class="arch-h">用户端侧设备</text>
+  <text x="70" y="398" class="arch-sub">手机 · PC · 车机 · 手表，各自加密上传 · 本地掌控数据授权使用</text>
+  ${tiles}
+  ${chip(68, 518, 152, "数据密钥 DEK", "key")}${chip(230, 518, 152, "检索密钥 SSE", "key")}${chip(392, 518, 178, "向量密钥 VEK", "key")}
+  ${chip(68, 562, 247, "HPIS SDK · 生成目标索引密文", "new")}${chip(323, 562, 247, "HPIS SDK · 密封目标向量", "new")}
 
-  <!-- data path: one-time encrypted upload, one anonymous AID per device -->
-  <text x="470" y="280" text-anchor="middle" class="ax-lab ax-lab--data">① 各设备以独立匿名 AID 加密上传</text>
-  ${pipes}${unlinks}
-  ${devCards}
-  ${vaults}
-  <text x="470" y="728" text-anchor="middle" class="ax-lab ax-lab--data">互不关联 · HPIS 无法得知它们属于同一人</text>
+  ${flow("M592 458 L644 458", "① 上传", 618, 446, "middle", 0)}
+  ${flow("M118 340 L118 196", "② 匿名令牌请求", 128, 270, "start", 0.2)}
+  ${flow("M420 340 L420 266", "③ 推理请求 + 数据密钥 + 目标索引/向量密文", 408, 324, "end", 0.4)}
+  ${flow("M572 130 L644 130", "④ 密封检索", 610, 120, "middle", 0.6)}
+  ${flow("M650 182 L578 182", "⑤ K 条密文", 612, 202, "middle", 0.8)}
+  ${flow("M520 266 L520 336", "⑦ 推理结果", 532, 324, "start", 1)}
 </svg>`;
 }
 

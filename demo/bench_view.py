@@ -41,15 +41,6 @@ def _scenarios(data: dict) -> list[tuple[str, dict]]:
     return []
 
 
-CHECKS = {
-    "scale": "10 万条",
-    "business_vectors": "512 维业务邮件向量",
-    "warm_cache": "缓存热口径",
-    "replicate": "另一批查询",
-    "secondary_platform": "macOS ARM",
-}
-
-
 SHORT = {
     "sse_exact": ("精确字段检索", "SSE", "按唯一的字段值（如编号）查，令牌只命中 1 条，只取这 1 条"),
     "sse_keyword": ("关键词检索", "SSE", "按关键词查，一个关键词对应 10 条，只取这 10 条"),
@@ -102,20 +93,6 @@ def _rollup_view(data: dict) -> dict:
                 r["color"] = "linear-gradient(90deg,#d2691e,#f0a868)"
             rows.append(r)
         view["io"] = {"title": "每次查询读出的数据量", "desc": "", "rows": rows}
-    bullets = []
-    three = (data.get("appendix") or {}).get("three_arm") or {}
-    same = (three.get("ppe_vs_plaintext_same_kernel") or {}).get("overhead_pct")
-    if same is not None:
-        bullets.append(f"旧报告里快速向量为 −1.14%：旧明文基线多做了一步 FP64 复核；同一排序内核对比为 +{same:.2f}%。")
-    tee = next((r for r in scenarios if r.get("key") == "vec_tee"), None)
-    if tee:
-        bullets.append(f"严格精排：TEE 路径 +{tee['overhead_pct']:.2f}%，Top-10 与明文逐条一致；不依赖 TEE 的精确方案未能稳定低于 10%。")
-    straddle = [
-        c for r in shown for key in CHECKS if isinstance((c := r.get(key)), dict) and c.get("ci95") and c["ci95"][0] < 0 < c["ci95"][1]
-    ]
-    if straddle:
-        bullets.append("个别复核的区间跨过 0：差异小于测量误差，不代表密文更快。")
-    view["notes"] = [{"title": "说明", "bullets": bullets, "wide": True}] if bullets else []
     return view
 
 
@@ -208,39 +185,6 @@ def build_view(data: dict | None) -> dict:
                 "desc": f"同一租户 {rows:,} 条记录；密文索引让 HPIS 在 AID 内先选出结果，只读、只传、只解密命中的记录。" if rows else "",
                 "rows": rows_io,
             }
-    notes = []
-    for key, sc in items.items():
-        if not isinstance(sc, dict) or sc.get("section") != "appendix":
-            continue
-        h = _headline(sc)
-        if key == "three_arm" and isinstance(sc.get("comparisons"), dict):
-            comp = sc["comparisons"]
-            parts = []
-            for ck, cv in comp.items():
-                ov = cv.get("overhead_pct", {})
-                ov = ov.get("mean") if isinstance(ov, dict) else ov
-                if ov is not None:
-                    names = {"plaintext_fp64_recheck": "旧明文基线（FP64 复核）", "plaintext": "明文同核", "ppe": "PPE 密文"}
-                    a_, _, b_ = ck.partition("_vs_")
-                    parts.append(f"{names.get(a_, a_)} 相对 {names.get(b_, b_)} {ov:+.2f}%")
-            notes.append(
-                {
-                    "title": "为什么旧报告里「快速向量」比明文还快（−1.14%）",
-                    "html": "旧报告的明文基线额外做了 <b>FP64 精确复核</b>，密文快速路径只做一次 FP32 选择，两边并非同一算法。"
-                    "本次三路同题交替对照：" + "；".join(parts) + "。主表一律采用同一排序内核。",
-                }
-            )
-        elif h and key in ("refine_strict", "mapped_exact"):
-            title = "纯密码学严格精排（HPIS→HPIC 候选精排）" if key == "refine_strict" else "HPIC 预置密态索引的严格 Top-K"
-            notes.append(
-                {
-                    "title": title,
-                    "html": f"平均损耗 <b>{h['overhead_pct']:+.1f}%</b>（明文 {h['plaintext_mean_ms']:.3f} ms → 密文 {h['cipher_mean_ms']:.3f} ms），"
-                    f"{h.get('correctness', '')}。主表中的精确结果由可信计算区内排序提供。",
-                }
-            )
-    if notes:
-        view["notes"] = notes
     return view
 
 

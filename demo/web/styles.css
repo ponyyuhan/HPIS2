@@ -91,27 +91,22 @@
   --tc5: #0e86a6; --tc6: #4f46e5; --tc7: #a62fb5; --tc8: #0f8a5f; --tc9: #5b6b82;
   --aid-1: #0c8f7c; --aid-2: #2f6fd1; --aid-3: #6c5ce0; --aid-4: #c2417e;
   /* architecture diagram */
+  --arch-box: rgba(255, 255, 255, .78);
+  --arch-box-line: rgba(74, 56, 24, .16);
+  --arch-chip: #fff;
+  --arch-chip-line: rgba(74, 56, 24, .18);
+  --arch-new-bg: rgba(11, 143, 120, .08);
+  --arch-new-line: rgba(11, 143, 120, .5);
+  --arch-new-ink: #0a6f5d;
+  --arch-model-bg: rgba(108, 92, 224, .08);
+  --arch-model-line: rgba(108, 92, 224, .45);
+  --arch-model-ink: #5443c4;
+  --arch-key-bg: rgba(47, 111, 209, .07);
+  --arch-key-line: rgba(47, 111, 209, .4);
+  --arch-key-ink: #2160b5;
   --arch-flow: #2f6fd1;
   --arch-flow-ink: #2160b5;
-  --ax-zone: rgba(47, 111, 209, .035);
-  --ax-zone-line: rgba(74, 56, 24, .17);
-  --ax-grid: rgba(74, 56, 24, .08);
-  --ax-shadow: rgba(31, 27, 22, .08);
-  --ax-sdk: #2f6fd1; --ax-hpic: #6c5ce0; --ax-hpis: #0c8f7c;
-  --ax-sdk-line: rgba(47, 111, 209, .36);
-  --ax-hpic-line: rgba(108, 92, 224, .36);
-  --ax-hpis-line: rgba(12, 143, 124, .42);
-  --ax-g0: .11; --ax-g1: .03;
-  --ax-key-bg: rgba(47, 111, 209, .08);
-  --ax-key-line: rgba(47, 111, 209, .36);
-  --ax-key-ink: #2160b5;
-  --ax-mod-bg: rgba(255, 255, 255, .86);
-  --ax-mod-line: rgba(108, 92, 224, .26);
-  --ax-cap-bg: rgba(255, 255, 255, .84);
-  --ax-aid-bg: #fffdf8;
-  --ax-card: #ffffff;
-  --ax-card-line: rgba(74, 56, 24, .14);
-  --ax-vault: rgba(255, 255, 255, .84);
+  --arch-hpis-line: rgba(12, 143, 124, .42);
   --radius: 22px;
   --radius-sm: 14px;
   --shadow: 0 1px 1px rgba(31,27,22,.03), 0 3px 8px rgba(31,27,22,.035), 0 18px 40px -16px rgba(31,27,22,.12);
@@ -504,6 +499,19 @@ body.scoreboard main { padding-bottom: 1rem; }
 .hrow .miss .i { width: .9em; height: .9em; color: var(--risk); }
 .hrow.missed .miss { display: inline-flex; animation: rise .3s both; }
 .hrow.fresh { animation: rise .45s both; }
+.view--hpis .row .hb { padding-right: 5.6rem; } /* room for the 命中 / 未命中 badge */
+/* hits of the encrypted search: lit as the scan passes, ranked, the token they matched marked */
+.hrow .found { position: absolute; top: .5rem; right: .7rem; display: none; align-items: center; gap: .2rem; padding: .08rem .5rem; border-radius: 6px; font-family: var(--cn); font-size: .76rem; font-weight: 800; color: var(--on-accent); background: var(--v2); box-shadow: 0 0 14px color-mix(in srgb, var(--v2) 45%, transparent); }
+.hrow .found .i { width: .9em; height: .9em; }
+.hrow.lit .found { display: inline-flex; animation: rise .3s both; }
+.view--hpis .row.hrow.lit { background: color-mix(in srgb, var(--v2) 11%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v2) 38%, transparent); animation: litflash 1.3s ease-out; }
+.view--hpis .row.hrow.missed { opacity: .5; }
+.view--hpis .row mark { background: color-mix(in srgb, var(--v2) 26%, transparent); color: var(--text); border-radius: 4px; padding: 0 .15em; }
+.hrow.lit .vec { color: var(--v2); }
+@keyframes litflash { from { box-shadow: inset 0 0 0 1px var(--v2), 0 0 24px color-mix(in srgb, var(--v2) 50%, transparent); } }
+.tenants.lit .tchip:not(.hit) { opacity: .38; }
+.tchip.hit { box-shadow: 0 0 0 2px var(--t), 0 0 16px color-mix(in srgb, var(--t) 45%, transparent); }
+.tchip.hit::after { content: "命中 " attr(data-hits); font-family: var(--cn); font-weight: 800; color: var(--text); }
 .table { position: relative; }
 .scanline { position: absolute; left: 0; right: 0; top: -3.2rem; height: 3.2rem; z-index: 3; pointer-events: none; background: linear-gradient(180deg, transparent, var(--scan-glow)); border-bottom: 2px solid var(--scan-line); box-shadow: 0 6px 16px -6px var(--scan-line); }
 .view--plain .scanline { --scan-glow: color-mix(in srgb, var(--risk) 18%, transparent); --scan-line: var(--risk); }
@@ -539,7 +547,7 @@ body.scoreboard main { padding-bottom: 1rem; }
 .vres--plain { color: var(--risk-ink); background: var(--risk-tint); }
 .vres--plain b { font-family: var(--num); font-size: 1.2rem; font-weight: 800; color: var(--risk); }
 .vres--hpis { color: var(--ink-soft); background: var(--v2-tint); }
-.vres--hpis .zero { font-size: 1.12rem; font-weight: 800; color: var(--v2); }
+.vres--hpis .hitn { display: inline-flex; align-items: center; gap: .35rem; font-size: 1.12rem; font-weight: 800; color: var(--v2); }
 .vres--hpis .why { display: inline-flex; align-items: center; gap: .35rem; font-weight: 700; color: var(--text); }
 /* tenant colours: one per anonymous AID */
 .tc0 { --t: var(--tc0); } .tc1 { --t: var(--tc1); } .tc2 { --t: var(--tc2); } .tc3 { --t: var(--tc3); } .tc4 { --t: var(--tc4); }
@@ -583,8 +591,6 @@ body.scoreboard main { padding-bottom: 1rem; }
 .io__bar { height: 1.55rem; border-radius: 999px; background: var(--well); border: 1px solid var(--line); overflow: hidden; }
 .io__bar i { display: block; height: 100%; border-radius: 999px; width: 0; transition: width 1.4s cubic-bezier(.2,.8,.2,1); }
 .io__row b { font-family: var(--num); font-weight: 720; text-align: right; }
-.note { font-size: .87rem; color: var(--muted); line-height: 1.75; }
-.note b { color: var(--text); }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: .35rem 1rem; font-size: .84rem; }
 .kv span { color: var(--muted); }
 
@@ -807,7 +813,6 @@ body.scoreboard main { padding-bottom: 1rem; }
 .prov__cmp p i.good { color: var(--v2); }
 .prov__cmp p small { font-size: .8rem; color: var(--muted); }
 .io__ratio { font-style: normal; font-weight: 650; color: var(--v2); margin-left: .6rem; font-size: .8rem; }
-.notes { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: .92rem; line-height: 1.95; }
 .bio-gap { height: 0; }
 
 /* ============================================================ motion & glow */
@@ -893,60 +898,46 @@ body.scoreboard main { padding-bottom: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   .aurora i, .orb__halo, .orb__devs, .odev, .orb__pulse, .orb__ring, .orb__chip, .orb__lock, .grad, .grad--alt, #run::after, .topbar::after,
   .lane.running::after, .rail li.run::before, .flow .node .ripple, .verdict::before, .verdict.on::after, .cert::after,
-  .ax-arrow, .ax-pipe-dash { animation: none !important; }
+  .arch-flow { animation: none !important; }
 }
 
 /* ============================================================ architecture diagram (themed) */
-.arch svg use.ax-ic { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ax-cloudzone { fill: var(--ax-zone); stroke: var(--ax-zone-line); stroke-width: 1.2; stroke-dasharray: 5 7; }
-.ax-griddot { fill: var(--ax-grid); }
-.ax-zone { fill: var(--dim); font-size: 14px; font-weight: 760; letter-spacing: 6px; }
-.ax-box { stroke-width: 1.4; filter: drop-shadow(0 10px 22px var(--ax-shadow)); }
-.ax-box--sdk { stroke: var(--ax-sdk-line); }
-.ax-box--hpic { stroke: var(--ax-hpic-line); }
-.ax-box--hpis { stroke: var(--ax-hpis-line); }
-.ax-g-sdk0 { stop-color: var(--ax-sdk); stop-opacity: var(--ax-g0); } .ax-g-sdk1 { stop-color: var(--ax-sdk); stop-opacity: var(--ax-g1); }
-.ax-g-hpic0 { stop-color: var(--ax-hpic); stop-opacity: var(--ax-g0); } .ax-g-hpic1 { stop-color: var(--ax-hpic); stop-opacity: var(--ax-g1); }
-.ax-g-hpis0 { stop-color: var(--ax-hpis); stop-opacity: var(--ax-g0); } .ax-g-hpis1 { stop-color: var(--ax-hpis); stop-opacity: var(--ax-g1); }
-.ax-badge--sdk { fill: var(--ax-sdk); } .ax-badge--hpic { fill: var(--ax-hpic); } .ax-badge--hpis { fill: var(--ax-hpis); }
-.ax-on { color: var(--on-accent); }
-.ax-h1 { fill: var(--text); font-size: 25px; font-weight: 820; letter-spacing: .5px; }
-.ax-h2 { fill: var(--text); font-size: 20px; font-weight: 780; }
-.ax-t1 { fill: var(--text); font-size: 18px; font-weight: 740; }
-.ax-t2 { fill: var(--ink-soft); font-size: 15px; font-weight: 620; }
-.ax-t2b { fill: var(--text); font-size: 16px; font-weight: 700; }
-.ax-t3 { fill: var(--muted); font-size: 13.5px; }
-.ax-mono { font-family: var(--mono); }
-.ax-key rect { fill: var(--ax-key-bg); stroke: var(--ax-key-line); }
-.ax-key text { fill: var(--ax-key-ink); font-size: 15px; font-weight: 680; }
-.ax-mod rect { fill: var(--ax-mod-bg); stroke: var(--ax-mod-line); }
-.ax-mod--tee .ax-modic { color: var(--v2); }
-.ax-mod--llm .ax-modic { color: var(--v1); }
-.ax-cap rect { fill: var(--ax-cap-bg); stroke: var(--ax-hpis-line); }
-.ax-capic { color: var(--v2); }
-.ax-arrow { fill: none; stroke: var(--arch-flow); stroke-width: 2.4; stroke-dasharray: 7 6; animation: archdash 1.2s linear infinite; }
-.ax-head { fill: var(--arch-flow); }
-.ax-lab { fill: var(--arch-flow-ink); font-size: 15px; font-weight: 720; }
-.ax-small { font-size: 13px; font-weight: 640; }
-.ax-lab--data { fill: var(--ink-soft); font-size: 15.5px; font-weight: 700; }
-.ax-dot { filter: drop-shadow(0 0 5px var(--a, var(--arch-flow))); }
-.ax-dot.q { fill: var(--arch-flow); }
+.arch-box { fill: var(--arch-box); stroke: var(--arch-box-line); }
+.arch-chip rect { fill: var(--arch-chip); stroke: var(--arch-chip-line); }
+.arch-chip text { fill: var(--text); }
+.arch-chip--new rect { fill: var(--arch-new-bg); stroke: var(--arch-new-line); }
+.arch-chip--new text { fill: var(--arch-new-ink); font-weight: 700; }
+.arch-chip--model rect { fill: var(--arch-model-bg); stroke: var(--arch-model-line); }
+.arch-chip--model text { fill: var(--arch-model-ink); font-weight: 600; }
+.arch-chip--key rect { fill: var(--arch-key-bg); stroke: var(--arch-key-line); }
+.arch-chip--key text { fill: var(--arch-key-ink); font-weight: 600; }
+.arch-cyl { fill: var(--arch-chip); stroke: var(--arch-chip-line); }
+.arch-cyl-label { fill: var(--text); }
+.arch-flow { fill: none; stroke: var(--arch-flow); stroke-width: 2.4; stroke-dasharray: 7 7; animation: archdash 1.2s linear infinite; }
+.arch-arrow { fill: var(--arch-flow); }
+.arch-label { fill: var(--arch-flow-ink); font-size: 13px; font-weight: 600; }
+.arch-sub { fill: var(--muted); font-size: 12.5px; }
+.arch-h { fill: var(--text); font-size: 19px; font-weight: 700; }
+.arch-sep { stroke: var(--arch-box-line); stroke-dasharray: 4 6; }
+.arch-side { fill: var(--dim); font-size: 13px; font-weight: 700; }
+.arch-hpis { stroke: var(--arch-hpis-line); }
+.arch-g0 { stop-color: var(--v2); stop-opacity: .1; }
+.arch-g1 { stop-color: var(--v2); stop-opacity: .03; }
+@keyframes archdash { to { stroke-dashoffset: -28; } }
+/* the four devices (end side) and their anonymous partitions in HPIS, one colour per AID */
 .a1 { --a: var(--aid-1); } .a2 { --a: var(--aid-2); } .a3 { --a: var(--aid-3); } .a4 { --a: var(--aid-4); }
-.ax-dot.a1, .ax-dot.a2, .ax-dot.a3, .ax-dot.a4 { fill: var(--a); }
-.ax-pipe { fill: none; stroke: var(--a); stroke-width: 3; opacity: .26; }
-.ax-pipe-dash { fill: none; stroke: var(--a); stroke-width: 3; stroke-dasharray: 2 12; stroke-linecap: round; opacity: .9; animation: archdash 1.1s linear infinite; }
-.ax-aid rect { fill: var(--ax-aid-bg); stroke: var(--a); stroke-width: 1.5; }
-.ax-aid text { fill: var(--a); font-family: var(--mono); font-size: 14px; font-weight: 700; }
-.ax-ne circle { fill: var(--ax-aid-bg); stroke: var(--line-2); }
-.ax-ne text { fill: var(--muted); font-size: 16px; font-weight: 800; }
-.ax-card { fill: var(--ax-card); stroke: color-mix(in srgb, var(--a) 40%, var(--ax-card-line)); stroke-width: 1.3; filter: drop-shadow(0 8px 18px var(--ax-shadow)); }
-.ax-devring { fill: color-mix(in srgb, var(--a) 15%, transparent); stroke: color-mix(in srgb, var(--a) 55%, transparent); stroke-width: 1.4; }
-.ax-devic { color: var(--a); }
-.ax-vbox { fill: var(--ax-vault); stroke: color-mix(in srgb, var(--a) 48%, transparent); stroke-width: 1.3; }
-.ax-vbar { fill: var(--a); }
-.ax-vic { color: var(--a); }
-.ax-hex { fill: var(--a); opacity: .5; font-family: var(--mono); font-size: 12px; letter-spacing: .5px; }
-@keyframes archdash { to { stroke-dashoffset: -26; } }
+.arch svg use.arch-ic { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.arch-dev__box { fill: var(--arch-chip); stroke: color-mix(in srgb, var(--a) 50%, var(--arch-chip-line)); stroke-width: 1.3; }
+.arch-dev__ring { fill: color-mix(in srgb, var(--a) 14%, transparent); stroke: color-mix(in srgb, var(--a) 55%, transparent); stroke-width: 1.2; }
+.arch-dev__ic { color: var(--a); }
+.arch-dev__name { fill: var(--text); font-size: 15px; font-weight: 700; }
+.arch-dev__data { fill: var(--muted); font-size: 12.5px; }
+.arch-aid rect { fill: color-mix(in srgb, var(--a) 12%, transparent); stroke: color-mix(in srgb, var(--a) 60%, transparent); }
+.arch-aid text { fill: var(--a); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.arch-part rect { fill: var(--arch-chip); stroke: color-mix(in srgb, var(--a) 50%, var(--arch-chip-line)); }
+.arch-part rect.arch-part__bar { fill: var(--a); stroke: none; }
+.arch-part__aid { fill: var(--a); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.arch-part__kind { fill: var(--muted); font-size: 12.5px; }
 
 /* theme switch in the top bar: shows the theme it switches to */
 .theme-btn .i-sun { display: none; }
@@ -1042,27 +1033,22 @@ body.scoreboard main { padding-bottom: 1rem; }
   --tc0: #2fe3c4; --tc1: #5aa9ff; --tc2: #a594ff; --tc3: #f472b6; --tc4: #a3e635;
   --tc5: #22d3ee; --tc6: #818cf8; --tc7: #e879f9; --tc8: #34d399; --tc9: #94a3b8;
   --aid-1: #2fe3c4; --aid-2: #5aa9ff; --aid-3: #a594ff; --aid-4: #f472b6;
+  --arch-box: rgba(255, 255, 255, .035);
+  --arch-box-line: rgba(140, 170, 255, .24);
+  --arch-chip: #0e1c3a;
+  --arch-chip-line: rgba(140, 170, 255, .26);
+  --arch-new-bg: rgba(47, 227, 196, .12);
+  --arch-new-line: rgba(47, 227, 196, .55);
+  --arch-new-ink: #5eead4;
+  --arch-model-bg: rgba(165, 148, 255, .14);
+  --arch-model-line: rgba(165, 148, 255, .5);
+  --arch-model-ink: #c9bfff;
+  --arch-key-bg: rgba(90, 169, 255, .14);
+  --arch-key-line: rgba(90, 169, 255, .5);
+  --arch-key-ink: #a6d0ff;
   --arch-flow: #5aa9ff;
   --arch-flow-ink: #a6d0ff;
-  --ax-zone: rgba(90, 169, 255, .035);
-  --ax-zone-line: rgba(140, 170, 255, .24);
-  --ax-grid: rgba(140, 170, 255, .12);
-  --ax-shadow: rgba(0, 0, 0, .35);
-  --ax-sdk: #5aa9ff; --ax-hpic: #a594ff; --ax-hpis: #2fe3c4;
-  --ax-sdk-line: rgba(90, 169, 255, .46);
-  --ax-hpic-line: rgba(165, 148, 255, .46);
-  --ax-hpis-line: rgba(47, 227, 196, .46);
-  --ax-g0: .17; --ax-g1: .04;
-  --ax-key-bg: rgba(90, 169, 255, .12);
-  --ax-key-line: rgba(90, 169, 255, .46);
-  --ax-key-ink: #a6d0ff;
-  --ax-mod-bg: rgba(10, 22, 48, .74);
-  --ax-mod-line: rgba(140, 170, 255, .26);
-  --ax-cap-bg: rgba(10, 22, 48, .7);
-  --ax-aid-bg: #0e1c3a;
-  --ax-card: #132447;
-  --ax-card-line: rgba(140, 170, 255, .24);
-  --ax-vault: rgba(8, 18, 40, .72);
+  --arch-hpis-line: rgba(47, 227, 196, .45);
 }
 :root[data-theme="dark"] body {
   background:

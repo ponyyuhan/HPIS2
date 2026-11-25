@@ -186,6 +186,30 @@ class Engine:
         vec = Embedder.get().encode_query(plan.get("semantic") or "")
         return unit_vectors(np.asarray(vec, dtype=np.float64), len(vec))
 
+    async def cipher_search(self, words: str, k: int = config.RETRIEVE_K) -> dict:
+        """One encrypted search by the owner's device, as HPIS sees it (the 云端视角 page).
+
+        The device that holds the data turns the words into its HMAC tokens and a query vector
+        sealed to the trusted region, the same request a question sends; HPIS matches them inside
+        that device's anonymous AID and returns the K nearest records, still encrypted.  An HPIS
+        operator can observe the AID, the tokens, the sealed bytes and which records came back,
+        not the words, the contents or whose they are."""
+        plan = self.plan(words)
+        kind = plan["kind"]
+        unit = await asyncio.get_running_loop().run_in_executor(None, self.embed, plan)
+        device = self.tenant("tee", kind)
+        op = device.vector_op(unit, k, plan)
+        grant = {"dek": device.dek}
+        sealed = unpack(device.envelope(op, grant)[1][64:])[2]
+        result = await device.request(op, grant)
+        return {
+            "kind": kind,
+            "aid": device.aid,
+            "rids": [int(rid) for rid, _ in result["records"]],
+            "tokens": [t for group in op["groups"] for t in group],
+            "sealed": sealed,
+        }
+
     async def vision(self, model: str) -> bool:
         """Both lanes' model servers accept images (else both get captions only)."""
         from . import llm

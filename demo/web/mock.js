@@ -243,13 +243,6 @@ async function handle(url, init) {
     const T = await tenants();
     return json({ ...real, tenants: T, rows: real.rows.map((r, i) => { const t = T[(i * 7) % T.length]; return { ...r, aid: t.aid, aid_short: t.aid_short, tenant: (i * 7) % T.length }; }) });
   }
-  if (p === "/api/spy") {
-    const real = await (await realFetch(url, init)).json();
-    const T = await tenants();
-    const seed = Math.floor(Math.random() * 1e6);
-    const rows = Array.from({ length: 40 }, (_, i) => { const t = T[(seed + i * 3) % T.length]; return { aid_short: t.aid_short, tenant: (seed + i * 3) % T.length, rid: 1 + ((seed * 31 + i * 977) % 90000), body: hex(96, seed + i), matched: false }; });
-    return json({ ...real, hpis_scanned: T.reduce((a, t) => a + t.records, 0), hpis_rows: rows, tenants: T, note: "HPIS 没有终端的检索密钥：明文关键词无法变成它认识的检索令牌" });
-  }
   return null;
 }
 

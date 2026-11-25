@@ -10,8 +10,6 @@ only used for an optional reveal on the page.
 from __future__ import annotations
 
 import hashlib
-import json
-import mmap
 import random
 import sqlite3
 from contextlib import closing
@@ -101,11 +99,19 @@ class StoreView:
             out.append(row)
         return out
 
-    def _row(self, db, aid: bytes, rid: int, *, body_bytes: int = 48, tags: int = 4, vector_bytes: int = 24) -> dict:
+    def _row(
+        self, db, aid: bytes, rid: int, *, body_bytes: int = 48, tags: int = 4, vector_bytes: int = 24, tokens=frozenset()
+    ) -> dict:
         head, size = db.execute(
             "SELECT substr(body,1,?), length(body) FROM docs WHERE aid=? AND rid=?", (body_bytes, aid, rid)
         ).fetchone()
-        labels = [t[0].hex() for t in db.execute("SELECT tag FROM postings WHERE aid=? AND rid=? LIMIT ?", (aid, rid, tags))]
+        if tokens:  # the row's own tags that a search token matched, first
+            every = [t[0] for t in db.execute("SELECT tag FROM postings WHERE aid=? AND rid=?", (aid, rid))]
+            hit = [t for t in every if t in tokens]
+            labels = [t.hex() for t in (hit + [t for t in every if t not in tokens])[: max(tags, len(hit))]]
+        else:
+            hit = []
+            labels = [t[0].hex() for t in db.execute("SELECT tag FROM postings WHERE aid=? AND rid=? LIMIT ?", (aid, rid, tags))]
         vec = db.execute(
             "SELECT substr(original,1,?), length(original) FROM vectors WHERE aid=? AND rid=?", (vector_bytes, aid, rid)
         ).fetchone()
@@ -117,12 +123,13 @@ class StoreView:
             "body": head.hex(),
             "bodyBytes": int(size),
             "tags": labels,
+            "matched": [t.hex() for t in hit],
             "vector": vec[0].hex() if vec else "",
             "vectorBytes": int(vec[1]) if vec else 0,
         }
 
-    def sample(self, limit: int, seed: int | None = None) -> list[dict]:
-        """Rows interleaved from many AIDs (a fresh draw unless ``seed`` is given)."""
+    def sample(self, limit: int, seed: int | None = None, skip=frozenset()) -> list[dict]:
+        """Rows interleaved from many AIDs (a fresh draw unless ``seed`` is given), none of ``skip``."""
         rng = random.Random(seed)
         tenants = list(self.order)
         rng.shuffle(tenants)
@@ -131,7 +138,8 @@ class StoreView:
         pools = {}
         for aid in tenants:
             ids = self.rids[aid]
-            pools[aid] = [int(ids[i]) for i in rng.sample(range(len(ids)), min(per, len(ids)))]
+            drawn = [int(ids[i]) for i in rng.sample(range(len(ids)), min(per + len(skip), len(ids)))]
+            pools[aid] = [rid for rid in drawn if (aid, rid) not in skip][:per]
         while len(picks) < limit and any(pools.values()):
             for aid in tenants:
                 if pools[aid] and len(picks) < limit:
@@ -146,54 +154,8 @@ class StoreView:
             row = self._row(db, aid, rid, body_bytes=192, tags=1000, vector_bytes=96)
         return row
 
-    def _file_contains(self, patterns: list[bytes]) -> bool:
-        """One native-speed pass over the store file (and its WAL, if any) for any of the byte patterns."""
-        for path in (self.path, Path(f"{self.path}-wal")):
-            if not path.exists() or path.stat().st_size == 0:
-                continue
-            with open(path, "rb") as fh, mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-                if any(mm.find(p) != -1 for p in patterns):
-                    return True
-        return False
-
-    def scan(self, q: str) -> dict:
-        """Grep the whole store for the plaintext word, as an operator would.
-
-        A single pass over the store file at native speed settles the usual case (the word occurs nowhere,
-        so no record can contain it); only if it occurs somewhere are the bodies counted one by one.
-        Words shorter than 4 bytes are not byte-scanned: in 1.5 GB of ciphertext such short byte strings
-        occur by pure chance, and a chance byte match is not a plaintext hit."""
-        raw = q.encode()
-        escaped = json.dumps(q)[1:-1].encode()
-        if len(raw) < 4:
-            return {"hits": 0, "scanned": self.docs, "bytes": self.bytes, "short": True}
-        try:
-            if not self._file_contains([raw] if escaped == raw else [raw, escaped]):
-                return {"hits": 0, "scanned": self.docs, "bytes": self.bytes}
-        except (OSError, ValueError):
-            pass  # cannot map the file: count row by row below
-        hits = scanned = size = 0
+    def rows(self, aid: bytes, rids: list[int], tokens=()) -> list[dict]:
+        """The stored rows of one AID, in the given order; tags matched by ``tokens`` come first."""
+        tokens = frozenset(tokens)
         with closing(self.connect()) as db:
-            for (body,) in db.execute("SELECT body FROM docs"):
-                scanned += 1
-                size += len(body)
-                if raw in body or escaped in body:
-                    hits += 1
-        return {"hits": hits, "scanned": scanned, "bytes": size}
-
-    def probe_rows(self, q: str, limit: int, seed: int | None = None) -> list[dict]:
-        """A fresh sample of stored rows, each checked for the word (it never matches ciphertext)."""
-        raw = q.encode()
-        escaped = json.dumps(q)[1:-1].encode()
-        rows = self.sample(limit, seed)
-        if len(raw) < 4:  # see scan(): a chance byte match in ciphertext is not a plaintext hit
-            for row in rows:
-                row["matched"] = False
-            return rows
-        with closing(self.connect()) as db:
-            for row in rows:
-                body = db.execute(
-                    "SELECT body FROM docs WHERE aid=? AND rid=?", (bytes.fromhex(row["aid"]), row["rid"])
-                ).fetchone()[0]
-                row["matched"] = bool(raw in body or escaped in body)
-        return rows
+            return [self._row(db, aid, rid, tokens=tokens) for rid in rids]

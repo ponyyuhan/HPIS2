@@ -10,7 +10,7 @@ Endpoints (PLAN-v3 §3; older fields are kept):
   GET  /api/cipher/{id}?kind=      the same record inside HPIS (AID, ciphertext, tokens, vector)
   GET  /api/cloudview?kind=plain   what the ordinary cloud reads (real name, all kinds)
   GET  /api/cloudview?kind=hpis    what HPIS stores (many anonymous AIDs)
-  GET  /api/spy?q=                 an operator greps both clouds for a word
+  GET  /api/spy?q=                 the same words in both clouds: a plaintext grep vs the encrypted search
   GET  /api/acceptance             the Linux acceptance results
 """
 
@@ -118,28 +118,25 @@ async def startup(app):
 
 
 SPY_DEFAULT = "体检报告"  # the word the 云端视角 search box starts with (index.html)
+SPY_OTHER_ROWS = 20  # stored rows of every AID shown under the encrypted search's hits
 
 
 async def prime_spy(state):
-    """Answer the page's default operator search once in the background after start-up.
+    """Grep the ordinary cloud's plaintext for the page's default word once, in the background after start-up.
 
-    The first search reads both stores from disk (about 1.6 GB, 10 s or more when cold); doing it
-    here leaves the answer cached and the files in the OS cache, so the first search on stage is instant."""
-    view, catalog = state.get("store"), state.get("catalog")
-    if view is None or catalog is None:
+    The first grep reads every device's plaintext from disk (seconds when cold); doing it here leaves
+    the answer cached and the files in the OS cache, so the first search on stage is instant."""
+    catalog = state.get("catalog")
+    if catalog is None:
         return
     warm = state.get("warm")
     if warm is not None:
         # after the model warm-up: this reading holds the interpreter for seconds and must not delay
         # the vision probe (a probe that times out leaves photos as captions until it is asked again)
         await asyncio.wait([warm])
-    loop = asyncio.get_running_loop()
     try:
-        (plain_hits, samples), scan = await asyncio.gather(
-            loop.run_in_executor(None, _plain_hits, catalog, SPY_DEFAULT),
-            loop.run_in_executor(None, view.scan, SPY_DEFAULT),
-        )
-        state.setdefault("spy", {})[SPY_DEFAULT] = {"plain_hits": plain_hits, "samples": samples, "scan": scan}
+        plain_hits, samples = await asyncio.get_running_loop().run_in_executor(None, _plain_hits, catalog, SPY_DEFAULT)
+        state.setdefault("spy", {})[SPY_DEFAULT] = {"plain_hits": plain_hits, "samples": samples}
     except Exception:  # only a warm-up; a search on stage still works without it
         traceback.print_exc()
 
@@ -550,41 +547,63 @@ def _plain_hits(catalog: Catalog, q: str) -> tuple[int, list[dict]]:
 
 
 async def spy(request):
-    """An operator greps both clouds for a plaintext word; HPIS shows a fresh sample of what it scanned."""
+    """The same words searched in both clouds, at the same time.
+
+    The ordinary cloud: its operator greps the plaintext it holds, real names included.
+    HPIS: the device that holds the data runs its encrypted search (HMAC tokens and a sealed query
+    vector, as for a question); the answer is what HPIS stores and returns for it: the device's
+    anonymous AID, the tokens, and the K matching rows as ciphertext, above other stored rows of every AID.
+    """
     state = request.app[STATE]
     q = request.query.get("q", "").strip()[:40]
     if not q:
         raise web.HTTPBadRequest()
-    view = state.get("store")
-    catalog = state.get("catalog")
-    if view is None or catalog is None:
+    view, catalog, engine = state.get("store"), state.get("catalog"), state.get("engine")
+    if view is None or catalog is None or engine is None:
         raise web.HTTPServiceUnavailable(text="demo is still starting")
     loop = asyncio.get_running_loop()
     cache = state.setdefault("spy", {})
-    if q not in cache:
-        (plain_hits, samples), scan = await asyncio.gather(  # both clouds are searched at the same time
-            loop.run_in_executor(None, _plain_hits, catalog, q),
-            loop.run_in_executor(None, view.scan, q),
-        )
-        cache[q] = {"plain_hits": plain_hits, "samples": samples, "scan": scan}
+
+    async def search():
+        try:
+            return await engine.cipher_search(q)
+        except Exception:  # the plaintext side still answers; the page says HPIS could not search
+            traceback.print_exc()
+            return None
+
+    if q in cache:
+        found = await search()
+    else:
+        (plain_hits, samples), found = await asyncio.gather(loop.run_in_executor(None, _plain_hits, catalog, q), search())
+        cache[q] = {"plain_hits": plain_hits, "samples": samples}
         if len(cache) > 256:
             cache.pop(next(iter(cache)))
-    hit = cache[q]
-    rows = await loop.run_in_executor(None, view.probe_rows, q, 24, None)
-    scan = hit["scan"]
-    tenants = len(view.order)
+    plain = cache[q]
+    hpis, rows = None, []
+    if found is not None:
+        aid = found["aid"]
+        hits = await loop.run_in_executor(None, view.rows, aid, found["rids"], found["tokens"])
+        skip = frozenset((aid, rid) for rid in found["rids"])
+        others = await loop.run_in_executor(None, view.sample, SPY_OTHER_ROWS, None, skip)
+        rows = [{**r, "hit": True, "rank": i + 1} for i, r in enumerate(hits)] + [{**r, "hit": False} for r in others]
+        hpis = {
+            "kind": found["kind"],
+            "aid": aid.hex(),
+            "aid_short": aid.hex()[:8],
+            "hits": len(hits),
+            "tokens": [t.hex() for t in found["tokens"][:3]],
+            "token_count": len(found["tokens"]),
+            "sealed": found["sealed"][:24].hex(),
+            "sealed_bytes": len(found["sealed"]),
+        }
     return jsonify(
         {
             "q": q,
-            "plain_hits": hit["plain_hits"],
-            "samples": hit["samples"],
-            "hpis_scanned": scan["scanned"],
-            "hpis_bytes": scan["bytes"],
-            "hpis_hits": scan["hits"],
-            "hpis_rows": [{**r, "matched": r["matched"]} for r in rows],
-            "tenants": tenants,
-            "note": f"HPIS 中 {tenants} 个匿名租户共 {scan['scanned']:,} 条记录，只有 AES-256-GCM 密文、"
-            f"HMAC 检索令牌和向量密文，没有可与「{q}」比对的明文：命中 {scan['hits']} 条。",
+            "plain_hits": plain["plain_hits"],
+            "samples": plain["samples"],
+            "hpis": hpis,
+            "hpis_rows": rows,
+            "tenants": len(view.order),
         }
     )
 
