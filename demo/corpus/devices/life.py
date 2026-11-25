@@ -2,16 +2,15 @@
 
 Domestic trips come from the flight / rail / hotel emails of the demo mailbox
 (``demo/data/mailbox.jsonl``, category ``travel``); they are frozen here so the
-generators do not need the mailbox. Three family trips and the Germany business
-trip are new and exist only on the devices:
+generators do not need the mailbox. That includes the family trips 成都
+2024-07-20 → 07-26 (JW1405/JW1410), 三亚 2025-07-25 → 07-31 (JW1953/JW1958) and the
+Spring Festivals in 扬州. Two family trips and the Germany business trip are new
+and exist only on the devices:
 
-* 韩国旅游 2024-07-20 → 07-26 (首尔、釜山, +09:00).  NOTE: the mailbox books the
-  family on JW1405/JW1410 北京大兴 ⇄ 成都天府 on exactly these dates; the devices
-  follow the Korea plan given for this data set (see README).
+* 韩国旅游 2024-10-01 → 10-06, the National Day holiday (首尔、釜山, +09:00, 首都机场).
+  NOTE: mailbox threads place the family in Beijing on some of these days (see README).
 * 日本赏樱 2025-04-03 → 04-08 (东京、京都、奈良, +09:00).
 * 德国出差 2025-09-14 → 09-20 (慕尼黑、柏林、法兰克福, +02:00).
-* 三亚度假 follows the mailbox family trip 2025-07-25 → 07-31 (JW1953/JW1958); the
-  2026 Spring Festival is spent in 扬州 (JW1861/JW1864, 2026-02-13 → 02-21).
 
 Everything is fictional.
 """
@@ -195,6 +194,7 @@ _MAIL_TRIPS = [
     ("2024-05-20", "13:20", "15:35", "JW1505", "2024-05-21", "21:10", "23:30", "JW1512", "上海", None),
     ("2024-07-03", "10:40", "12:45", "JW1203", "2024-07-05", "16:50", "19:00", "JW1206", "西安", "悦庭酒店西安高新店"),
     ("2024-07-15", "07:30", "09:35", "JW1203", "2024-07-16", "19:55", "22:05", "JW1206", "西安", "悦庭酒店西安高新店"),
+    ("2024-07-20", "08:00", "11:00", "JW1405", "2024-07-26", "18:40", "21:45", "JW1410", "成都", None),
     ("2024-08-19", "07:30", "09:45", "JW1501", "2024-08-21", "18:40", "21:00", "JW1508", "上海", "悦庭酒店上海虹桥店"),
     ("2024-08-27", "09:15", "11:30", "JW1501", "2024-08-28", "18:40", "21:00", "JW1508", "上海", "悦庭酒店上海虹桥店"),
     ("2024-09-12", "07:30", "09:45", "JW1505", "2024-09-14", "21:10", "23:30", "JW1512", "上海", None),
@@ -237,12 +237,16 @@ _MAIL_TRIPS = [
     ("2026-09-20", "07:30", "09:45", "JW1503", "2026-09-21", "18:40", "21:00", "JW1510", "苏州", "悦庭酒店苏州园区店"),
     ("2026-10-13", "08:00", "10:15", "JW1501", "2026-10-16", "18:40", "21:00", "JW1508", "上海", "悦庭酒店上海虹桥店"),
 ]
+
+
 def _mail_trip(row) -> Trip:
     out_d, dep, _arr, fo, back_d, bdep, barr, fb, city, hotel = row
     if city == "扬州":
         label, purpose, family = "春节回扬州", "探亲", True
     elif city == "三亚":
         label, purpose, family = "三亚度假", "度假", True
+    elif city == "成都":
+        label, purpose, family = "成都旅游", "旅游", True
     else:
         label, purpose, family = f"{city}出差", "出差", False
     return Trip(
@@ -261,12 +265,12 @@ TRIPS.append(Trip(
 ))
 TRIPS += [
     Trip(
-        key="2024-07-20-韩国", label="韩国旅游", purpose="旅游", family=True, country="韩国",
-        start=D("2024-07-20"), end=D("2024-07-26"), tz=9,
-        segments=[_seg("首尔", "2024-07-20", "2024-07-22"), _seg("釜山", "2024-07-23", "2024-07-25"),
-                  _seg("首尔", "2024-07-26", "2024-07-26")],
-        airport="pkx", out_dep="08:00", back_arr="20:45", flight_out="北京大兴—首尔仁川",
-        flight_back="首尔仁川—北京大兴", note="一家三口暑假旅行：首尔3晚、釜山3晚（KTX往返）",
+        key="2024-10-01-韩国", label="韩国旅游", purpose="旅游", family=True, country="韩国",
+        start=D("2024-10-01"), end=D("2024-10-06"), tz=9,
+        segments=[_seg("首尔", "2024-10-01", "2024-10-03"), _seg("釜山", "2024-10-04", "2024-10-05"),
+                  _seg("首尔", "2024-10-06", "2024-10-06")],
+        airport="pek", out_dep="08:30", back_arr="20:30", flight_out="北京首都—首尔仁川",
+        flight_back="首尔仁川—北京首都", note="国庆假期一家三口：首尔3晚、釜山2晚（KTX往返）",
     ),
     Trip(
         key="2025-04-03-日本", label="日本赏樱", purpose="旅游", family=True, country="日本",
@@ -343,7 +347,6 @@ FIXED_OUTINGS = [
     Outing(D("2024-05-02"), "gubei", 1, note="五一 古北水镇住一晚"),
     Outing(D("2024-06-09"), "universal", note="端午 带小禾去环球度假区"),
     Outing(D("2024-08-10"), "beidaihe", 2, note="北戴河海边避暑"),
-    Outing(D("2024-10-03"), "tianjin", 0, note="国庆 天津一日游"),
     Outing(D("2024-10-19"), "mutianyu", note="慕田峪长城看红叶"),
     Outing(D("2024-11-02"), "xiangshan", note="香山红叶"),
     Outing(D("2024-12-28"), "badaling", note="八达岭长城看残雪"),
@@ -377,6 +380,12 @@ def season(d: dt.date) -> int:
     return {12: 3, 1: 3, 2: 3, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 1, 9: 2, 10: 2, 11: 2}[d.month]
 
 
+# National Day 2024 used to be free holiday days that drew random outings (and 10-03 held a fixed day
+# trip to 天津) before the Korea trip moved there. Keep drawing for those days and drop the result,
+# so every later random outing stays exactly as it was.
+_RNG_REPLAY = {D("2024-10-01"), D("2024-10-02"), D("2024-10-04"), D("2024-10-05"), D("2024-10-06")}
+
+
 def _gen_outings() -> list[Outing]:
     rng = random.Random(20261120)
     fixed = {o.date for o in FIXED_OUTINGS}
@@ -386,7 +395,8 @@ def _gen_outings() -> list[Outing]:
             blocked.add(o.date + dt.timedelta(days=i))
     out = list(FIXED_OUTINGS)
     for d in daterange(START, END):
-        if is_workday(d) or d in blocked or trip_on(d) or d in HALF_MARATHONS or d in CAR_SERVICE:
+        replay = d in _RNG_REPLAY
+        if is_workday(d) or d in blocked or (trip_on(d) and not replay) or d in HALF_MARATHONS or d in CAR_SERVICE:
             continue
         if d.weekday() not in (5, 6) and d not in HOLIDAYS:
             continue
@@ -396,7 +406,9 @@ def _gen_outings() -> list[Outing]:
             keys = [k for k, _ in _LOCAL]
             weights = [w[season(d)] for _, w in _LOCAL]
             k = rng.choices(keys, weights=weights)[0]
-            out.append(Outing(d, k, 0, family=rng.random() < 0.85))
+            family = rng.random() < 0.85
+            if not replay:
+                out.append(Outing(d, k, 0, family=family))
     out.sort(key=lambda o: o.date)
     return out
 

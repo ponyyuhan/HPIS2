@@ -1,7 +1,7 @@
 {
  "model": "BAAI/bge-small-zh-v1.5",
  "dim": 512,
- "count": 2868,
+ "count": 2850,
  "text": "title + text (date, from/to or station, distance, energy, charging and summary numbers as written)",
  "onnx": "Xenova/bge-small-zh-v1.5",
  "dtype": "float32",
@@ -10,5 +10,5 @@
  "layout": "row i = line i of car.jsonl (record id i+1), little-endian float32, C order",
  "builder": "demo.corpus.devices.embed.embed_text",
  "query_prefix": "为这个句子生成表示以用于检索相关文章：",
- "seconds": 13.4
+ "seconds": 14.3
 }

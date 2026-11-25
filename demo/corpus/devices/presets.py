@@ -74,7 +74,8 @@ def photo_presets(photos: list[dict]) -> list[dict]:
 
     night = [r for r in photos if r["fields"]["city"] == "首尔" and r["fields"]["type"] == "夜景"]
     if len(night) >= 2:
-        facts = [_fact("时间", f"{_cn_range(*_span(night))}", "2024年7月", "7月")]
+        a, b = _span(night)
+        facts = [_fact("时间", f"{_cn_range(a, b)}", f"{a.year}年{a.month}月", f"{a.month}月{a.day}日")]
         facts += [_fact("地点", p, p) for p in dict.fromkeys(r["place"]["name"] for r in night)]
         out.append(_preset(
             "photo_seoul_night", "首尔夜景", "photo", "phone", "找出我在首尔拍的夜景照片",
@@ -85,7 +86,7 @@ def photo_presets(photos: list[dict]) -> list[dict]:
     if len(jp) >= 3:
         a, b = _span(jp)
         cities = list(dict.fromkeys(r["fields"]["city"] for r in jp))
-        facts = [_fact("时间", f"{_cn_range(a, b)}", "2025年4月", "4月")]
+        facts = [_fact("时间", f"{_cn_range(a, b)}", f"{a.year}年{a.month}月", f"{a.month}月")]
         facts += [_fact(c, c, c) for c in cities]
         out.append(_preset(
             "photo_sakura", "日本赏樱", "photo", "phone", "去年春天去日本看樱花，拍了哪些照片？",

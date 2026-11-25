@@ -11,6 +11,12 @@ Capture times are set inside the trip windows (local time and UTC offset).
 
 Writes photo.jsonl, photos/img/{id}.jpg (long side 960), photos/thumb/{id}.jpg
 (long side 360) and photos/ATTRIBUTION.md. Needs Pillow (the throwaway venv).
+
+Incremental by default: photos already in photo.jsonl keep their date, place and
+text as long as their trip, outing or day still exists in the timeline; scenes of a
+trip that lost all its photos (e.g. a trip moved to other dates) are filled again,
+and every everyday photo that lands on a day away from Beijing is replaced by
+exactly one new one. ``--fresh`` rebuilds the whole album from scratch.
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ import math
 import random
 import re
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -279,28 +285,27 @@ def foreign_and_family_scenes() -> list[Scene]:
         _sc(g, "法兰克福", "2025-09-19", "美因河畔", 2, ["建筑", "街景", "地标"], "day", ("河", "城市", "高楼")),
         _sc(g, "法兰克福", "2025-09-19", "棕榈园", 2, ["花卉", "公园", "自然风光"], "noon", ("植物", "花", "温室")),
         _sc(g, "法兰克福", "2025-09-19", "法兰克福机场", 1, ["交通出行"], "day", ("机场", "飞机", "航拍")),
-        # 韩国旅游 2024-07-20 → 07-26 (+09:00)
-        _sc(k, "首尔", "2024-07-20", "仁川机场", 1, ["交通出行"], "day", ("飞机", "机场", "海鸥")),
-        _sc(k, "首尔", "2024-07-20", "南山 首尔塔", 2, ["夜景", "地标"], "evening", ("城市", "高楼", "塔")),
-        _sc(k, "首尔", "2024-07-21", "汉江公园", 2, ["公园", "自然风光"], "morning", ("江", "河", "公园", "桥")),
-        _sc(k, "首尔", "2024-07-21", "钟路区", 2, ["建筑", "街景"], "day", ("建筑", "街道", "屋顶")),
-        _sc(k, "首尔", "2024-07-21", "益善洞", 2, ["街景", "咖啡馆"], "day", ("街道", "门", "咖啡")),
-        _sc(k, "首尔", "2024-07-21", "汉江公园", 2, ["夜景"], "evening", ("江", "桥", "喷泉", "城市")),
-        _sc(k, "首尔", "2024-07-22", "北岳山城郭路", 2, ["自然风光"], "day", ("山", "森林", "城墙", "步道")),
-        _sc(k, "首尔", "2024-07-22", "明洞", 1, ["美食"], "noon", ("烤肉", "拌饭")),
-        _sc(k, "首尔", "2024-07-22", "弘大", 2, ["街景", "建筑"], "dusk", ("街道", "招牌", "建筑")),
-        _sc(k, "首尔", "2024-07-22", "汝矣岛", 1, ["夜景"], "evening", ("高楼", "城市")),
-        _sc(k, "釜山", "2024-07-23", "釜山站", 1, ["交通出行"], "day", ("列车", "车站")),
-        _sc(k, "釜山", "2024-07-23", "釜山塔", 1, ["地标", "建筑", "街景"], "day", ("城市", "航拍", "塔"), located_only=True),
-        _sc(k, "釜山", "2024-07-23", "海云台", 2, ["海边"], "dusk", ("海滩", "海边", "沙滩")),
-        _sc(k, "釜山", "2024-07-24", "海云台", 2, ["海边"], "morning", ("海滩", "沙滩", "清晨")),
-        _sc(k, "釜山", "2024-07-24", "甘川洞文化村", 1, ["街景", "建筑"], "day", ("彩色", "房屋", "街道")),
-        _sc(k, "釜山", "2024-07-24", "札嘎其市场", 1, ["美食"], "noon", ("海鲜",)),
-        _sc(k, "釜山", "2024-07-24", "广安里", 2, ["夜景"], "evening", ("大桥", "城市", "高楼")),
-        _sc(k, "釜山", "2024-07-25", "海云台", 3, ["海边", "自然风光"], "day", ("海滩", "遮阳伞", "海")),
-        _sc(k, "釜山", "2024-07-25", "海云台", 1, ["海边", "自然风光"], "dusk", ("日落", "海")),
-        _sc(k, "首尔", "2024-07-26", "弘大", 1, ["咖啡馆", "街景"], "day", ("咖啡", "街道")),
-        _sc(k, "首尔", "2024-07-26", "仁川机场", 1, ["交通出行"], "dusk", ("机场", "飞机")),
+        # 韩国旅游 2024-10-01 → 10-06（国庆假期，+09:00）
+        _sc(k, "首尔", "2024-10-01", "仁川机场", 1, ["交通出行"], "day", ("飞机", "机场", "海鸥")),
+        _sc(k, "首尔", "2024-10-01", "南山 首尔塔", 2, ["夜景", "地标"], "evening", ("城市", "高楼", "塔")),
+        _sc(k, "首尔", "2024-10-02", "汉江公园", 2, ["公园", "自然风光"], "morning", ("江", "河", "公园", "桥")),
+        _sc(k, "首尔", "2024-10-02", "钟路区", 2, ["建筑", "街景"], "day", ("建筑", "街道", "屋顶")),
+        _sc(k, "首尔", "2024-10-02", "益善洞", 2, ["街景", "咖啡馆"], "day", ("街道", "门", "咖啡")),
+        _sc(k, "首尔", "2024-10-02", "汉江公园", 2, ["夜景"], "evening", ("江", "桥", "喷泉", "城市")),
+        _sc(k, "首尔", "2024-10-03", "北岳山城郭路", 2, ["自然风光"], "day", ("山", "森林", "城墙", "步道")),
+        _sc(k, "首尔", "2024-10-03", "明洞", 1, ["美食"], "noon", ("烤肉", "拌饭")),
+        _sc(k, "首尔", "2024-10-03", "弘大", 2, ["街景", "建筑"], "dusk", ("街道", "招牌", "建筑")),
+        _sc(k, "首尔", "2024-10-03", "汝矣岛", 1, ["夜景"], "evening", ("高楼", "城市")),
+        _sc(k, "釜山", "2024-10-04", "釜山站", 1, ["交通出行"], "day", ("列车", "车站")),
+        _sc(k, "釜山", "2024-10-04", "釜山塔", 1, ["地标", "建筑", "街景"], "day", ("城市", "航拍", "塔"), located_only=True),
+        _sc(k, "釜山", "2024-10-04", "海云台", 3, ["海边", "自然风光"], "day", ("海滩", "海")),
+        _sc(k, "釜山", "2024-10-04", "海云台", 2, ["海边", "自然风光"], "dusk", ("海滩", "海边", "沙滩", "日落")),
+        _sc(k, "釜山", "2024-10-05", "海云台", 2, ["海边"], "morning", ("海滩", "沙滩", "清晨")),
+        _sc(k, "釜山", "2024-10-05", "甘川洞文化村", 1, ["街景", "建筑"], "day", ("彩色", "房屋", "街道")),
+        _sc(k, "釜山", "2024-10-05", "札嘎其市场", 1, ["美食"], "noon", ("海鲜",)),
+        _sc(k, "釜山", "2024-10-05", "广安里", 2, ["夜景"], "evening", ("大桥", "城市", "高楼")),
+        _sc(k, "首尔", "2024-10-06", "弘大", 1, ["咖啡馆", "街景"], "day", ("咖啡", "街道")),
+        _sc(k, "首尔", "2024-10-06", "仁川机场", 1, ["交通出行"], "dusk", ("机场", "飞机")),
         # 日本赏樱 2025-04-03 → 04-08 (+09:00)
         _sc(j, "东京", "2025-04-03", "羽田机场", 1, ["交通出行"], "day", ("飞机", "机翼")),
         _sc(j, "东京", "2025-04-03", "上野恩赐公园", 3, ["花卉", "公园"], "dusk", ("樱花",)),
@@ -629,8 +634,12 @@ DAILY_POI = {
 RUN_PLACE = {"olympic": "奥林匹克森林公园", "chaoyang": "朝阳公园", "wangjing": "大望京公园"}
 
 
-def daily_assign(cands: list[Cand], used: set, target: int, runs) -> list[tuple]:
-    """Everyday Beijing photos: (cand, local datetime, place, trip label)."""
+def daily_assign(cands: list[Cand], used: set, target: int, runs, kept=()) -> list[tuple]:
+    """Everyday Beijing photos: (cand, local datetime, place, trip label, note).
+
+    ``kept`` are (cand, datetime) pairs of everyday photos that stay; their days and
+    types count against the per-day and per-type limits.
+    """
     rng = random.Random(f"{SEED}|daily")
     pool = []
     for c in cands:
@@ -665,11 +674,11 @@ def daily_assign(cands: list[Cand], used: set, target: int, runs) -> list[tuple]
         pool.append((s, c))
     pool.sort(key=lambda t: -t[0])
     days = [d for d in daterange(life.START, life.END - dt.timedelta(days=1)) if life.in_beijing(d)]
-    taken = Counter()
+    taken = Counter(t.date() for _c, t in kept)
     out = []
     run_days = [(x, RUN_PLACE[x.key]) for x in runs if x.key in RUN_PLACE and x.start.utcoffset() == dt.timedelta(hours=8)]
-    per_type = Counter()
-    sakura = 0
+    per_type = Counter(c.v.get("type") or "自然风光" for c, _t in kept)
+    sakura = sum("樱花" in c.text for c, _t in kept)
     for _s, c in pool:
         if len(out) >= target:
             break
@@ -805,31 +814,91 @@ def _tags(c: Cand, typ: str) -> list[str]:
     return tags[:6]
 
 
+def _run_ok(text: str, t: dt.datetime, runs) -> bool:
+    """An everyday photo taken after a run stays only if that run is still on the watch."""
+    if "跑步后拍摄" not in text:
+        return True
+    return any(x.activity == "跑步" and x.start.utcoffset() == dt.timedelta(hours=8) and x.start.date() == t.date()
+               and x.end.replace(second=0) <= t <= x.end + dt.timedelta(minutes=10) for x in runs)
+
+
+def keep_previous(prev: list[dict], by_pid: dict, scenes: list[Scene], runs, used: set):
+    """Previous photos that are still valid: scene photos go back into their scene, everyday ones are listed.
+
+    Returns (kept, kept_daily, dropped_daily) with kept = {pid: previous record}.
+    """
+    groups: dict[tuple, list[Scene]] = defaultdict(list)
+    for sc in scenes:
+        groups[(sc.trip, sc.city, sc.day)].append(sc)
+    kept, kept_daily, dropped_daily = {}, [], 0
+    for r in prev:
+        c = by_pid.get(r["source"]["id"])
+        t = dt.datetime.fromisoformat(r["date"])
+        trip = r["fields"]["trip"]
+        if trip == "日常":
+            ok = c is not None and life.in_beijing(t.date()) and _run_ok(r["text"], t, runs)
+            if ok and c.pid not in used:
+                kept[c.pid] = r
+                kept_daily.append((c, t))
+                used.add(c.pid)
+            else:
+                dropped_daily += 1
+            continue
+        if c is None or c.pid in used:
+            continue
+        options = groups.get((trip, r["fields"]["city"], t.date()), [])
+        options = [sc for sc in options if len(sc.filled) < sc.n]
+        if not options:
+            continue  # the trip / outing is no longer on that day
+        same = [sc for sc in options if sc.place == r["place"]["name"]]
+        sc = (same or options)[0]
+        sc.filled.append(c)
+        kept[c.pid] = r
+        used.add(c.pid)
+    return kept, kept_daily, dropped_daily
+
+
 def build() -> list[dict]:
     from PIL import Image
 
     cands = load_candidates()
+    by_pid = {c.pid: c for c in cands}
+    fresh = "--fresh" in sys.argv or not (OUT / "photo.jsonl").exists()
+    prev = [] if fresh else read_jsonl(OUT / "photo.jsonl")
     used: set = set()
     scenes = foreign_and_family_scenes()
-    assign(scenes, cands, used)
     biz = business_scenes()
-    assign(biz, cands, used)
     outs = outing_scenes()
-    assign(outs, cands, used)
     workouts, _, _ = sport.plan()
-    rng = random.Random(f"{SEED}|times")
+    kept, kept_daily, dropped_daily = keep_previous(prev, by_pid, scenes + biz + outs, workouts, used)
+    if fresh:
+        assign(scenes, cands, used)
+        assign(biz, cands, used)
+        assign(outs, cands, used)
+    else:
+        # only trips without any kept photo (new or moved trips) are filled again
+        kept_trips = {r["fields"]["trip"] for r in kept.values()}
+        for group in (scenes, biz, outs):
+            assign([sc for sc in group if sc.trip not in kept_trips], cands, used)
     rows = []  # (cand, datetime, country, city, place, trip, extra)
     for sc in scenes + biz + outs:
         for i, c in enumerate(sc.filled):
-            t = slot_time(sc, c, i, rng)
+            if c.pid in kept:
+                t = dt.datetime.fromisoformat(kept[c.pid]["date"])
+            else:
+                rng = random.Random(f"{SEED}|time|{sc.trip}|{sc.city}|{sc.day}|{sc.place}|{c.pid}")
+                t = slot_time(sc, c, i, rng)
             rows.append((c, t, sc.country, sc.city, sc.place, sc.trip, sc.note))
+    for c, t in kept_daily:
+        rows.append((c, t, "中国", "北京", None, "日常", ""))
     target_total = int(sys.argv[sys.argv.index("--total") + 1]) if "--total" in sys.argv else 440
-    daily = daily_assign(cands, used, max(0, target_total - len(rows)), workouts)
+    n_new = max(0, target_total - len(rows)) if fresh else dropped_daily
+    daily = daily_assign(cands, used, n_new, workouts, kept_daily)
     for c, t, place, trip, extra in daily:
         rows.append((c, t, "中国", "北京", place, trip, extra))
         used.add(c.pid)
-    # de-duplicate identical timestamps
-    rows.sort(key=lambda r: (r[1].astimezone(dt.timezone.utc), r[0].pid))
+    # unique timestamps (kept photos keep theirs)
+    rows.sort(key=lambda r: (r[1].astimezone(dt.timezone.utc), r[0].pid not in kept, r[0].pid))
     seen = set()
     fixed = []
     for r in rows:
@@ -838,7 +907,7 @@ def build() -> list[dict]:
             t += dt.timedelta(minutes=1)
         seen.add(t.astimezone(dt.timezone.utc))
         fixed.append((r[0], t, *r[2:]))
-    rows = sorted(fixed, key=lambda r: r[1].astimezone(dt.timezone.utc))
+    rows = sorted(fixed, key=lambda r: (r[1].astimezone(dt.timezone.utc), r[0].pid))
     # write images and records
     img_dir, th_dir = OUT / "photos" / "img", OUT / "photos" / "thumb"
     img_dir.mkdir(parents=True, exist_ok=True)
@@ -857,6 +926,13 @@ def build() -> list[dict]:
             th.thumbnail((360, 360), Image.Resampling.LANCZOS)
             th.save(th_dir / f"{i}.jpg", "JPEG", quality=QUALITY_THUMB, optimize=True)
             w, h = full.size
+        files = {"file": f"photos/img/{i}.jpg", "thumb": f"photos/thumb/{i}.jpg", "width": w, "height": h,
+                 "bytes": (img_dir / f"{i}.jpg").stat().st_size}
+        if c.pid in kept:
+            old = kept[c.pid]
+            rec = {"id": i, **{k: v for k, v in old.items() if k != "id"}} | files
+            recs.append(rec)
+            continue
         name, lat, lon = place_for(city, place, c)
         typ = c.v.get("type") or "自然风光"
         if c.v.get("time") == "夜晚" and typ in ("街景", "建筑", "地标"):
@@ -868,8 +944,7 @@ def build() -> list[dict]:
             "text": _text(cap, t, country, city, name, trip, extra),
             "fields": {"year": str(t.year), "month": f"{t.year}-{t.month:02d}", "country": country, "city": city,
                        "type": typ, "trip": trip},
-            "file": f"photos/img/{i}.jpg", "thumb": f"photos/thumb/{i}.jpg", "width": w, "height": h,
-            "bytes": (img_dir / f"{i}.jpg").stat().st_size,
+            **files,
             "place": {"name": name, "lat": lat, "lon": lon, "country": country, "city": city},
             "caption": cap, "tags": _tags(c, typ),
             "source": {"dataset": "Unsplash Lite", "id": c.pid,
@@ -880,6 +955,8 @@ def build() -> list[dict]:
         recs.append(rec)
     write_jsonl(OUT / "photo.jsonl", recs)
     write_attribution(recs)
+    print(f"[photo] {'fresh build' if fresh else 'incremental'}: kept {len(kept)} previous photos "
+          f"({len(kept_daily)} everyday), added {len(rows) - len(kept)}")
     return recs
 
 
