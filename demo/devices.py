@@ -242,6 +242,9 @@ def _mail_index(mailbox) -> LocalIndex:
         tmp = cache.with_suffix(".tmp.npz")
         np.savez(tmp, days=index.days, **{f"col_{k}": v for k, v in index.cols.items()})
         tmp.replace(cache)
+        for old in cache.parent.glob("*-fields-v*.npz"):  # older field layouts or mailboxes
+            if old != cache:
+                old.unlink(missing_ok=True)
     except OSError:
         pass
     return index

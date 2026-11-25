@@ -25,7 +25,6 @@ import time
 import unittest
 from pathlib import Path
 
-import aiohttp
 
 from demo.tests.fakes import FakeModel
 from demo.tests.fixtures import make_devices
