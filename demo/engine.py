@@ -125,6 +125,7 @@ class Engine:
         self.devices = {}  # deployment key -> the PC (mail) device, as before
         self.tenants = {}  # (deployment key, tenant) -> device
         self.active: Control | None = None
+        self._reprobes: set[asyncio.Task] = set()  # background vision re-checks (see vision())
         self.uploads = {"mail": Uploader("mail", build["upload"], mailbox.path)}
         for kind, upload in (build.get("uploads") or {}).items():
             if kind != "mail" and kind in self.catalog.sets:
@@ -196,7 +197,17 @@ class Engine:
             plain = llm.resolve_endpoint(model, plain_env)
             if llm.vision_probed(hpis) and llm.vision_probed(plain, plain_env):
                 # Known (the server probes at start and every 10 min): no network on the question's path.
-                return llm.vision_cached(hpis) is True and llm.vision_cached(plain, plain_env) is True
+                known = (llm.vision_cached(hpis), llm.vision_cached(plain, plain_env))
+                if None in known:
+                    # The last probe could not tell (server slow or down): ask again in the background,
+                    # so the next photo question gets the answer without waiting for the 10-minute refresh.
+                    task = asyncio.create_task(
+                        asyncio.gather(llm.probe_vision(hpis, refresh=True), llm.probe_vision(plain, env=plain_env, refresh=True),
+                                       return_exceptions=True)
+                    )
+                    self._reprobes.add(task)
+                    task.add_done_callback(self._reprobes.discard)
+                return all(v is True for v in known)
             results = await asyncio.wait_for(
                 asyncio.gather(llm.probe_vision(hpis), llm.probe_vision(plain, env=plain_env)), 4
             )
