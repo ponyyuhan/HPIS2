@@ -1,4 +1,4 @@
-// 面向个人敏感数据的智能问答 — front-end
+// 多端隐私智能问答助手 — front-end
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const NS = "http://www.w3.org/2000/svg";
@@ -1359,17 +1359,17 @@ function archSvg() {
     const n = d.kind === "mail" ? state.status?.mailbox?.emails : d.records;
     return { ...d, i, K, n, aidText: d.aid ? `AID ${d.aid.slice(0, 6)}…` : `匿名 AID ${i + 1}` };
   });
-  // device tiles: 4 × 118 wide with gaps of 10, from x = 68
+  // device tiles: 4 × 116 wide with gaps of 10, from x = 68 to 562
   const tiles = devices
     .map((d) => {
-      const x = 68 + d.i * 128, y = 412;
+      const x = 68 + d.i * 126, y = 412;
       return `<g class="arch-dev a${d.i + 1}">
-      <rect x="${x}" y="${y}" width="118" height="92" rx="14" class="arch-dev__box"/>
+      <rect x="${x}" y="${y}" width="116" height="92" rx="14" class="arch-dev__box"/>
       <circle cx="${x + 25}" cy="${y + 26}" r="16" class="arch-dev__ring"/>
       <use href="${SPRITE}#${d.icon}" x="${x + 16}" y="${y + 17}" width="18" height="18" class="arch-ic arch-dev__ic"/>
       <text x="${x + 50}" y="${y + 31}" class="arch-dev__name">${esc(d.label)}</text>
       <text x="${x + 13}" y="${y + 59}" class="arch-dev__data">${d.K.short}${d.n ? ` · ${wanText(d.n)}${d.K.unit}` : ""}</text>
-      <g class="arch-aid"><rect x="${x + 10}" y="${y + 66}" width="98" height="19" rx="9.5"/><text x="${x + 59}" y="${y + 79.5}" text-anchor="middle">${esc(d.aidText)}</text></g>
+      <g class="arch-aid"><rect x="${x + 10}" y="${y + 66}" width="96" height="19" rx="9.5"/><text x="${x + 58}" y="${y + 79.5}" text-anchor="middle">${esc(d.aidText)}</text></g>
     </g>`;
     })
     .join("");
@@ -1380,13 +1380,17 @@ function archSvg() {
       return `<g class="arch-part a${d.i + 1}"><rect x="${x}" y="${y}" width="135" height="34" rx="9"/><rect x="${x}" y="${y}" width="5" height="34" rx="2.5" class="arch-part__bar"/><text x="${x + 14}" y="${y + 22}" class="arch-part__aid">${esc(d.aidText)}</text><text x="${x + 126}" y="${y + 22}" text-anchor="end" class="arch-part__kind">${d.K.short}</text></g>`;
     })
     .join("");
-  return `<svg viewBox="0 0 1000 630" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="方案架构：手机、PC、车机、手表各以独立匿名 AID 加密上传；提问经 HPIC 与 HPIS 密态检索后作答">
+  return `<svg viewBox="0 0 1000 644" xmlns="http://www.w3.org/2000/svg" font-family="HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="方案架构：手机、PC、车机、手表各以独立匿名 AID 加密上传；提问经 HPIC 与 HPIS 密态检索后作答">
   <defs>
     <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arch-arrow"/></marker>
     <linearGradient id="hpisg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="arch-g0"/><stop offset="1" class="arch-g1"/></linearGradient>
   </defs>
   <line x1="20" y1="300" x2="980" y2="300" class="arch-sep"/>
   <text x="26" y="290" class="arch-side">云</text><text x="26" y="324" class="arch-side">端</text>
+
+  <!-- HPIC 2.0: the trusted compute zone and the anonymous store together, behind both boxes -->
+  <path d="M302 12H968A18 18 0 0 1 986 30V614A18 18 0 0 1 968 632H654A18 18 0 0 1 636 614V296A18 18 0 0 0 618 278H302A18 18 0 0 1 284 260V30A18 18 0 0 1 302 12Z" class="arch-frame"/>
+  <g class="arch-legend"><rect x="300" y="0" width="232" height="24" rx="12"/><text x="416" y="17.5" text-anchor="middle">HPIC 2.0 个人智能计算区</text></g>
 
   ${box(50, 40, 200, 150)}
   <text x="70" y="74" class="arch-h">终端云认证服务</text>
@@ -1414,14 +1418,14 @@ function archSvg() {
   <text x="810" y="500" text-anchor="middle" class="arch-sub">每台设备一个匿名 AID · 互不关联</text>
   ${parts}
 
-  ${box(50, 340, 540, 272)}
-  <text x="70" y="374" class="arch-h">用户端侧设备</text>
-  <text x="70" y="398" class="arch-sub">手机 · PC · 车机 · 手表，各自加密上传 · 本地掌控数据授权使用</text>
+  ${box(50, 340, 530, 272)}
+  <text x="70" y="374" class="arch-h">用户多端设备</text>
+  <text x="70" y="398" class="arch-sub">多端数据各自加密上传 · 本地掌控数据授权使用</text>
   ${tiles}
-  ${chip(68, 518, 152, "数据密钥 DEK", "key")}${chip(230, 518, 152, "检索密钥 SSE", "key")}${chip(392, 518, 178, "向量密钥 VEK", "key")}
-  ${chip(68, 562, 247, "HPIS SDK · 生成目标索引密文", "new")}${chip(323, 562, 247, "HPIS SDK · 密封目标向量", "new")}
+  ${chip(68, 518, 152, "数据密钥 DEK", "key")}${chip(230, 518, 152, "检索密钥 SSE", "key")}${chip(392, 518, 170, "向量密钥 VEK", "key")}
+  ${chip(68, 562, 242, "HPIS SDK · 生成目标索引密文", "new")}${chip(320, 562, 242, "HPIS SDK · 密封目标向量", "new")}
 
-  ${flow("M592 458 L644 458", "① 上传", 618, 446, "middle", 0)}
+  ${flow("M582 458 L644 458", "① 上传", 607, 446, "middle", 0)}
   ${flow("M118 340 L118 196", "② 匿名令牌请求", 128, 270, "start", 0.2)}
   ${flow("M420 340 L420 266", "③ 推理请求 + 数据密钥 + 目标索引/向量密文", 408, 324, "end", 0.4)}
   ${flow("M572 130 L644 130", "④ 密封检索", 610, 120, "middle", 0.6)}
@@ -1444,8 +1448,6 @@ async function poll() {
     $("span", st).textContent = phases[s.phase] || s.phase;
     if (s.mailbox) {
       renderMeta();
-      $("[data-cover=emails]").textContent = intText(s.mailbox.emails);
-      if (s.build?.upload?.bytes) $("[data-cover=upload]").textContent = bytesText(s.build.upload.bytes);
     }
     if (first || (s.presets && s.presets.length !== state.presets.length)) initPresets(s);
     if (first) initModels(s);
@@ -1693,7 +1695,7 @@ function saveRecording() {
   if (!blob.size) return;
   const d = new Date();
   const p2 = (n) => String(n).padStart(2, "0");
-  const name = `面向个人敏感数据的智能问答-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.${type.includes("mp4") ? "mp4" : "webm"}`;
+  const name = `多端隐私智能问答助手-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}.${type.includes("mp4") ? "mp4" : "webm"}`;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
