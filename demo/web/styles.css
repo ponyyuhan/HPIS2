@@ -728,15 +728,15 @@ body.scoreboard main { padding-bottom: 1rem; }
 .cert__meta { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin-top: .45rem; font-size: .78rem; color: var(--muted); }
 .cert__meta code { font-family: var(--mono); font-size: .96em; font-weight: 600; letter-spacing: .02em; color: var(--ink-soft); }
 /* credit line */
-.cover__credit { position: absolute; z-index: 1; left: 7.5vw; right: 7.5vw; bottom: clamp(1.1rem, 3.4vh, 2.5rem); display: flex; flex-wrap: wrap; align-items: center; gap: .55rem .9rem; font-size: .92rem; font-weight: 650; letter-spacing: .16em; color: var(--muted); }
+.cover__credit { position: absolute; z-index: 1; left: 7.5vw; right: 7.5vw; bottom: clamp(1.1rem, 3.4vh, 2.5rem); display: flex; flex-wrap: wrap; align-items: center; gap: .55em .95em; font-size: clamp(1.16rem, 3vw, 1.52rem); font-weight: 650; letter-spacing: .16em; color: var(--muted); }
 .cover__credit-brand, .cover__credit-labs { display: inline-flex; align-items: center; }
-.cover__credit-brand { gap: .5rem; white-space: nowrap; }
-.cover__credit-brand svg { display: block; width: 6.1rem; height: auto; color: #24272a; }
+.cover__credit-brand { gap: .55em; white-space: nowrap; }
+.cover__credit-brand svg { display: block; width: 6.6em; height: auto; color: #24272a; }
 :root[data-theme="dark"] .cover__credit-brand svg { color: #fff; }
-.cover__credit-brand small { font: 550 max(10px, .68rem)/1 var(--mono); letter-spacing: .06em; }
+.cover__credit-brand small { font: 550 .74em/1 var(--mono); letter-spacing: .06em; }
 .cover__credit-labs { gap: .9rem; }
 .cover__credit-labs span { white-space: nowrap; }
-.cover__credit i { width: 2.6rem; height: 2px; border-radius: 2px; background: var(--grad); }
+.cover__credit i { width: 2.8em; height: .14em; border-radius: 2px; background: var(--grad); }
 @media (max-width: 600px) {
   .cover__credit { display: grid; grid-template-columns: auto 1fr; }
   .cover__credit-labs { grid-column: 1 / -1; flex-wrap: wrap; gap: .25rem .65rem; }
@@ -804,9 +804,10 @@ body.scoreboard main { padding-bottom: 1rem; }
   .bcard, .bcard--third { grid-column: span 12; }
   .roadmap { grid-column: span 1; }
   .brand__name { display: none; }
-  .cover { grid-template-columns: 1fr; }
+  .cover { grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr auto auto; row-gap: 1.1rem; padding-block: 1.1rem clamp(1.1rem, 3.4vh, 2.5rem); overflow-y: auto; }
   .cover__visual { display: none; }
   .cover__side { justify-items: start; }
+  .cover__credit { position: static; }
 }
 
 .device__idle { color: var(--dim); font-size: .85rem; }
