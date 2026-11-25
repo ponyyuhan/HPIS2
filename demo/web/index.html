@@ -8,7 +8,7 @@
 <script>/* theme before first paint: ?theme=light|dark, else the last choice, else dark */
 try { var t = new URLSearchParams(location.search).get("theme") || localStorage.getItem("hpis-theme"); document.documentElement.dataset.theme = t === "light" ? "light" : "dark"; } catch (e) {}
 </script>
-<link rel="stylesheet" href="/styles.css?v=21">
+<link rel="stylesheet" href="/styles.css?v=22">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -73,7 +73,11 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
       </div>
     </aside>
   </div>
-  <footer class="cover__credit"><i></i><span>数据保护技术实验室</span><em></em><span>安全与隐私保护技术实验室</span></footer>
+  <footer class="cover__credit">
+    <span class="cover__credit-brand"><svg viewBox="0 0 1275.5 287" role="img" aria-label="华为"><use href="/assets/huawei.svg#huawei"/></svg><small>CN-DE</small></span>
+    <i aria-hidden="true"></i>
+    <span class="cover__credit-labs"><span>数据保护技术实验室</span><em aria-hidden="true"></em><span>安全与隐私保护技术实验室</span></span>
+  </footer>
 </section>
 
 <!-- ============================== Shell ============================== -->
@@ -184,8 +188,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
 <!-- ============================== Benchmark ============================== -->
 <section class="tab-pane" id="pane-bench">
   <div class="pane-head">
-    <h2>Linux 验收：密文检索 vs 明文检索</h2>
-    <p id="bench-sub">同一台 Linux 服务器、同一条请求链路，明文与密文请求交替配对执行。</p>
+    <h2>密文检索 vs 明文检索</h2>
   </div>
   <div class="bench" id="bench"></div>
 </section>
@@ -217,6 +220,6 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=21"></script>
+<script type="module" src="/app.js?v=22"></script>
 </body>
 </html>

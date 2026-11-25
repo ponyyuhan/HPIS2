@@ -1312,7 +1312,7 @@ async function loadBench() {
   const head = data.headline || {};
   const worst = Math.max(...sc.filter((s) => s.headline !== false).map((s) => s.overhead_pct));
   let html = `<div class="bhero card"><div class="bhero__big">${worst < 10 ? "&lt;10%" : worst.toFixed(1) + "%"}</div>
-    <div class="bhero__txt"><h3>${esc(head.title || "全部密文检索场景的时延损耗均低于 10%")}</h3><p>${esc(head.subtitle || "")}</p></div></div>`;
+    <div class="bhero__txt"><h3>${esc(head.title || "全部密文检索场景的时延损耗均低于 10%")}</h3></div></div>`;
   for (const s of sc.filter((x) => x.headline !== false)) {
     const ov = s.overhead_pct, ci = s.ci95 || [ov, ov];
     const scale = (v) => Math.max(0, Math.min(100, ((v + 2) / 14) * 100));
@@ -1323,14 +1323,6 @@ async function loadBench() {
       <div class="bbar"><div class="bbar__zero" style="left:${scale(0)}%"></div><div class="bbar__fill" data-w="${scale(ov)}"></div><div class="bbar__ci" style="left:${scale(ci[0])}%;width:${Math.max(0.5, scale(ci[1]) - scale(ci[0]))}%"></div><div class="bbar__limit" style="left:${scale(10)}%"><span>10% 上限</span></div></div>
       <div class="bnums"><div><label>明文均值</label><b>${s.plaintext_mean_ms.toFixed(3)} ms</b></div><div><label>密文均值</label><b>${s.cipher_mean_ms.toFixed(3)} ms</b></div><div><label>${esc(s.correctness_label || "正确性")}</label><b>${esc(s.correctness || "—")}</b></div></div>
     </div>`;
-  }
-  if (data.io) {
-    const io = data.io;
-    const mx = Math.log10(Math.max(...io.rows.map((r) => r.bytes)) + 1);
-    const top = Math.max(...io.rows.map((r) => r.bytes));
-    html += `<div class="bcard bcard--wide card"><h4>${esc(io.title || "每次查询读出的数据量")}<span class="tag">对数刻度</span></h4>${io.desc ? `<p class="desc">${esc(io.desc)}</p>` : ""}<div class="io">${io.rows
-      .map((r) => `<div class="io__row"><span>${esc(r.label)}</span><div class="io__bar"><i data-w="${(Math.log10(r.bytes + 1) / mx) * 100}" style="background:${r.color || "var(--io-good)"}"></i></div><b>${bytesText(r.bytes)}${r.bytes < top ? `<em class="io__ratio">1/${intText(Math.round(top / Math.max(1, r.bytes)))}</em>` : ""}</b></div>`)
-      .join("")}</div></div>`;
   }
   host.innerHTML = html;
   requestAnimationFrame(() => {
@@ -1404,7 +1396,7 @@ function archSvg() {
   <text x="320" y="98" class="arch-sub">无状态 · 只在本次请求内持有密钥</text>
   ${chip(320, 114, 230, "匿名票据校验 · 转发")}
   ${chip(320, 158, 230, "解密命中的 K 条记录", "key")}
-  ${chip(320, 210, 230, "业务模型 Qwen / Gemma", "model")}
+  ${chip(320, 210, 230, "业务模型", "model")}
   <text x="435" y="204" text-anchor="middle" class="arch-sub">⑥ 上下文 ↓</text>
 
   <rect x="650" y="40" width="320" height="572" rx="20" fill="url(#hpisg)" class="arch-hpis"/>

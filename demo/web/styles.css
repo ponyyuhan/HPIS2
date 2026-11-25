@@ -722,9 +722,20 @@ body.scoreboard main { padding-bottom: 1rem; }
 .cert__meta { display: flex; flex-wrap: wrap; gap: .2rem 1.1rem; margin-top: .45rem; font-size: .78rem; color: var(--muted); }
 .cert__meta code { font-family: var(--mono); font-size: .96em; font-weight: 600; letter-spacing: .02em; color: var(--ink-soft); }
 /* credit line */
-.cover__credit { position: absolute; z-index: 1; left: 7.5vw; bottom: clamp(1.1rem, 3.4vh, 2.5rem); display: flex; align-items: center; gap: .9rem; font-size: .92rem; font-weight: 650; letter-spacing: .16em; color: var(--muted); }
+.cover__credit { position: absolute; z-index: 1; left: 7.5vw; right: 7.5vw; bottom: clamp(1.1rem, 3.4vh, 2.5rem); display: flex; flex-wrap: wrap; align-items: center; gap: .55rem .9rem; font-size: .92rem; font-weight: 650; letter-spacing: .16em; color: var(--muted); }
+.cover__credit-brand, .cover__credit-labs { display: inline-flex; align-items: center; }
+.cover__credit-brand { gap: .5rem; white-space: nowrap; }
+.cover__credit-brand svg { display: block; width: 6.1rem; height: auto; color: #24272a; }
+:root[data-theme="dark"] .cover__credit-brand svg { color: #fff; }
+.cover__credit-brand small { font: 550 max(10px, .68rem)/1 var(--mono); letter-spacing: .06em; }
+.cover__credit-labs { gap: .9rem; }
+.cover__credit-labs span { white-space: nowrap; }
 .cover__credit i { width: 2.6rem; height: 2px; border-radius: 2px; background: var(--grad); }
 .cover__credit em { width: 1px; height: 1.05em; background: var(--line-2); }
+@media (max-width: 600px) {
+  .cover__credit { display: grid; grid-template-columns: auto 1fr; }
+  .cover__credit-labs { grid-column: 1 / -1; flex-wrap: wrap; gap: .25rem .65rem; }
+}
 .orb::before { content: ""; position: absolute; inset: 14%; border-radius: 50%; background: radial-gradient(circle at 50% 40%, #ffffff, rgba(255,255,255,.55) 45%, rgba(255,255,255,0) 72%); }
 .orb::after { content: ""; position: absolute; z-index: 1; inset: 31%; border-radius: 50%; background: #fff; box-shadow: 0 30px 60px -20px rgba(16,162,140,.45), 0 0 0 1px rgba(12,143,124,.12); }
 .orb__ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(12,143,124,.22); }
