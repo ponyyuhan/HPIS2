@@ -1,4 +1,4 @@
-// Dev-only fixture: ?mock=1 (or photo / sport / car) on the page URL.
+// Dev-only fixture: ?mock=1 on the page URL (?mock=edge adds a lane notice and a model timeout).
 //
 // Serves sample data for what the backend is adding (PLAN-v3 §3: devices, photo / sport / car runs,
 // records, photos, the multi-tenant HPIS view), so the page can be checked before the backend has it.
@@ -7,6 +7,7 @@
 
 const realFetch = window.fetch.bind(window);
 const enc = new TextEncoder();
+let MODE = "1";
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -163,7 +164,8 @@ function mockRun(body, kind, preset) {
   at(t + 400, { type: "search", lane: "plain", scanned: total, candidates: Math.min(100, total), edge_up: bytes + 2400 });
   at(t + 1500, { type: "evidence", lane: "plain", items: ev });
   const pend = tok("plain", t + 2600);
-  at(pend, { type: "finish", lane: "plain", ttft_ms: t + 2600, total_ms: pend, edge_up: bytes + 2400, edge_down: 9800 });
+  if (MODE === "edge") at(t + 1200, { type: "notice", lane: "plain", text: "普通云 6 秒内只为 64 条候选现算了向量，仅在这些记录中排序" });
+  at(pend, { type: "finish", lane: "plain", ttft_ms: t + 2600, total_ms: pend, edge_up: bytes + 2400, edge_down: 9800, ...(MODE === "edge" ? { timed_out: true } : {}) });
   const last = Math.max(v2end, pend);
   at(last + 300, { type: "verify", plain_ms: 4.12, cipher_ms: 4.31, plain_p25_ms: 3.98, cipher_p25_ms: 4.15, overhead_pct: 4.27, identical: true, k: 10, pairs: 60 });
   at(last + 320, { type: "end" });
@@ -251,7 +253,8 @@ async function handle(url, init) {
   return null;
 }
 
-export function install() {
+export function install(mode) {
+  MODE = mode;
   window.HPIS_MOCK = { photoUrl };
   window.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input.url, location.href);

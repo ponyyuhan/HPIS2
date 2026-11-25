@@ -301,6 +301,7 @@ function buildLanes() {
     const el = document.createElement("article");
     el.className = `lane card lane--${id}`;
     el.dataset.lane = id;
+    el.dataset.kind = "mail";
     // the band on top says what the cloud gets, and its ticker shows it: plaintext on the left, ciphertext on the right
     el.innerHTML = `
       <div class="lane__ribbon">${ICON(cfg.ribbonIcon)}<span class="lane__id">${cfg.ribbon}</span><div class="ticker"><span class="ticker__track ${id === "plain" ? "bad" : "mono"}" data-ticker></span></div></div>
@@ -736,9 +737,10 @@ function handle(ev, question) {
       break;
     }
     case "sealed": {
-      dchip("SSE 检索令牌", ev.tokens.length ? ev.tokens[0].slice(0, 16) + "…" : "无", true);
+      const tokens = ev.tokens || [];
+      dchip("SSE 检索令牌", tokens.length ? tokens[0].slice(0, 16) + "…" : "无", true);
       dchip("密封请求", bytesText(ev.bytes));
-      setTicker("v2", `匿名标识 AID · 检索令牌 ${ev.tokens.map((x) => x.slice(0, 12)).join(" ")} · 密封目标向量 ${ev.preview} · 正文 AES-256-GCM 密文`);
+      setTicker("v2", `匿名标识 AID · 检索令牌 ${tokens.map((x) => x.slice(0, 12)).join(" ")} · 密封目标向量 ${ev.preview || ""} · 正文 AES-256-GCM 密文`);
       break;
     }
     case "stage": {
@@ -1045,14 +1047,16 @@ function mosaic(hex) {
 async function cipherView() {
   const body = $("#drawer-body");
   const { kind, id } = drawer;
+  const still = () => drawer.id === id && $(".drawer__seg .active")?.dataset.view === "cipher";
+  body.innerHTML = `<div class="cipherview cipherview--wait">${ICON("database")}<span>正在读取 HPIS 存储文件…</span></div>`;
   let c;
   try {
     c = await getJSON(kind === "mail" ? `/api/cipher/${id}` : `/api/cipher/${id}?kind=${kind}`);
   } catch {
-    body.innerHTML = `<div class="cipherview"><p class="muted" style="font-family:var(--cn)">暂时无法读取 HPIS 中的这条记录。</p></div>`;
+    if (still()) body.innerHTML = `<div class="cipherview"><p class="muted" style="font-family:var(--cn)">暂时无法读取 HPIS 中的这条记录。</p></div>`;
     return;
   }
-  if (drawer.id !== id) return;
+  if (!still()) return;
   const K = kindOf(kind);
   let pic = "";
   if (kind === "photo") {
@@ -1162,10 +1166,12 @@ function renderPlainRows(q = "", hits = null) {
     })
     .join("");
 }
+// which of the owner's devices a tenant is (status.devices[].aid against the tenant's AID or its short form)
 function ownerOf(t) {
+  const key = String(t.aid || aidKey(t)).replace(/[^0-9a-f]/gi, "");
   for (const d of DEVICE_ORDER) {
     const dev = deviceOf(d);
-    if (dev.aid && t.aid && (dev.aid === t.aid || dev.aid.startsWith(t.aid) || t.aid.startsWith(dev.aid))) return `${OWNER} · ${dev.label}`;
+    if (dev.aid && key && (dev.aid.startsWith(key) || key.startsWith(dev.aid))) return `${OWNER} · ${dev.label}`;
   }
   return OWNER;
 }
