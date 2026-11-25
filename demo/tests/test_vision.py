@@ -70,7 +70,9 @@ class VisionProbeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_ollama_capabilities(self) -> None:
         env = {**self.env, "HPIS_LLM_QWEN_MODEL": "qwen3.8:27b", "HPIS_LLM_GEMMA_MODEL": "gemma4:12b"}
+        self.assertFalse(llm.vision_probed("qwen", env=env))
         self.assertTrue(await llm.probe_vision("qwen", env=env))
+        self.assertTrue(llm.vision_probed("qwen", env=env))  # a question then reads the cache, no network
         self.assertFalse(await llm.probe_vision("gemma", env=env))
         self.assertTrue(llm.vision_cached("qwen", env=env))
         rows = {r["id"]: r for r in llm.describe_profiles(env)}

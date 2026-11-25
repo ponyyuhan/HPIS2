@@ -194,6 +194,9 @@ class Engine:
             hpis = llm.resolve_endpoint(model)
             plain_env = llm.lane_env("plain")
             plain = llm.resolve_endpoint(model, plain_env)
+            if llm.vision_probed(hpis) and llm.vision_probed(plain, plain_env):
+                # Known (the server probes at start and every 10 min): no network on the question's path.
+                return llm.vision_cached(hpis) is True and llm.vision_cached(plain, plain_env) is True
             results = await asyncio.wait_for(
                 asyncio.gather(llm.probe_vision(hpis), llm.probe_vision(plain, env=plain_env)), 4
             )

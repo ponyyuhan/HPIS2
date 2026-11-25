@@ -139,7 +139,7 @@ async def warm_models():
     from . import llm
 
     try:
-        await llm.probe_vision_all()
+        await llm.probe_vision_all(refresh=True)  # renewed with every warm-up (10 min)
     except Exception:
         traceback.print_exc()
     try:

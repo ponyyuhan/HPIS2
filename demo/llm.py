@@ -1075,7 +1075,6 @@ async def probe(
 
 # ------------------------------------------------------------------ vision
 
-VISION_TTL = 600.0
 _VISION: dict[tuple[str, str], tuple[float, bool | None]] = {}
 
 
@@ -1100,6 +1099,15 @@ def vision_cached(profile: str | Endpoint | Mapping[str, Any], env: Mapping[str,
         return None
     hit = _VISION.get((ep.base_url, ep.model))
     return hit[1] if hit else None
+
+
+def vision_probed(profile: str | Endpoint | Mapping[str, Any], env: Mapping[str, str] | None = None) -> bool:
+    """Whether this endpoint was probed already (its answer may still be "cannot tell")."""
+    try:
+        ep = resolve_endpoint(profile, env)
+    except LLMConfigError:
+        return True
+    return (ep.base_url, ep.model) in _VISION
 
 
 def _modalities(arch: Any) -> bool | None:
@@ -1136,8 +1144,8 @@ async def probe_vision(
         return None
     key = (ep.base_url, ep.model)
     hit = _VISION.get(key)
-    if hit and hit[1] is not None and not refresh and time.monotonic() - hit[0] < VISION_TTL:
-        return hit[1]
+    if hit and hit[1] is not None and not refresh:
+        return hit[1]  # a question never waits for the network; refresh=True renews it in the background
     if not (ep.is_ollama or ep.is_openrouter or ep.kind == "openrouter"):
         return None  # vLLM does not say; HPIS_LLM_VISION=1 turns images on
     headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
@@ -1175,7 +1183,7 @@ async def probe_vision(
     return result
 
 
-async def probe_vision_all(env: Mapping[str, str] | None = None) -> dict[str, bool | None]:
+async def probe_vision_all(env: Mapping[str, str] | None = None, *, refresh: bool = False) -> dict[str, bool | None]:
     """Vision of every profile on both lanes' servers: {profile: True only if both accept images}."""
     out: dict[str, bool | None] = {}
     for name in PROFILES:
@@ -1184,7 +1192,7 @@ async def probe_vision_all(env: Mapping[str, str] | None = None) -> dict[str, bo
         except LLMConfigError:
             out[name] = None
             continue
-        results = [await probe_vision(ep, env=env) for _, ep in lanes]
+        results = [await probe_vision(ep, env=env, refresh=refresh) for _, ep in lanes]
         out[name] = None if any(r is None for r in results) else all(results)
     return out
 
