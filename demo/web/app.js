@@ -1097,10 +1097,11 @@ function renderProv() {
   const records = devs.reduce((a, d) => a + (d.records || 0), 0) || b.emails;
   const secs = (tee.seconds || 0) + Object.values(b.kinds || {}).reduce((a, k) => a + (k.seconds?.tee || 0), 0);
   const what = multi ? "数据" : "邮件";
+  const wanPlus = (n) => (n >= 1e4 ? `${Math.floor(n / 1e4)}万+` : intText(n)); // 106,081 -> 10万+
   // Upload per question: the whole mailbox versus one sealed request of about 3 KB.
   $("#prov").innerHTML = `
     <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>${multi ? "多端数据只在开通时加密上传一次" : "邮箱只在开通时加密上传一次"}</small></div></div>
-    <div><b>${intText(records)}</b><span>${multi ? "条多端数据在终端加密后存入 HPIS" : "封邮件在终端加密后存入 HPIS"}</span></div>
+    <div><b>${wanPlus(records)}</b><span>${multi ? "条多端数据在终端加密后存入 HPIS" : "封邮件在终端加密后存入 HPIS"}</span></div>
     <div><b>${secs ? secs.toFixed(0) + " s" : "—"}</b><span>一次性预置用时：加密全部${what}，生成检索令牌与向量密文</span></div>
     <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 中的全部存储：${what}密文与密文索引</span></div>
     <div class="prov__x"><b>万倍+</b><div class="prov__cmp"><em>每次提问上传云端的数据量</em>
