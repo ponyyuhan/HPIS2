@@ -385,17 +385,33 @@ class Engine:
         )
 
     async def _relay(self, emit, run: Run, lane: str, request_cm, edge, edge_up: int):
-        """Read the NDJSON stream from HPIC / the cloud and forward normalized events."""
+        """Read the NDJSON stream from HPIC / the cloud and forward normalized events.
+
+        Each event reaches the device one downlink latency after the sender wrote it. The sender stamps
+        its events with its own clock (``hpic_ms`` / ``cloud_ms``, from when the request arrived); the
+        first event places that clock on ours, and every event is released at its send time plus the
+        latency. Sleeping the latency once and then forwarding whatever had arrived meanwhile gave a
+        search, decryption and evidence that finish within the latency (a few ms on a fast server) one
+        and the same time, so the page showed 密态检索 0.00 s.
+        """
         received = 0
         first_token = None
         timed_out = stopped = False
+        latency = edge.rtt_ms / 2000
+        origin = None  # where the sender's zero sits on our clock
+        shift = latency  # an unstamped stream: one latency up front, then as it arrives
         async with request_cm as response:
             response.raise_for_status()
-            delayed = False
             async for size, ev in _iter_ndjson(response):
-                if not delayed:
-                    await asyncio.sleep(edge.rtt_ms / 2000)  # downlink latency
-                    delayed = True
+                sent = ev.get("hpic_ms", ev.get("cloud_ms"))
+                if origin is None:
+                    origin = now() - (sent or 0) / 1000  # same host: the first event arrives as it is written
+                if sent is not None:
+                    wait = origin + sent / 1000 + latency - now()
+                else:
+                    wait, shift = shift, 0
+                if wait > 0:
+                    await asyncio.sleep(min(wait, latency + 1))
                 received += size
                 kind = ev.pop("ev")
                 if kind == "token":

@@ -124,10 +124,11 @@ function tweenTo(el, value, render, dur = 650) {
 })();
 const renderBytes = (el, v) => { const [a, b] = bytes(v); el.innerHTML = `${a}<small>${b}</small>`; };
 const renderSecs = (el, v) => { const [a, b] = secs(v); el.innerHTML = `${a}<small>${b}</small>`; };
-// Stage times: each boundary is rounded to 0.01 s once and a stage is the gap between two rounded
-// boundaries, so the stages on screen add up exactly to the total.
-const cs = (ms) => Math.round(ms / 10);
-const csText = (c) => `${(c / 100).toFixed(2)} s`;
+// Stage times: each boundary is rounded to 1 ms once and a stage is the gap between two rounded
+// boundaries, so the stages on screen add up exactly to the total. Milliseconds, because the
+// encrypted search takes only a few of them (at 0.01 s it would read 0.00 s).
+const msr = (ms) => Math.round(ms);
+const msText = (m) => `${(m / 1000).toFixed(3)} s`;
 
 // ------------------------------------------------------------------ lane config
 const LANES = {
@@ -334,7 +335,7 @@ function setTotal(id, ms) {
   const b = $("b", li);
   li.classList.add("done");
   b.classList.remove("ticking", "pop");
-  b.textContent = csText(cs(ms));
+  b.textContent = msText(msr(ms));
   void b.offsetWidth;
   b.classList.add("pop");
 }
@@ -376,7 +377,7 @@ function stage(id, key, phase, t, label) {
     L.ends[key] = t;
     const keys = L.cfg.stages.map(([k]) => k);
     const prev = keys.slice(0, keys.indexOf(key)).reverse().map((k) => L.ends[k]).find((v) => v != null) ?? 0;
-    $("b", li).textContent = csText(Math.max(0, cs(t) - cs(prev)));
+    $("b", li).textContent = msText(Math.max(0, msr(t) - msr(prev)));
   }
 }
 function setTicker(id, text) {
@@ -581,7 +582,7 @@ async function run() {
       const L = lane(id);
       if (!L || L.done) continue;
       const b = $("[data-total] b", L.el);
-      b.textContent = csText(cs(el));
+      b.textContent = msText(msr(el));
       b.classList.add("ticking");
     }
   }, 60);
@@ -913,8 +914,8 @@ function verdict() {
     tiles.push({ big: `${share < 0.1 ? share.toFixed(2) : share.toFixed(1)}<small>%</small>`, title: "HPIS 只读命中密文", sub: `${V2.decryptRows} / ${intText(total)} ${K.unit} · 云内 ${bytesText(V2.m.cloud)}` });
   }
   if (P.final.total_ms && V2.final.total_ms) {
-    const pt = cs(P.final.total_ms), vt = cs(V2.final.total_ms);
-    const ratio = pt / Math.max(1, vt), sub = `普通云 ${csText(pt)} → ${csText(vt)}`;
+    const pt = msr(P.final.total_ms), vt = msr(V2.final.total_ms);
+    const ratio = pt / Math.max(1, vt), sub = `普通云 ${msText(pt)} → ${msText(vt)}`;
     // Small collections (a watch or car log) upload in a blink: then the two lanes take about as long,
     // and the tile says so instead of "1.0× faster".
     if (ratio >= 1.1) tiles.push({ big: fold(ratio), title: "完整回答更快", sub });
