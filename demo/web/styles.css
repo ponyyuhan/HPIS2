@@ -254,12 +254,12 @@ main { position: relative; z-index: 1; padding: 1.5rem 2.2rem 3rem; max-width: 2
 .btn--stop:hover { background: var(--risk-tint); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--risk) 80%, transparent); }
 .btn--stop .i { width: .9em; height: .9em; }
 /* presets: the four devices at the far left (a fixed marker: the data is multi-device), then the questions by scene */
-.presets.grouped { gap: .5rem .8rem; }
+.presets.grouped { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5rem .9rem; }
+.pscenes { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.3rem; padding-left: .9rem; border-left: 1px solid var(--line-2); }
 .pgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
-.pgroup + .pgroup { padding-left: .8rem; border-left: 1px solid var(--line-2); }
-.pdevs { display: inline-flex; align-items: center; padding: .32rem .35rem; border: 1px solid var(--line-2); border-radius: 999px; background: var(--well); }
-.pdev { display: inline-flex; align-items: center; gap: .28rem; padding: 0 .5rem; font-size: .84rem; font-weight: 720; color: var(--ink-soft); white-space: nowrap; }
-.pdev + .pdev { border-left: 1px solid var(--line-2); }
+.pdevs { display: grid; grid-template-columns: repeat(2, auto); align-content: center; gap: .35rem 0; padding: .35rem .2rem; border: 1px solid var(--line-2); border-radius: 14px; background: var(--well); }
+.pdev { display: inline-flex; align-items: center; gap: .28rem; padding: .05rem .5rem; font-size: .84rem; font-weight: 720; color: var(--ink-soft); white-space: nowrap; }
+.pdev:nth-child(even) { border-left: 1px solid var(--line-2); }
 .pdev .i { width: 1.05em; height: 1.05em; color: var(--v2); }
 .pscene { display: inline-flex; align-items: center; gap: .3rem; padding: 0 .15rem; font-size: .84rem; font-weight: 760; color: var(--ink-soft); white-space: nowrap; }
 .pscene .i { width: 1.1em; height: 1.1em; color: var(--v2); }
@@ -768,12 +768,12 @@ body.scoreboard main { padding-bottom: 1rem; }
   .topbar { gap: 1rem; }
   .tabs button { padding: .48rem 1.05rem; }
   /* presets: the devices show their icon only (the name is in the tooltip), chips a little tighter */
-  .pdev { font-size: 0; gap: 0; padding: 0 .35rem; }
+  .pdev { font-size: 0; gap: 0; padding: .1rem .42rem; }
   .pdev .i { width: 1.1rem; height: 1.1rem; }
   .presets { gap: .4rem; }
-  .presets.grouped { gap: .4rem .55rem; }
+  .presets.grouped { gap: .4rem .6rem; }
+  .pscenes { gap: .4rem .9rem; padding-left: .6rem; }
   .pgroup { gap: .38rem; }
-  .pgroup + .pgroup { padding-left: .55rem; }
   .presets.grouped .preset { gap: .38rem; padding: .36rem .75rem .36rem .4rem; }
   .arch { grid-template-columns: 1.9fr 1fr; }
   .tech { padding: 1.05rem 1.2rem; }

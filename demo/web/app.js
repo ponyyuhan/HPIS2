@@ -1527,14 +1527,15 @@ function initPresets(s) {
     $("#presets").innerHTML = order.map(chip).join("");
   } else {
     const devs = STRIP_DEVICES.filter((d) => list.some((p) => devOf(p) === d));
-    let html = `<span class="pgroup"><span class="pdevs" title="多端数据">${devs
+    // two devices above, two below, beside the two rows of questions
+    let html = `<span class="pdevs" title="多端数据">${devs
       .map((d) => `<span class="pdev">${ICON(deviceOf(d).icon)}${esc(deviceOf(d).label)}</span>`)
-      .join("")}</span></span>`;
+      .join("")}</span><span class="pscenes">`;
     for (const sc of SCENES) {
       const items = order.map((p, i) => [p, i]).filter(([p]) => sceneOf(p) === sc.id);
       if (items.length) html += `<span class="pgroup"><span class="pscene" title="${sc.hint}">${ICON(sc.icon)}${sc.label}</span>${items.map(([p, i]) => chip(p, i)).join("")}</span>`;
     }
-    $("#presets").innerHTML = html;
+    $("#presets").innerHTML = html + "</span>";
   }
   $("#presets").classList.toggle("grouped", grouped);
   if (state.presets.length && !$("#question").value) selectPreset(0);
