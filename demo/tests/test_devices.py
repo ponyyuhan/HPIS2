@@ -124,7 +124,8 @@ class DevicesTest(unittest.TestCase):
         for kind in ("mail", "photo", "sport", "car"):
             upload = info["uploads"][kind]
             self.assertTrue(upload["batches"])
-            self.assertTrue(all((build.UPLOAD_DIR / b).exists() for b in upload["batches"]))
+            self.assertEqual(upload["bytes"], sum(b["bytes"] for b in upload["batches"]))
+        self.assertFalse(build.UPLOAD_DIR.exists())  # no second plaintext copy in the runtime
         self.assertGreater(info["uploads"]["photo"]["image_bytes"], 0)
         from demo.tests.fixtures import car_records, photo_records, sport_records
 

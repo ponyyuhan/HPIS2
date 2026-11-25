@@ -63,6 +63,7 @@ def index_fields(mail: dict) -> dict:
         "year": year,
         "quarter": f"{year}Q{(month - 1) // 3 + 1}",
         "month": mail["date"][:7],
+        "day": mail["date"][:10],
         "category": mail.get("category") or "",
     }
     for i, name in enumerate(people_of(mail)):

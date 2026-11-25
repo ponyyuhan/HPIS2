@@ -38,11 +38,11 @@ import numpy as np
 from hpis.codec import pack, unit_vectors, unpack
 
 from . import config, planner
-from .build import UPLOAD_DIR
 from .cluster import Cluster, device_tenants
 from .devices import BY_KIND, Catalog
 from .mailbox import Mailbox
 from .netem import now, pace
+from .uploads import Uploader
 
 
 class Embedder:
@@ -125,11 +125,11 @@ class Engine:
         self.devices = {}  # deployment key -> the PC (mail) device, as before
         self.tenants = {}  # (deployment key, tenant) -> device
         self.active: Control | None = None
-        self.batches = [UPLOAD_DIR / name for name in build["upload"]["batches"]]
-        self.uploads = {"mail": self.batches}
+        self.uploads = {"mail": Uploader("mail", build["upload"], mailbox.path)}
         for kind, upload in (build.get("uploads") or {}).items():
-            if kind != "mail":
-                self.uploads[kind] = [UPLOAD_DIR / name for name in upload["batches"]]
+            if kind != "mail" and kind in self.catalog.sets:
+                rs = self.catalog.sets[kind]
+                self.uploads[kind] = Uploader(kind, upload, rs.path, rs)
 
     async def open(self):
         for key in self.cluster.hpic_url:
@@ -255,6 +255,9 @@ class Engine:
         batches = self.uploads[kind]
         edge = net.edge
         sent = 0
+        loop = asyncio.get_running_loop()
+        # Batches are packed from the data files; the next one is packed while this one is sent.
+        pending = loop.run_in_executor(None, batches.load, 0) if len(batches) else None
         async with self.cluster.cloud_session() as cloud:
             emit({"lane": lane, "type": "stage", "stage": "upload", "state": "start", "batches": len(batches)})
             t0 = now()
@@ -264,10 +267,11 @@ class Engine:
                 ctl.plain_sid = (await r.json())["sid"]
             sid = ctl.plain_sid
             await pace(t0, edge, 64, legs=2)
-            for i, path in enumerate(batches):
+            for i in range(len(batches)):
                 if ctl.cancelled:
                     raise asyncio.CancelledError()
-                blob = await asyncio.to_thread(path.read_bytes)
+                blob = await pending
+                pending = loop.run_in_executor(None, batches.load, i + 1) if i + 1 < len(batches) else None
                 t0 = now()
                 async with cloud.post(
                     f"{self.cluster.cloud_url}/upload/{sid}", data=blob, server_hostname="hpic.internal"

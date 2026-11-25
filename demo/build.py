@@ -32,23 +32,22 @@ import time
 from contextlib import closing
 from pathlib import Path
 
-import msgpack
 import numpy as np
 
 from hpis.provision import enroll, read_config
 from hpis.provision import init as provision
 
-from . import config, records, retrieval
+from . import config, records, retrieval, uploads
 from .cluster import DEPLOYMENTS, Cluster, deploy_root, device_folder
 from .devices import BY_KIND, OTHER_KINDS, Catalog, RecordSet
 from .mailbox import Mailbox
 
 BUILD_FILE = config.RUNTIME / "build.json"
-UPLOAD_DIR = config.RUNTIME / "upload"
+UPLOAD_DIR = config.RUNTIME / "upload"  # stored batches of format 2 (removed on update)
 BETA = 0.25
 BUILD_VERSION = 3  # 3: four device tenants + decoy tenants (v2 and older: mail only)
-UPLOAD_FORMAT = 2  # mail: email JSON only (content + attachments), no device vectors
-KIND_UPLOAD_FORMAT = 1  # other kinds: record JSON (+ [JSON, picture] for photos)
+INDEX_VERSION = 2  # SSE labels per record; 2 adds day labels (exact date windows)
+UPLOAD_FORMAT = uploads.FORMAT  # batches packed on the fly from the data files
 DECOY_VERSION = 1
 DECOY_SIZES = (2400, 1300, 3100, 900, 1800, 2700, 1100, 1600)  # records per decoy tenant
 DECOY_PREFIX = "decoy-"
@@ -81,18 +80,12 @@ def _read_build() -> dict | None:
     return None
 
 
-def _uploads_present(build: dict) -> bool:
-    for upload in (build.get("uploads") or {}).values():
-        for name in upload.get("batches") or []:
-            if not (UPLOAD_DIR / name).exists():
-                return False
-    return True
-
-
 def current_build(catalog: Catalog | None = None):
     """The build on disk if it matches the data exactly (else None: ``build`` will update it)."""
     build = _read_build()
     if not build or build.get("version") != BUILD_VERSION or build.get("signature") != data_signature():
+        return None
+    if build.get("index") != INDEX_VERSION:
         return None
     if (build.get("upload") or {}).get("format") != UPLOAD_FORMAT:
         return None
@@ -105,8 +98,8 @@ def current_build(catalog: Catalog | None = None):
     for kind, rs in catalog.sets.items():
         if kinds[kind].get("signature") != rs.signature():
             return None
-    if not _uploads_present(build):
-        return None
+        if (build.get("uploads") or {}).get(kind, {}).get("format") != UPLOAD_FORMAT:
+            return None
     return build
 
 
@@ -246,78 +239,13 @@ def decoy_items(mailbox: Mailbox, vectors: np.ndarray, size: int, seed: int):
 
 
 def build_upload(mailbox: Mailbox, progress) -> dict:
-    """Plain-cloud upload batches: exactly the emails (headers, body, attachments as text)."""
-    for old in UPLOAD_DIR.glob("batch-*.bin"):
-        old.unlink()
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    batch, size, files, total, text_bytes = [], 0, [], 0, 0
-
-    def flush():
-        nonlocal batch, size, total
-        if not batch:
-            return
-        blob = msgpack.packb(batch, use_bin_type=True)
-        path = UPLOAD_DIR / f"batch-{len(files):04d}.bin"
-        path.write_bytes(blob)
-        files.append(path.name)
-        total += len(blob)
-        batch, size = [], 0
-
-    for i, raw in enumerate(mailbox.iter_lines()):
-        text = raw.rstrip(b"\n")
-        text_bytes += len(text)
-        size += len(text) + 8
-        batch.append(text)
-        if size >= config.UPLOAD_BATCH_BYTES - 64 * 1024:
-            flush()
-            progress("upload", i + 1)
-    flush()
-    return {"format": UPLOAD_FORMAT, "batches": files, "bytes": total, "text_bytes": text_bytes, "vector_bytes": 0}
+    """Plain-cloud upload of the mailbox: exactly the emails (headers, body, attachments as text)."""
+    return uploads.plan_mail(mailbox.path, progress)
 
 
-def build_kind_upload(rs: RecordSet, progress) -> dict:
+def uploads_plan_kind(rs: RecordSet, progress) -> dict:
     """The whole collection of one kind as the device uploads it to the ordinary cloud."""
-    folder = UPLOAD_DIR / rs.kind
-    if folder.exists():
-        shutil.rmtree(folder)
-    folder.mkdir(parents=True)
-    batch, size, files, total, text_bytes, image_bytes = [], 0, [], 0, 0, 0
-
-    def flush():
-        nonlocal batch, size, total
-        if not batch:
-            return
-        blob = msgpack.packb(batch, use_bin_type=True)
-        path = folder / f"batch-{len(files):04d}.bin"
-        path.write_bytes(blob)
-        files.append(f"{rs.kind}/{path.name}")
-        total += len(blob)
-        batch, size = [], 0
-
-    for i, raw in enumerate(rs.iter_lines()):
-        text = raw.rstrip(b"\n")
-        rec = rs.records[i]
-        image = rs.image_bytes(rec["id"], "full") if rs.kind == "photo" else None
-        text_bytes += len(text)
-        if image:
-            image_bytes += len(image)
-            item, extra = [text, image], len(image)
-        else:
-            item, extra = text, 0
-        if batch and size + len(text) + extra + 16 > config.UPLOAD_BATCH_BYTES - 64 * 1024:
-            flush()
-        batch.append(item)
-        size += len(text) + extra + 16
-        progress(f"upload:{rs.kind}", i + 1)
-    flush()
-    return {
-        "format": KIND_UPLOAD_FORMAT,
-        "batches": files,
-        "bytes": total,
-        "records": rs.count,
-        "text_bytes": text_bytes,
-        "image_bytes": image_bytes,
-    }
+    return uploads.plan_kind(rs, progress)
 
 
 # ------------------------------------------------------------------ build
@@ -391,6 +319,7 @@ async def _build(mailbox: Mailbox, force: bool, progress) -> dict:
         force
         or not previous
         or previous.get("signature") != signature
+        or previous.get("index") != INDEX_VERSION
         or not stores
         or any(tenant_rows(n, "default") != mailbox.count for n in DEPLOYMENTS)
     )
@@ -442,25 +371,25 @@ async def _build(mailbox: Mailbox, force: bool, progress) -> dict:
         result["deployments"].setdefault(name, {"mode": DEPLOYMENTS[name]})
         result["deployments"][name]["store_bytes"] = dir_bytes(deploy_root(name) / "hpis")
 
-    uploads = {} if fresh else dict((previous or {}).get("uploads") or {})
+    plans = {} if fresh else dict((previous or {}).get("uploads") or {})
     upload = None if fresh else (previous or {}).get("upload")
-    if not upload or upload.get("format") != UPLOAD_FORMAT or not all((UPLOAD_DIR / b).exists() for b in upload["batches"]):
-        upload = build_upload(mailbox, progress)
-    uploads["mail"] = upload
+    if not upload or upload.get("format") != UPLOAD_FORMAT:
+        upload = await asyncio.to_thread(build_upload, mailbox, progress)
+    plans["mail"] = upload
     for kind in OTHER_KINDS:
         if kind not in usable:
-            uploads.pop(kind, None)
-            shutil.rmtree(UPLOAD_DIR / kind, ignore_errors=True)
+            plans.pop(kind, None)
             continue
-        old = uploads.get(kind) or {}
-        stale = kind in kinds or old.get("format") != KIND_UPLOAD_FORMAT
-        if stale or not all((UPLOAD_DIR / b).exists() for b in old.get("batches") or ["-"]):
-            uploads[kind] = build_kind_upload(catalog.sets[kind], progress)
+        old = plans.get(kind) or {}
+        if kind in kinds or old.get("format") != UPLOAD_FORMAT:
+            plans[kind] = await asyncio.to_thread(uploads_plan_kind, catalog.sets[kind], progress)
+    shutil.rmtree(UPLOAD_DIR, ignore_errors=True)  # stored batches of older builds
     result["upload"] = upload
-    result["uploads"] = uploads
+    result["uploads"] = plans
     result["skipped"] = skipped
     result["summary"] = mailbox.summary
     result["version"] = BUILD_VERSION
+    result["index"] = INDEX_VERSION
     result["built_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     BUILD_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = BUILD_FILE.with_suffix(".tmp")

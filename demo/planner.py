@@ -478,28 +478,35 @@ def _city_country(catalog) -> dict:
     return out
 
 
-def date_cover(start: dt.date, end: dt.date) -> list[list[str]]:
-    """Fewest year / quarter / month labels whose union covers [start, end].
+def date_cover(start: dt.date, end: dt.date, today: dt.date | None = None) -> list[list[str]]:
+    """Few year / quarter / month / day labels whose union is exactly [start, end].
 
-    Every record carries all three labels, so a 23-month window costs 6 SSE tokens
-    instead of 23.  The cover may include a few extra days at the edges; exact
-    dates are re-checked after decryption.
+    Every record carries all four labels, so a 23-month window costs a handful of
+    SSE tokens; partial months at the edges use day labels, so HPIS selects
+    exactly the window (no in-window record is lost to a coarse label).  Nothing
+    is dated after today, so a window that reaches today may end with a coarse
+    label that runs past it.
     """
-    by_year: dict[str, list[int]] = {}
-    for m in months_between(start, end):
-        by_year.setdefault(m[:4], []).append(int(m[5:]))
-    cover = []
-    for year, months in by_year.items():
-        if len(months) == 12:
-            cover.append(["year", year])
-            continue
-        left = set(months)
-        for q in range(1, 5):
-            span = {3 * q - 2, 3 * q - 1, 3 * q}
-            if span <= left:
-                cover.append(["quarter", f"{year}Q{q}"])
-                left -= span
-        cover.extend(["month", f"{year}-{m:02d}"] for m in sorted(left))
+    today = today or config.AS_OF.date()
+    open_end = end >= today
+    last = min(end, today)
+    cover, day = [], start
+    while day <= last:
+        units = []
+        if day.month == 1 and day.day == 1:
+            units.append(("year", dt.date(day.year, 12, 31), str(day.year)))
+        if day.day == 1 and day.month in (1, 4, 7, 10):
+            units.append(("quarter", _add_months(day, 3) - dt.timedelta(days=1), f"{day.year}Q{(day.month - 1) // 3 + 1}"))
+        if day.day == 1:
+            units.append(("month", _add_months(day, 1) - dt.timedelta(days=1), day.strftime("%Y-%m")))
+        for field, unit_end, value in units:  # the largest aligned unit that fits
+            if unit_end <= end or open_end:
+                cover.append([field, value])
+                day = unit_end + dt.timedelta(days=1)
+                break
+        else:
+            cover.append(["day", day.isoformat()])
+            day += dt.timedelta(days=1)
     return cover
 
 
@@ -611,16 +618,33 @@ def relax_notice(plan: dict) -> str | None:
 
 
 def model_note(plan: dict) -> str | None:
-    """What the model is told when the filters were relaxed: say plainly what was not found."""
+    """What the model is told besides the evidence (both lanes get the same text).
+
+    Photos, watch and car records: the conditions the device searched with, so the model
+    can judge dates and places.  Any kind: when filters were relaxed, say plainly what
+    was not found.  Mail without relaxation gets nothing (its prompt is unchanged).
+    """
+    kind = plan.get("kind") or "mail"
+    notes = []
+    if kind != "mail":
+        parts = []
+        if plan.get("date_from") and plan.get("date_to"):
+            parts.append(f"时间 {plan['date_from'][:10]} 至 {plan['date_to'][:10]}")
+        for key, label in (("countries", "国家"), ("cities", "城市"), ("trips", "旅程"), ("types", "类型"),
+                           ("activities", "运动"), ("events", "事件")):
+            if plan.get(key):
+                parts.append(f"{label} {'、'.join(plan[key])}")
+        if parts:
+            notes.append("检索条件：设备已按" + "；".join(parts) + " 筛选，下面的证据都符合这些条件。")
     dropped = plan.get("dropped") or []
-    if not dropped:
-        return None
-    label = KIND_LABEL.get(plan.get("kind") or "mail", "记录")
-    what = "，".join(f"{name}：{values}" for _, name, values in dropped if values)
-    return (
-        f"检索说明：没有找到符合「{what}」的{label}。下面的证据是去掉这些条件后按语义检索到的最接近结果。"
-        f"回答时先明确告诉用户没有找到符合这些条件的{label}，再简要介绍这些结果。"
-    )
+    if dropped:
+        label = KIND_LABEL.get(kind, "记录")
+        what = "，".join(f"{name}：{values}" for _, name, values in dropped if values)
+        notes.append(
+            f"检索说明：没有找到符合「{what}」的{label}。下面的证据是去掉这些条件后按语义检索到的最接近结果。"
+            f"回答时先明确告诉用户没有找到符合这些条件的{label}，再简要介绍这些结果。"
+        )
+    return "\n".join(notes) or None
 
 
 def describe(plan: dict) -> list[dict]:

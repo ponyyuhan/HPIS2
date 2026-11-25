@@ -91,10 +91,19 @@ def embedder():
     return _EMBEDDER
 
 
+_FIELDS: dict[str, list[str]] = {}
+
+
 def _text_fields(kind: str) -> list[str] | None:
     """The document recipe of ``embeddings_{kind}.json`` (the same text the device embedded)."""
     if kind == "mail":
         return None
+    if kind not in _FIELDS:
+        _FIELDS[kind] = _read_text_fields(kind)
+    return _FIELDS[kind]
+
+
+def _read_text_fields(kind: str) -> list[str]:
     path = config.DEVICES / f"embeddings_{kind}.json"
     try:
         meta = json.loads(path.read_text("utf-8"))

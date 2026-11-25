@@ -240,6 +240,40 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(self.planner.time_rule("最近有什么通知", today)[2], "vague")
         self.assertEqual(self.planner.time_rule("最近一个月的通知", today)[2], "explicit")
 
+    def test_date_cover_is_exact(self):
+        d = dt.date.fromisoformat
+        cover = self.planner.date_cover
+        self.assertEqual(cover(d("2026-11-09"), d("2026-11-15")), [["day", f"2026-11-{i:02d}"] for i in range(9, 16)])
+        self.assertEqual(cover(d("2026-10-20"), d("2026-11-20")),
+                         [["day", f"2026-10-{i}"] for i in range(20, 32)] + [["month", "2026-11"]])
+        self.assertEqual(cover(d("2026-01-01"), d("2026-11-20")), [["year", "2026"]])  # nothing after today
+        self.assertEqual(cover(d("2025-07-01"), d("2025-12-31")), [["quarter", "2025Q3"], ["quarter", "2025Q4"]])
+        self.assertEqual(cover(d("2025-09-01"), d("2025-09-30")), [["month", "2025-09"]])
+        self.assertEqual(cover(d("2026-11-20"), d("2026-11-20")), [["day", "2026-11-20"]])
+        today = dt.date(2026, 11, 20)
+
+        def days_of(labels):
+            out = set()
+            day = dt.date(2023, 1, 1)
+            while day <= today:
+                tags = {("year", f"{day.year}"), ("quarter", f"{day.year}Q{(day.month - 1) // 3 + 1}"),
+                        ("month", day.strftime("%Y-%m")), ("day", day.isoformat())}
+                if tags & {tuple(x) for x in labels}:
+                    out.add(day)
+                day += dt.timedelta(days=1)
+            return out
+
+        import random
+
+        rng = random.Random(5)
+        for _ in range(200):
+            a = dt.date(2024, 1, 1) + dt.timedelta(days=rng.randrange(1060))
+            b = a + dt.timedelta(days=rng.randrange(400))
+            want = {a + dt.timedelta(days=i) for i in range((min(b, today) - a).days + 1)} if a <= today else set()
+            labels = cover(a, b)
+            self.assertEqual(days_of(labels), want, (a, b))
+            self.assertLessEqual(len(labels), 70)
+
     def test_places(self):
         self.assertEqual(self.planner.places("慕尼黑和柏林"), (["德国"], ["慕尼黑", "柏林"]))
         self.assertEqual(self.planner.places("南韩"), (["韩国"], []))

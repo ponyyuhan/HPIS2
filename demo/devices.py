@@ -165,7 +165,7 @@ class RecordSet:
         out: dict[str, set] = {}
         for rec in self.records:
             for key, value in records.index_fields(self.kind, rec).items():
-                if key not in ("year", "quarter", "month"):
+                if key not in ("year", "quarter", "month", "day"):
                     out.setdefault(key, set()).add(value)
         return {k: sorted(v, key=len, reverse=True) for k, v in out.items()}
 
@@ -223,7 +223,7 @@ def _mail_index(mailbox) -> LocalIndex:
     from .retrieval import index_fields
 
     st = mailbox.path.stat()
-    cache = config.RUNTIME / "mailbox-index" / f"{st.st_size}-{int(st.st_mtime)}-fields-v1.npz"
+    cache = config.RUNTIME / "mailbox-index" / f"{st.st_size}-{int(st.st_mtime)}-fields-v2.npz"
     if cache.exists():
         try:
             data = np.load(cache, allow_pickle=False)
@@ -263,6 +263,7 @@ class Catalog:
                     self.errors[kind] = f"{type(exc).__name__}: {exc}"
         self._indexes: dict[str, LocalIndex] = {}
         self._lock = threading.Lock()
+        self._presets: tuple | None = None  # (file stamp, presets)
 
     @property
     def kinds(self) -> list[str]:
@@ -302,7 +303,21 @@ class Catalog:
         return {kind: rs.vocabulary() for kind, rs in self.sets.items()}
 
     def presets(self) -> list[dict]:
-        """Mail presets (kind mail, device pc) followed by the device presets, if any."""
+        """Mail presets (kind mail, device pc) followed by the device presets, if any.
+
+        Read once and again only when the device presets file changes (asked on every question)."""
+        path = self.folder / "presets.json"
+        try:
+            stamp = tuple(_stat(path)) if path.exists() else None
+        except OSError:
+            stamp = None
+        if self._presets is not None and self._presets[0] == stamp:
+            return [dict(p) for p in self._presets[1]]
+        presets = self._read_presets()
+        self._presets = (stamp, presets)
+        return [dict(p) for p in presets]
+
+    def _read_presets(self) -> list[dict]:
         out = []
         for p in self.mailbox.presets:
             p = dict(p)

@@ -44,7 +44,7 @@ def _squeeze(text: Any) -> str:
 
 def date_fields(date: str) -> dict:
     year, month = date[:4], int(date[5:7])
-    return {"year": year, "quarter": f"{year}Q{(month - 1) // 3 + 1}", "month": date[:7]}
+    return {"year": year, "quarter": f"{year}Q{(month - 1) // 3 + 1}", "month": date[:7], "day": date[:10]}
 
 
 def index_fields(kind: str, rec: dict) -> dict:
