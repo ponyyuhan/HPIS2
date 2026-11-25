@@ -8,7 +8,7 @@
 <script>/* theme before first paint: ?theme=light|dark, else the last choice, else dark */
 try { var t = new URLSearchParams(location.search).get("theme") || localStorage.getItem("hpis-theme"); document.documentElement.dataset.theme = t === "light" ? "light" : "dark"; } catch (e) {}
 </script>
-<link rel="stylesheet" href="/styles.css?v=19">
+<link rel="stylesheet" href="/styles.css?v=20">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
@@ -25,7 +25,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
       <div class="stat"><b>&lt;10<small>%</small></b><span>密态检索相对明文的时延损耗</span></div>
       <div class="stat"><b>≈3<small> KB</small></b><span>每次提问上传云端的数据（直传普通云 <span data-cover="upload">275 MB</span>）</span></div>
     </div>
-    <button class="btn btn--primary btn--xl" id="enter">进入业务演示 <svg class="i"><use href="/assets/icons.svg?v=19#arrow-right"/></svg></button>
+    <button class="btn btn--primary btn--xl" id="enter">进入业务演示 <svg class="i"><use href="/assets/icons.svg?v=20#arrow-right"/></svg></button>
   </div>
   <div class="cover__side">
     <div class="cover__visual" aria-hidden="true">
@@ -33,10 +33,10 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
         <div class="orb__ring r1"></div><div class="orb__ring r2"></div><div class="orb__ring r3"></div>
         <div class="orb__halo"></div>
         <div class="orb__devs">
-          <span class="odev o1"><svg class="i"><use href="/assets/icons.svg?v=19#smartphone"/></svg></span>
-          <span class="odev o2"><svg class="i"><use href="/assets/icons.svg?v=19#laptop"/></svg></span>
-          <span class="odev o3"><svg class="i"><use href="/assets/icons.svg?v=19#car"/></svg></span>
-          <span class="odev o4"><svg class="i"><use href="/assets/icons.svg?v=19#watch"/></svg></span>
+          <span class="odev o1"><svg class="i"><use href="/assets/icons.svg?v=20#smartphone"/></svg></span>
+          <span class="odev o2"><svg class="i"><use href="/assets/icons.svg?v=20#laptop"/></svg></span>
+          <span class="odev o3"><svg class="i"><use href="/assets/icons.svg?v=20#car"/></svg></span>
+          <span class="odev o4"><svg class="i"><use href="/assets/icons.svg?v=20#watch"/></svg></span>
         </div>
         <span class="orb__chip c1">AES-256-GCM 密文存储</span>
         <span class="orb__chip c2">HMAC 检索令牌</span>
@@ -90,10 +90,10 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
     <button role="tab" data-tab="bench">性能对比</button>
   </nav>
   <div class="controls">
-    <div class="select" id="model-select"><svg class="i"><use href="/assets/icons.svg?v=19#cpu"/></svg><select id="model"></select></div>
-    <button class="chip-btn" id="net-btn" title="统一网络条件"><svg class="i"><use href="/assets/icons.svg?v=19#signal"/></svg><span id="net-label">端云 1 Gbps · 云云 50 Gbps</span></button>
+    <div class="select" id="model-select"><svg class="i"><use href="/assets/icons.svg?v=20#cpu"/></svg><select id="model"></select></div>
+    <button class="chip-btn" id="net-btn" title="统一网络条件"><svg class="i"><use href="/assets/icons.svg?v=20#signal"/></svg><span id="net-label">端云 1 Gbps · 云云 50 Gbps</span></button>
     <button class="chip-btn rec-btn" id="rec-btn" title="把演示过程录成视频"><i class="rec-dot"></i><span id="rec-label">录制视频</span></button>
-    <button class="icon-btn theme-btn" id="theme-btn" type="button" title="切换到浅色" aria-label="切换到浅色"><svg class="i i-sun"><use href="/assets/icons.svg?v=19#sun"/></svg><svg class="i i-moon"><use href="/assets/icons.svg?v=19#moon"/></svg></button>
+    <button class="icon-btn theme-btn" id="theme-btn" type="button" title="切换到浅色" aria-label="切换到浅色"><svg class="i i-sun"><use href="/assets/icons.svg?v=20#sun"/></svg><svg class="i i-moon"><use href="/assets/icons.svg?v=20#moon"/></svg></button>
     <span class="status" id="status"><i></i><span>连接中</span></span>
   </div>
 </header>
@@ -120,17 +120,17 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
   <div class="ask card">
     <div class="ask__row">
       <div class="ask__field">
-        <svg class="i ask__icon"><use href="/assets/icons.svg?v=19#sparkles"/></svg>
+        <svg class="i ask__icon"><use href="/assets/icons.svg?v=20#sparkles"/></svg>
         <input id="question" autocomplete="off" spellcheck="false" placeholder="向你的私人邮箱提问…">
       </div>
-      <button class="btn btn--primary btn--lg" id="run"><svg class="i"><use href="/assets/icons.svg?v=19#play"/></svg><span>开始对比</span></button>
-      <button class="btn btn--stop btn--lg" id="stop" type="button" hidden><svg class="i"><use href="/assets/icons.svg?v=19#square"/></svg><span>停止</span></button>
+      <button class="btn btn--primary btn--lg" id="run"><svg class="i"><use href="/assets/icons.svg?v=20#play"/></svg><span>开始对比</span></button>
+      <button class="btn btn--stop btn--lg" id="stop" type="button" hidden><svg class="i"><use href="/assets/icons.svg?v=20#square"/></svg><span>停止</span></button>
     </div>
     <div class="ask__row ask__meta">
       <div class="presets" id="presets"></div>
     </div>
     <div class="device" id="device">
-      <span class="device__tag"><svg class="i"><use href="/assets/icons.svg?v=19#smartphone"/></svg>终端本地完成</span>
+      <span class="device__tag"><svg class="i"><use href="/assets/icons.svg?v=20#smartphone"/></svg>终端本地完成</span>
       <div class="device__chips" id="device-chips"><span class="device__idle">提问后，终端在本地生成查询向量、HMAC 检索令牌，并把目标向量密封给 HPIS —— 密钥从不离开终端</span></div>
       <div class="mailbox-meta" id="mailbox-meta"></div>
     </div>
@@ -139,7 +139,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
   <div class="lanes" id="lanes"></div>
 
   <div class="verdict card" id="verdict" hidden>
-    <div class="verdict__title"><svg class="i"><use href="/assets/icons.svg?v=19#award"/></svg>本次提问 · 端侧+HPIC+HPIS 对比端侧直传普通云<button class="verdict__close" id="verdict-close">收起</button></div>
+    <div class="verdict__title"><svg class="i"><use href="/assets/icons.svg?v=20#award"/></svg>本次提问 · 端侧+HPIC+HPIS 对比端侧直传普通云<button class="verdict__close" id="verdict-close">收起</button></div>
     <div class="verdict__grid" id="verdict-grid"></div>
   </div>
 </section>
@@ -161,7 +161,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
   </div>
   <div class="prov card" id="prov"></div>
   <div class="spy card">
-    <svg class="i"><use href="/assets/icons.svg?v=19#search"/></svg>
+    <svg class="i"><use href="/assets/icons.svg?v=20#search"/></svg>
     <span>运维人员尝试检索：</span>
     <input id="spy-q" value="体检报告">
     <button class="btn btn--ghost" id="spy-go">检索</button>
@@ -169,12 +169,12 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
   </div>
   <div class="views">
     <div class="view card view--plain">
-      <div class="view__head"><span class="badge badge--risk"><svg class="i"><use href="/assets/icons.svg?v=19#eye"/></svg>实名 · 明文</span><h3>普通云数据库</h3><span class="muted" id="plain-count"></span></div>
+      <div class="view__head"><span class="badge badge--risk"><svg class="i"><use href="/assets/icons.svg?v=20#eye"/></svg>实名 · 明文</span><h3>普通云数据库</h3><span class="muted" id="plain-count"></span></div>
       <div class="vbar vbar--plain" id="plain-bar"><span class="vbar__idle">运维人员可按姓名、设备、类型直接读取和检索全部数据</span></div>
       <div class="table" id="plain-rows"></div>
     </div>
     <div class="view card view--hpis">
-      <div class="view__head"><span class="badge badge--safe"><svg class="i"><use href="/assets/icons.svg?v=19#eye-off"/></svg>匿名 · 密文</span><h3>HPIS 匿名密态存储</h3><span class="muted" id="hpis-count"></span></div>
+      <div class="view__head"><span class="badge badge--safe"><svg class="i"><use href="/assets/icons.svg?v=20#eye-off"/></svg>匿名 · 密文</span><h3>HPIS 匿名密态存储</h3><span class="muted" id="hpis-count"></span></div>
       <div class="vbar vbar--hpis" id="hpis-bar"></div>
       <div class="table mono" id="hpis-rows"></div>
     </div>
@@ -198,7 +198,7 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
       <button class="active" data-view="plain">原文</button>
       <button data-view="cipher">HPIS 中的样子</button>
     </div>
-    <button class="icon-btn" id="drawer-close" aria-label="关闭"><svg class="i"><use href="/assets/icons.svg?v=19#x"/></svg></button>
+    <button class="icon-btn" id="drawer-close" aria-label="关闭"><svg class="i"><use href="/assets/icons.svg?v=20#x"/></svg></button>
   </div>
   <div class="drawer__body" id="drawer-body"></div>
 </aside>
@@ -217,6 +217,6 @@ try { var t = new URLSearchParams(location.search).get("theme") || localStorage.
 <div class="countdown" id="countdown" hidden><div><b id="countdown-n">3</b><span>即将开始录制</span></div></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script type="module" src="/app.js?v=19"></script>
+<script type="module" src="/app.js?v=20"></script>
 </body>
 </html>

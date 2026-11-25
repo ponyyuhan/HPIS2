@@ -915,7 +915,12 @@ function verdict() {
   }
   if (P.final.total_ms && V2.final.total_ms) {
     const pt = cs(P.final.total_ms), vt = cs(V2.final.total_ms);
-    tiles.push({ big: fold(pt / vt), title: "完整回答更快", sub: `普通云 ${csText(pt)} → ${csText(vt)}` });
+    const ratio = pt / Math.max(1, vt), sub = `普通云 ${csText(pt)} → ${csText(vt)}`;
+    // Small collections (a watch or car log) upload in a blink: then the two lanes take about as long,
+    // and the tile says so instead of "1.0× faster".
+    if (ratio >= 1.1) tiles.push({ big: fold(ratio), title: "完整回答更快", sub });
+    else if (ratio > 0.9) tiles.push({ big: `≈1<small>×</small>`, title: "完整回答用时相近", sub });
+    else tiles.push({ big: fold(1 / ratio), title: "完整回答较慢", sub });
   }
   const vf = state.verify;
   if (vf && vf.plain_ms) {
