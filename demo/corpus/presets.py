@@ -19,7 +19,7 @@ def F(label, value, *match):
 
 PRESETS = [
     {
-        "id": "minutes", "chip": "项目纪要",
+        "id": "minutes", "chip": "会议总结",
         "question": "帮我找到过去三个月与瀚海物流讨论项目规划的会议纪要，总结最终确定的目标、交付时间和还没解决的问题。",
         "plan": {"orgs": ["瀚海物流"], "people": [], "date_from": "2026-08-20", "date_to": "2026-11-20", "categories": ["client", "work"],
                  "semantic": "瀚海物流 华东智能调度平台 项目规划 会议纪要 目标 交付时间 未解决问题"},
@@ -37,7 +37,7 @@ PRESETS = [
         "distractors": ["q1.plan_v12", "q1.wms", "q1.port", "q1.annual", "q1.quote2", "q1.cost"],
     },
     {
-        "id": "checkup", "chip": "体检对比",
+        "id": "checkup", "chip": "体检对比", "scene": "health",
         "question": "对比我2025年和2026年的体检报告，哪些指标变化最明显？医生给了什么建议？",
         "plan": {"orgs": ["安康体检中心"], "people": [], "date_from": "2025-01-01", "date_to": "2026-11-20", "categories": ["health"],
                  "semantic": "林舟 2025年 2026年 年度体检报告 指标变化 低密度脂蛋白 尿酸 空腹血糖 体重 医生建议"},
@@ -101,22 +101,6 @@ PRESETS = [
         "evidence": ["q5.yanxue", "q5.vaccine", "q5.ptm"],
         "distractors": ["q5.open", "q5.lunch", "q5.autumn", "q5.y2025"],
     },
-    {
-        "id": "contract", "chip": "合同条款",
-        "question": "我们和星河数据签的数据服务合同，付款分几期？逾期交付怎么赔偿？",
-        "plan": {"orgs": ["星河数据"], "people": [], "date_from": "2026-01-01", "date_to": "2026-11-20", "categories": ["work", "client"],
-                 "semantic": "星河数据 数据服务合同 已签署 付款 分期 逾期交付 违约金"},
-        "facts": [
-            F("合同", "YF-XH-2026-031，总额¥1,860,000", "YF-XH-2026-031"),
-            F("第一期", "签约后10个工作日内30%（¥558,000）", "¥558,000"),
-            F("第二期", "中期验收后40%（¥744,000）", "¥744,000"),
-            F("第三期", "终验后30%（¥558,000）", "终验"),
-            F("违约金", "逾期交付每日按合同总额千分之一，累计不超过10%", "千分之一"),
-            F("解除", "逾期超过30日可解除合同", "30日"),
-        ],
-        "evidence": ["q6.signed", "q6.pay1"],
-        "distractors": ["q6.v2", "q6.legal", "q6.tianshu", "q6.accept"],
-    },
 ]
 
 # Extra distractors located by subject (programmatic siblings without a nid).
@@ -150,7 +134,8 @@ def write(nids: dict):
         if p["id"] == "checkup":
             ds += [i for i, (s, c, o) in subj.items() if o == "安康体检中心" and c == "promotion"][:3]
         out.append({
-            "id": p["id"], "chip": p["chip"], "question": p["question"], "plan": p["plan"],
+            "id": p["id"], "chip": p["chip"], **({"scene": p["scene"]} if p.get("scene") else {}),
+            "question": p["question"], "plan": p["plan"],
             "gold": {"facts": p["facts"], "evidence_ids": ev, "evidence_nids": p["evidence"]},
             "distractor_ids": sorted(set(ds)),
         })

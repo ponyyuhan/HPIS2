@@ -1507,35 +1507,34 @@ function renderMeta() {
   $("#mailbox-meta").innerHTML = `${tag}<span>${ICON(K.icon)} <b>${intText(dev.records)}</b> ${K.unit}${K.noun}</span>${dev.bytes ? `<span>${ICON("hard-drive")} ${bytesText(dev.bytes)}</span>` : ""}`;
 }
 const keyLabel = (i) => (i < 9 ? String(i + 1) : i === 9 ? "0" : "");
+// The preset questions are shown by scene, in this order; a preset may name its scene (体检对比 is 运动健康).
+const SCENES = [
+  { id: "daily", label: "日常生活", icon: "calendar", hint: "邮件 · 用车出行" },
+  { id: "album", label: "一生相随", icon: "camera", hint: "相册" },
+  { id: "health", label: "运动健康", icon: "activity", hint: "体检 · 运动 · 睡眠" },
+];
+const sceneOf = (p) => p.scene || { photo: "album", sport: "health" }[p.kind || "mail"] || "daily";
+const STRIP_DEVICES = ["pc", "phone", "watch", "car"]; // at the far left: the questions draw on all four devices
 function initPresets(s) {
   const list = s.presets || [];
   const grouped = list.some((p) => p.device || p.kind);
   const devOf = (p) => p.device || deviceFor(p.kind || "mail");
-  // shown grouped by device; the numbering (and the number keys) follow the order on screen
-  let order = list;
-  if (grouped) {
-    const groups = new Map();
-    for (const p of list) { const d = devOf(p); if (!groups.has(d)) groups.set(d, []); groups.get(d).push(p); }
-    order = [...groups.values()].flat();
-  }
+  // the numbering (and the number keys) follow the order on screen
+  const order = grouped ? SCENES.flatMap((sc) => list.filter((p) => sceneOf(p) === sc.id)) : list;
   state.presets = order;
-  const sens = /体检|账单|合同|学校/;
-  const chip = (p, i) => `<button class="preset ${sens.test(p.chip) ? "sensitive" : ""}" data-i="${i}">${keyLabel(i) ? `<span class="k">${keyLabel(i)}</span>` : `<span class="k k--none"></span>`}${esc(p.chip)}</button>`;
+  const chip = (p, i) => `<button class="preset" data-i="${i}">${keyLabel(i) ? `<span class="k">${keyLabel(i)}</span>` : `<span class="k k--none"></span>`}${esc(p.chip)}</button>`;
   if (!grouped) {
     $("#presets").innerHTML = order.map(chip).join("");
   } else {
-    let html = "", last = null;
-    order.forEach((p, i) => {
-      const d = devOf(p);
-      if (d !== last) {
-        if (last) html += "</span>";
-        const dev = deviceOf(d);
-        html += `<span class="pgroup"><span class="pdev" title="${esc(dev.label)} · ${esc(kindOf(dev.kind || DEVICES[d]?.kind).label)}">${ICON(dev.icon)}${esc(dev.label)}</span>`;
-        last = d;
-      }
-      html += chip(p, i);
-    });
-    $("#presets").innerHTML = html + "</span>";
+    const devs = STRIP_DEVICES.filter((d) => list.some((p) => devOf(p) === d));
+    let html = `<span class="pgroup"><span class="pdevs" title="多端数据">${devs
+      .map((d) => `<span class="pdev">${ICON(deviceOf(d).icon)}${esc(deviceOf(d).label)}</span>`)
+      .join("")}</span></span>`;
+    for (const sc of SCENES) {
+      const items = order.map((p, i) => [p, i]).filter(([p]) => sceneOf(p) === sc.id);
+      if (items.length) html += `<span class="pgroup"><span class="pscene" title="${sc.hint}">${ICON(sc.icon)}${sc.label}</span>${items.map(([p, i]) => chip(p, i)).join("")}</span>`;
+    }
+    $("#presets").innerHTML = html;
   }
   $("#presets").classList.toggle("grouped", grouped);
   if (state.presets.length && !$("#question").value) selectPreset(0);

@@ -239,7 +239,6 @@ main { position: relative; z-index: 1; padding: 1.5rem 2.2rem 3rem; max-width: 2
 .preset.active { color: var(--v2); border-color: rgba(12,143,124,.35); background: var(--v2-tint); box-shadow: none; }
 .preset .k { display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; font-family: var(--num); font-size: .72rem; font-weight: 700; color: var(--muted); background: var(--well-2); border-radius: 50%; }
 .preset.active .k { background: var(--v2); color: var(--on-accent); }
-.preset.sensitive::after { content: "敏感"; font-size: .66rem; font-weight: 650; color: var(--risk); background: var(--risk-tint); border-radius: 6px; padding: .05em .45em; }
 .mailbox-meta { display: flex; gap: 1.2rem; color: var(--muted); font-size: .88rem; }
 .mailbox-meta b { color: var(--text); font-family: var(--num); font-weight: 700; }
 .device { min-height: 2.6rem; margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--line); display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; font-size: .88rem; }
@@ -254,15 +253,19 @@ main { position: relative; z-index: 1; padding: 1.5rem 2.2rem 3rem; max-width: 2
 .btn--stop { color: var(--risk); background: var(--surface); border: 1.5px solid color-mix(in srgb, var(--risk) 48%, transparent); animation: rise .3s both; }
 .btn--stop:hover { background: var(--risk-tint); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--risk) 80%, transparent); }
 .btn--stop .i { width: .9em; height: .9em; }
-/* presets grouped by device: 手机 · PC · 车机 · 手表 */
+/* presets: the four devices at the far left (a fixed marker: the data is multi-device), then the questions by scene */
 .presets.grouped { gap: .5rem .8rem; }
 .pgroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
 .pgroup + .pgroup { padding-left: .8rem; border-left: 1px solid var(--line-2); }
-.pdev { display: inline-flex; align-items: center; gap: .3rem; padding: 0 .15rem; font-size: .84rem; font-weight: 760; color: var(--ink-soft); }
-.pdev .i { width: 1.1em; height: 1.1em; color: var(--v2); }
+.pdevs { display: inline-flex; align-items: center; padding: .32rem .35rem; border: 1px solid var(--line-2); border-radius: 999px; background: var(--well); }
+.pdev { display: inline-flex; align-items: center; gap: .28rem; padding: 0 .5rem; font-size: .84rem; font-weight: 720; color: var(--ink-soft); white-space: nowrap; }
+.pdev + .pdev { border-left: 1px solid var(--line-2); }
+.pdev .i { width: 1.05em; height: 1.05em; color: var(--v2); }
+.pscene { display: inline-flex; align-items: center; gap: .3rem; padding: 0 .15rem; font-size: .84rem; font-weight: 760; color: var(--ink-soft); white-space: nowrap; }
+.pscene .i { width: 1.1em; height: 1.1em; color: var(--v2); }
+.preset .k--none { width: .3em; background: none; }
 .device .mailbox-meta { margin-left: auto; }
 .device:has(.dchip) .mailbox-meta { display: none; }
-.preset .k--none { width: .3em; background: none; }
 .mdev { display: inline-flex; align-items: center; gap: .32rem; font-weight: 720; color: var(--text); }
 .mdev .i { color: var(--v2); }
 
@@ -764,15 +767,14 @@ body.scoreboard main { padding-bottom: 1rem; }
   .brand__name { display: none; }
   .topbar { gap: 1rem; }
   .tabs button { padding: .48rem 1.05rem; }
-  /* presets: device groups show their icon only (the name is in the tooltip), chips a little tighter */
-  .pdev { font-size: 0; gap: 0; }
-  .pdev .i { width: 1.15rem; height: 1.15rem; }
+  /* presets: the devices show their icon only (the name is in the tooltip), chips a little tighter */
+  .pdev { font-size: 0; gap: 0; padding: 0 .35rem; }
+  .pdev .i { width: 1.1rem; height: 1.1rem; }
   .presets { gap: .4rem; }
   .presets.grouped { gap: .4rem .55rem; }
   .pgroup { gap: .38rem; }
   .pgroup + .pgroup { padding-left: .55rem; }
-  .presets.grouped .preset { position: relative; gap: .38rem; padding: .36rem .75rem .36rem .4rem; }
-  .presets.grouped .preset.sensitive::after { content: ""; position: absolute; top: .16rem; right: .2rem; width: .42rem; height: .42rem; padding: 0; border-radius: 50%; background: var(--risk); box-shadow: 0 0 0 2px var(--surface); }
+  .presets.grouped .preset { gap: .38rem; padding: .36rem .75rem .36rem .4rem; }
   .arch { grid-template-columns: 1.9fr 1fr; }
   .tech { padding: 1.05rem 1.2rem; }
   .tech p, .tech ul { font-size: .86rem; line-height: 1.65; }

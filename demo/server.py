@@ -1,7 +1,7 @@
 """Web server for the demo (面向个人敏感数据的智能问答): static UI + JSON/NDJSON API.
 
 Endpoints (PLAN-v3 §3; older fields are kept):
-  GET  /api/status                 phase, models (+vision), presets (+kind, device), devices, build …
+  GET  /api/status                 phase, models (+vision), presets (+kind, device, scene), devices, build …
   POST /api/run                    NDJSON events of one question (plan, notice, stage, …, finish, end)
   POST /api/stop                   stop the run in progress -> {"ok", "stopped"}
   GET  /api/mail/{id}              one email (plaintext, the PC's own copy)
@@ -279,6 +279,7 @@ def preset_rows(state) -> list[dict]:
             "gold": p.get("gold", {}),
             "kind": p.get("kind", "mail"),
             "device": p.get("device", "pc"),
+            **({"scene": p["scene"]} if p.get("scene") else {}),  # the page's group when not the kind's own
         }
         for p in presets
     ]
