@@ -825,7 +825,7 @@ function handle(ev, question) {
     }
     case "search": { // plain cloud
       if (L.done) break;
-      L.flow.node("cloud", "alert", `解析 ${intText(ev.scanned)} ${unit} · 现算向量 ${intText(ev.candidates)} ${unit}`, "bad");
+      L.flow.node("cloud", "alert", `解析 ${intText(ev.scanned)} ${unit} · 现算向量 ${intText(ev.embedded ?? ev.candidates)} ${unit}`, "bad");
       break;
     }
     case "evidence": {
