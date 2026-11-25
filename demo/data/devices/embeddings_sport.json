@@ -1,0 +1,14 @@
+{
+ "model": "BAAI/bge-small-zh-v1.5",
+ "dim": 512,
+ "count": 2834,
+ "text": "title + text (date, place, activity and all numbers as written in the record)",
+ "onnx": "Xenova/bge-small-zh-v1.5",
+ "dtype": "float32",
+ "normalized": true,
+ "pooling": "CLS",
+ "layout": "row i = line i of sport.jsonl (record id i+1), little-endian float32, C order",
+ "builder": "demo.corpus.devices.embed.embed_text",
+ "query_prefix": "为这个句子生成表示以用于检索相关文章：",
+ "seconds": 11.5
+}
