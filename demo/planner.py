@@ -44,11 +44,11 @@ KIND_KEYS = {
 KIND_CUES = {
     "photo": (
         (3, ("照片", "相片", "相册", "图片", "拍的", "拍了", "拍摄", "拍照", "合影", "合照", "自拍", "拍过", "拍下", "相机", "照相")),
-        (1, ("风景", "留念", "打卡", "旅游", "旅行", "游玩", "景点", "度假")),
+        (1, ("风景", "留念", "打卡", "旅游", "旅行", "游玩", "景点", "度假", "出国", "国外", "境外", "海外")),
     ),
     "sport": (
         (3, ("运动", "锻炼", "健身", "跑步", "骑行", "游泳", "羽毛球", "力量训练", "步数", "心率", "睡眠", "卡路里",
-             "配速", "手表", "马拉松", "徒步", "体能")),
+             "配速", "手表", "马拉松", "半马", "全马", "完赛", "跑量", "徒步", "体能")),
         (1, ("跑了", "慢跑", "夜跑", "晨跑", "骑车", "走路", "散步", "睡得", "睡觉", "深睡", "千卡", "消耗", "训练",
              "公里", "步行")),
     ),
@@ -65,6 +65,8 @@ KIND_CUES = {
     ),
 }
 KIND_ORDER = ("mail", "photo", "sport", "car")  # tie-break
+VISIT_RE = re.compile(r"去过|去了|到过|去哪|开去|跑了一趟|去[^，。？?！!\s]{1,8}?[了过]")  # 去故宫了吗
+ABROAD_WORDS = ("国家", "出国", "国外", "境外", "海外")
 
 # Place gazetteer: country -> cities (Chinese names), plus aliases.
 GAZETTEER = {
@@ -113,7 +115,7 @@ PHOTO_TYPES = {
     "宠物": ("宠物", "小猫", "小狗"),
 }
 SPORT_ACTIVITIES = {
-    "跑步": ("跑步", "跑了", "慢跑", "夜跑", "晨跑", "马拉松", "配速"),
+    "跑步": ("跑步", "跑了", "慢跑", "夜跑", "晨跑", "马拉松", "半马", "全马", "完赛", "跑量", "配速"),
     "骑行": ("骑行", "骑车", "单车", "自行车"),
     "游泳": ("游泳", "泳池"),
     "步行": ("步行", "走路", "散步", "徒步"),
@@ -348,6 +350,22 @@ def _canonical(question: str, table: dict, present: list[str] | None) -> list[st
     return found
 
 
+def _summaries(start: dt.date | None, end: dt.date | None, present) -> list[str]:
+    """Summary records that answer an overview question about [start, end].
+
+    A month-scale window (15 days or more, e.g. 这个月 or 最近一个月) is answered by the monthly reports,
+    a week-scale one by the weekly reports; without a window both may help.
+    """
+    values = [v for v in SUMMARY_VALUES if v in (present or SUMMARY_VALUES)]
+    if start and end:
+        days = (end - start).days + 1
+        if days >= 15:
+            return [v for v in values if v == "月报"] or values
+        if days >= 6:
+            return [v for v in values if v == "周报"] or values
+    return values
+
+
 def detect_kind(
     question: str, available=("mail",), entities: tuple[list, list] = ([], []), vocabulary: dict | None = None
 ) -> tuple[str, dict]:
@@ -362,6 +380,15 @@ def detect_kind(
         vocab = (vocabulary or {}).get(kind) or {}
         if any(v and v in question for f in fields for v in vocab.get(f) or []):
             scores[kind] += 1
+    # "去过北戴河吗 / 上个月去了哪些地方": a visit is the car's log when the place is domestic (or unnamed),
+    # the photo album when the place is abroad.
+    if VISIT_RE.search(question):
+        named = [c for c in CITY_COUNTRY if c in question] + [c for c in GAZETTEER if c in question]
+        abroad = any(CITY_COUNTRY.get(p, p) != "中国" for p in named) or bool(_hits(question, ABROAD_WORDS))
+        if abroad:
+            scores["photo"] += 2
+        else:
+            scores["car"] += 2 if named else 1
     best = max(KIND_ORDER, key=lambda k: (scores[k] if k in available else -1, -KIND_ORDER.index(k)))
     if best not in available or scores.get(best, 0) <= 0:
         best = "mail"
@@ -447,13 +474,14 @@ def plan_question(question: str, presets: list[dict], bible: dict, catalog=None)
             plan["types"] = _canonical(question, PHOTO_TYPES, vocab.get("type"))[:2]
         elif kind == "sport":
             acts = _canonical(question, SPORT_ACTIVITIES, vocab.get("activity"))[:3]
-            if acts and any(w in question for w in OVERVIEW_WORDS):
-                acts += [v for v in SUMMARY_VALUES if v in (vocab.get("activity") or SUMMARY_VALUES)]
+            if any(w in question for w in OVERVIEW_WORDS) and (acts or start):
+                # "这个月跑了多少" or a plain "最近一个月的运动情况": the watch's own summaries answer it
+                acts += _summaries(start, end, vocab.get("activity"))
             plan["activities"] = acts
         elif kind == "car":
             events = _canonical(question, CAR_EVENTS, vocab.get("event"))[:3]
-            if events and any(w in question for w in OVERVIEW_WORDS):
-                events += [v for v in SUMMARY_VALUES if v in (vocab.get("event") or SUMMARY_VALUES)]
+            if any(w in question for w in OVERVIEW_WORDS) and (events or start):
+                events += _summaries(start, end, vocab.get("event"))
             plan["events"] = events
             plan["cities"] = places(question, {"city": vocab.get("city") or []})[1]
     plan["date_from"] = start.isoformat() if start else None

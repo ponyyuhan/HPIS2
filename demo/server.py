@@ -534,8 +534,10 @@ async def spy(request):
     loop = asyncio.get_running_loop()
     cache = state.setdefault("spy", {})
     if q not in cache:
-        plain_hits, samples = await loop.run_in_executor(None, _plain_hits, catalog, q)
-        scan = await loop.run_in_executor(None, view.scan, q)
+        (plain_hits, samples), scan = await asyncio.gather(  # both clouds are searched at the same time
+            loop.run_in_executor(None, _plain_hits, catalog, q),
+            loop.run_in_executor(None, view.scan, q),
+        )
         cache[q] = {"plain_hits": plain_hits, "samples": samples, "scan": scan}
         if len(cache) > 256:
             cache.pop(next(iter(cache)))

@@ -139,14 +139,19 @@ class PlannerTest(unittest.TestCase):
     # ------------------------------------------------------------------ watch
     def test_sport_routing(self):
         self.check("我最近一个月的运动情况怎么样？", "sport", preset="sport_month")
-        self.check("上周跑了几次步", "sport", activities=["跑步", "周报", "月报"], date_from="2026-11-09", date_to="2026-11-15")
-        self.check("这个月睡眠怎么样", "sport", activities=["睡眠", "周报", "月报"], date_from="2026-11-01")
-        self.check("最近骑行了多少公里", "sport", activities=["骑行", "周报", "月报"], date_from="2026-10-20")
-        self.check("今年游泳了几次", "sport", activities=["游泳", "周报", "月报"], date_from="2026-01-01")
+        self.check("上周跑了几次步", "sport", activities=["跑步", "周报"], date_from="2026-11-09", date_to="2026-11-15")
+        self.check("这个月睡眠怎么样", "sport", activities=["睡眠", "月报"], date_from="2026-11-01")
+        self.check("最近骑行了多少公里", "sport", activities=["骑行", "月报"], date_from="2026-10-20")
+        self.check("今年游泳了几次", "sport", activities=["游泳", "月报"], date_from="2026-01-01")
         self.check("我的静息心率是多少", "sport")
         self.check("上个月去健身房做了几次力量训练", "sport", date_from="2026-10-01", date_to="2026-10-31")
         self.check("最近一周的步数", "sport", activities=["日常"], date_from="2026-11-13")
         self.check("最近打羽毛球了吗", "sport", activities=["羽毛球"])
+        self.check("今年半马成绩怎么样", "sport", date_from="2026-01-01")
+        # a plain month-scale overview is answered by the monthly reports, a week-scale one by the weekly ones
+        self.check("最近一个月运动得怎么样", "sport", activities=["月报"], date_from="2026-10-20")
+        self.check("上周的运动情况", "sport", activities=["周报"], date_from="2026-11-09", date_to="2026-11-15")
+        self.check("我的全马成绩", "sport")
 
     def test_sport_relaxation(self):
         p = self.plan("2023年跑了几次步")
@@ -160,12 +165,20 @@ class PlannerTest(unittest.TestCase):
     # ------------------------------------------------------------------ car
     def test_car_routing(self):
         self.check("上个月我开车去过哪些地方，充了几次电？", "car", preset="car_month")
-        self.check("这个月充了几次电", "car", events=["充电", "周报", "月报"], date_from="2026-11-01")
+        self.check("这个月充了几次电", "car", events=["充电", "月报"], date_from="2026-11-01")
         self.check("最近一次保养是什么时候", "car", events=["保养"])
         self.check("我开车去过天津吗", "car", cities=["天津"])
         self.check("上周开车通勤一共开了多少公里", "car", date_from="2026-11-09", date_to="2026-11-15")
         self.check("胎压提醒", "car", events=["提醒"])
         self.check("导航去机场的记录", "car", events=["导航"])
+        # a visit to a domestic (or unnamed) place is the car's log; abroad is the photo album
+        self.check("上个月去过北戴河吗", "car", date_from="2026-10-01", date_to="2026-10-31")
+        self.check("我上个月去过哪些地方", "car", date_from="2026-10-01")
+        self.check("上个月去故宫了吗", "car")
+        self.check("去年去过日本吗", "photo")
+        self.check("我去过哪些国家", "photo")
+        self.check("上周去了几次健身房", "sport")
+        self.check("老师说孩子去了哪里", "mail")
 
     def test_car_relaxation(self):
         p = self.plan("去北戴河的那次自驾")  # the records file the trip under 秦皇岛

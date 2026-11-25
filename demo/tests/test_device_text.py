@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from pathlib import Path
 
 from demo import config, records
 
@@ -19,8 +20,9 @@ class DeviceTextTests(unittest.TestCase):
         except ImportError as exc:  # the generator package is optional at runtime
             self.skipTest(f"data builder not importable: {exc}")
         checked = 0
+        folder = Path(config.__file__).resolve().parent / "data" / "devices"  # the repo's data, not a test fixture
         for kind in ("photo", "sport", "car"):
-            path = config.DEVICES / f"{kind}.jsonl"
+            path = folder / f"{kind}.jsonl"
             if not path.exists():
                 continue
             with open(path, encoding="utf-8") as fh:
