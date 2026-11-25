@@ -1090,12 +1090,19 @@ function renderProv() {
   if (!b || !b.deployments) return;
   const tee = b.deployments.tee || {};
   const up = b.upload || {};
+  // All of the owner's devices: their records, and the one-time provisioning time of every kind
+  // (the deployment's own time is the mailbox's; each other kind records its own).
+  const devs = state.status?.devices || [];
+  const multi = devs.length > 1;
+  const records = devs.reduce((a, d) => a + (d.records || 0), 0) || b.emails;
+  const secs = (tee.seconds || 0) + Object.values(b.kinds || {}).reduce((a, k) => a + (k.seconds?.tee || 0), 0);
+  const what = multi ? "数据" : "邮件";
   // Upload per question: the whole mailbox versus one sealed request of about 3 KB.
   $("#prov").innerHTML = `
-    <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>邮箱只在开通时加密上传一次</small></div></div>
-    <div><b>${intText(b.emails)}</b><span>封邮件在终端加密后存入 HPIS</span></div>
-    <div><b>${tee.seconds ? tee.seconds.toFixed(0) + " s" : "—"}</b><span>一次性预置用时：加密全部邮件，生成检索令牌与向量密文</span></div>
-    <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 中的全部存储：邮件密文与密文索引</span></div>
+    <div class="prov__title">${ICON("shield-check")}<div>一次性加密预置<small>${multi ? "多端数据只在开通时加密上传一次" : "邮箱只在开通时加密上传一次"}</small></div></div>
+    <div><b>${intText(records)}</b><span>${multi ? "条多端数据在终端加密后存入 HPIS" : "封邮件在终端加密后存入 HPIS"}</span></div>
+    <div><b>${secs ? secs.toFixed(0) + " s" : "—"}</b><span>一次性预置用时：加密全部${what}，生成检索令牌与向量密文</span></div>
+    <div><b>${bytesText(tee.store_bytes)}</b><span>HPIS 中的全部存储：${what}密文与密文索引</span></div>
     <div class="prov__x"><b>万倍+</b><div class="prov__cmp"><em>每次提问上传云端的数据量</em>
       <p><span>端侧直传普通云</span><i class="bad">${up.bytes ? bytesText(up.bytes) : "—"}</i><small>整个邮箱</small></p>
       <p><span>端侧+HPIC+HPIS</span><i class="good">约 3 KB</i><small>一次密封请求</small></p></div></div>`;
@@ -1476,7 +1483,7 @@ function bootOverlay(s) {
   if (s.phase === "ready") { boot.classList.add("off"); return; }
   boot.classList.remove("off");
   const total = s.mailbox?.emails || 100000;
-  const titles = { unpacking: "首次运行：解压邮箱与向量数据", building: "首次运行：在本机加密预置邮箱", "starting-services": "启动 HPIS / HPIC / 普通云服务", warming: "预热密态索引", error: "启动失败" };
+  const titles = { unpacking: "首次运行：解压多端数据与向量", building: "首次运行：在本机加密预置多端数据", "starting-services": "启动 HPIS / HPIC / 普通云服务", warming: "预热密态索引", error: "启动失败" };
   $("#boot-title").textContent = titles[s.phase] || "正在启动密态服务…";
   if (s.phase === "error") $("#boot-sub").textContent = s.error || "";
   const bars = [["tee", "HPIS 密态租户（AES-GCM + HMAC + 向量密文）"], ["plain", "明文对照租户"], ["upload", "普通云上传批次"]];
