@@ -108,12 +108,35 @@ async def startup(app):
             state["phase"] = "ready"
             state["warm"] = asyncio.create_task(warm_models())
             state["keepalive"] = asyncio.create_task(keepalive(state))
+            state["spy_warm"] = asyncio.create_task(prime_spy(state))
         except Exception as exc:
             state["phase"] = "error"
             state["error"] = f"{type(exc).__name__}: {exc}"
             traceback.print_exc()
 
     state["boot"] = asyncio.create_task(boot())
+
+
+SPY_DEFAULT = "体检报告"  # the word the 云端视角 search box starts with (index.html)
+
+
+async def prime_spy(state):
+    """Answer the page's default operator search once in the background after start-up.
+
+    The first search reads both stores from disk (about 1.6 GB, 10 s or more when cold); doing it
+    here leaves the answer cached and the files in the OS cache, so the first search on stage is instant."""
+    view, catalog = state.get("store"), state.get("catalog")
+    if view is None or catalog is None:
+        return
+    loop = asyncio.get_running_loop()
+    try:
+        (plain_hits, samples), scan = await asyncio.gather(
+            loop.run_in_executor(None, _plain_hits, catalog, SPY_DEFAULT),
+            loop.run_in_executor(None, view.scan, SPY_DEFAULT),
+        )
+        state.setdefault("spy", {})[SPY_DEFAULT] = {"plain_hits": plain_hits, "samples": samples, "scan": scan}
+    except Exception:  # only a warm-up; a search on stage still works without it
+        traceback.print_exc()
 
 
 def store_view(engine: Engine):
