@@ -111,6 +111,25 @@ class VisionProbeTests(unittest.IsolatedAsyncioTestCase):
         llm._VISION.clear()
         self.assertIsNone(await llm.probe_vision(ep("http://127.0.0.1:9"), env={}, refresh=True, timeout=1))
 
+    async def test_background_reprobe_fills_in_cannot_tell(self) -> None:
+        target = llm.Endpoint("qwen", self.base + "/api/v1", "qwen/qwen3.8-27b", "key", {}, "Qwen", "openrouter")
+        llm._VISION[(target.base_url, target.model)] = (0.0, None)  # the start-up probe could not tell
+        self.assertIsNone(llm.vision_cached(target, env={}))
+        await llm.reprobe_vision((target, {}))  # the engine does not await it; the next question reads the cache
+        self.assertTrue(llm.vision_cached(target, env={}))
+
+    async def test_engine_question_with_unknown_vision(self) -> None:
+        # A photo question that meets "cannot tell" gets captions and schedules a re-check; the next one gets pictures.
+        from demo.engine import Engine
+
+        env = {**self.env, "HPIS_LLM_QWEN_MODEL": "qwen3.8:27b"}
+        with mock.patch.dict(os.environ, env):
+            ep = llm.resolve_endpoint("qwen")
+            llm._VISION[(ep.base_url, ep.model)] = (0.0, None)
+            self.assertFalse(await Engine.vision(None, "qwen"))
+            await asyncio.gather(*list(llm._REPROBES))
+            self.assertTrue(await Engine.vision(None, "qwen"))
+
 
 class ImagePayloadTests(unittest.TestCase):
     def messages(self):

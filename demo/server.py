@@ -128,6 +128,11 @@ async def prime_spy(state):
     view, catalog = state.get("store"), state.get("catalog")
     if view is None or catalog is None:
         return
+    warm = state.get("warm")
+    if warm is not None:
+        # after the model warm-up: this reading holds the interpreter for seconds and must not delay
+        # the vision probe (a probe that times out leaves photos as captions until it is asked again)
+        await asyncio.wait([warm])
     loop = asyncio.get_running_loop()
     try:
         (plain_hits, samples), scan = await asyncio.gather(

@@ -1187,6 +1187,24 @@ async def probe_vision(
     return result
 
 
+_REPROBES: set[asyncio.Task] = set()
+
+
+def reprobe_vision(*targets: tuple[Any, Mapping[str, str] | None]) -> asyncio.Task:
+    """Ask again, in the background, whether each (profile or endpoint, env) accepts images.
+
+    For answers that were "cannot tell": the question in hand does not wait, the next one gets the answer.
+    """
+
+    async def again():
+        await asyncio.gather(*(probe_vision(p, env=e, refresh=True) for p, e in targets), return_exceptions=True)
+
+    task = asyncio.create_task(again())
+    _REPROBES.add(task)  # keep a reference until it is done
+    task.add_done_callback(_REPROBES.discard)
+    return task
+
+
 async def probe_vision_all(env: Mapping[str, str] | None = None, *, refresh: bool = False) -> dict[str, bool | None]:
     """Vision of every profile on both lanes' servers: {profile: True only if both accept images}."""
     out: dict[str, bool | None] = {}
