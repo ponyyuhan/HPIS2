@@ -207,12 +207,49 @@ def recipe_fields(recipe: Any, sample: dict | None = None) -> list[str]:
     return names or ["text"]
 
 
+def _period(hour: int) -> str:
+    for limit, name in ((5, "深夜"), (9, "清晨"), (12, "上午"), (14, "中午"), (18, "下午"), (20, "傍晚")):
+        if hour < limit:
+            return name
+    return "夜晚"
+
+
+def device_doc_text(rec: dict) -> str | None:
+    """The exact text the device data was embedded from (demo/corpus/devices/embed.py ``embed_text``).
+
+    Photos: title, caption, place, time of day, trip, type and tags; watch and car records: title + text.
+    Returns None for records that do not follow the device-data schema (e.g. test fixtures).
+    """
+    kind = rec.get("kind")
+    try:
+        if kind == "photo":
+            p, d = rec["place"], rec["date"]
+            y, m, day, hh = int(d[:4]), int(d[5:7]), int(d[8:10]), int(d[11:13])
+            where = p["city"] if p["country"] == "中国" else f"{p['country']} {p['city']}"
+            return "\n".join([
+                rec["title"],
+                rec["caption"],
+                f"拍摄地点：{where} {p['name']}",
+                f"拍摄时间：{y}年{m}月{day}日 {_period(hh)}",
+                f"行程：{rec['fields']['trip']}",
+                f"类别：{rec['fields']['type']}；标签：{'、'.join(rec['tags'])}",
+            ])
+        if kind in ("sport", "car"):
+            return f"{rec['title']}\n{rec['text']}"
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+    return None
+
+
 def doc_text(kind: str, rec: dict, fields: list[str] | None = None) -> str:
     """The document text embedded for one record (identical on the device and in the cloud)."""
     if kind == "mail":
         from .embed import doc_text as mail_doc_text
 
         return mail_doc_text(rec)
+    exact = device_doc_text(rec)
+    if exact is not None:
+        return exact
     parts = []
     for name in fields or ["text"]:
         value = _lookup(rec, name)
