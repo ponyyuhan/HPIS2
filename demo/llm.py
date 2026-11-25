@@ -1179,6 +1179,10 @@ async def probe_vision(
                             break
     except (asyncio.TimeoutError, aiohttp.ClientError, ValueError):
         result = None
+    if result is None and hit is not None and hit[1] is not None:
+        # A refresh that could not reach the server keeps the last known answer: one slow reply
+        # from a model directory must not switch photos off until the next refresh.
+        return hit[1]
     _VISION[key] = (time.monotonic(), result)
     return result
 

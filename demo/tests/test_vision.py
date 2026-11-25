@@ -98,6 +98,19 @@ class VisionProbeTests(unittest.IsolatedAsyncioTestCase):
         down = {"HPIS_LLM_BACKEND": "ollama", "HPIS_LLM_OLLAMA_URL": "http://127.0.0.1:9"}
         self.assertIsNone(await llm.probe_vision("qwen", env=down, timeout=1))
 
+    async def test_failed_refresh_keeps_the_last_answer(self) -> None:
+        # Known to see images, then the periodic refresh cannot reach the server: photos stay on.
+        def ep(base):
+            return llm.Endpoint("qwen", base + "/api/v1", "qwen/qwen3.8-27b", "key", {}, "Qwen", "openrouter")
+
+        self.assertTrue(await llm.probe_vision(ep(self.base), env={}))
+        llm._VISION[("http://127.0.0.1:9/api/v1", "qwen/qwen3.8-27b")] = (0.0, True)  # known from an earlier probe
+        self.assertTrue(await llm.probe_vision(ep("http://127.0.0.1:9"), env={}, refresh=True, timeout=1))
+        self.assertTrue(llm.vision_cached(ep("http://127.0.0.1:9"), env={}))
+        # Never known: an unreachable server still says "cannot tell".
+        llm._VISION.clear()
+        self.assertIsNone(await llm.probe_vision(ep("http://127.0.0.1:9"), env={}, refresh=True, timeout=1))
+
 
 class ImagePayloadTests(unittest.TestCase):
     def messages(self):
