@@ -1,0 +1,14 @@
+{
+ "model": "BAAI/bge-small-zh-v1.5",
+ "dim": 512,
+ "count": 401,
+ "text": "title + caption + '拍摄地点：' country city place.name + '拍摄时间：' 年月日与时段 + '行程：' trip + '类别：' type + '标签：' tags",
+ "onnx": "Xenova/bge-small-zh-v1.5",
+ "dtype": "float32",
+ "normalized": true,
+ "pooling": "CLS",
+ "layout": "row i = line i of photo.jsonl (record id i+1), little-endian float32, C order",
+ "builder": "demo.corpus.devices.embed.embed_text",
+ "query_prefix": "为这个句子生成表示以用于检索相关文章：",
+ "seconds": 1.7
+}
