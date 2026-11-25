@@ -23,7 +23,7 @@ def main():
         for preset in status.get("presets", []):
             body = json.dumps({"question": preset["question"], "model": model}).encode()
             req = urllib.request.Request(base + "/api/run", data=body, headers={"Content-Type": "application/json"})
-            lanes, verify, text, evid, search = {}, None, {}, {}, None
+            lanes, verify, text, evid, search, flags = {}, None, {}, {}, None, []
             with urllib.request.urlopen(req, timeout=600) as resp:
                 for line in resp:
                     ev = json.loads(line)
@@ -31,17 +31,26 @@ def main():
                         text[ev["lane"]] = text.get(ev["lane"], "") + ev["text"]
                     elif ev["type"] == "finish":
                         lanes[ev["lane"]] = (ev["ttft_ms"], ev["total_ms"])
+                        if ev.get("stopped") or ev.get("timed_out"):
+                            flags.append(f"{ev['lane']}:{'stopped' if ev.get('stopped') else 'timed out'}")
                     elif ev["type"] == "verify":
                         verify = ev
                     elif ev["type"] == "evidence":
                         evid[ev["lane"]] = [c["id"] for c in ev["items"]]
                     elif ev["type"] == "search":
                         search = ev
+                    elif ev["type"] == "notice":
+                        flags.append(ev["text"])
             summary = " ".join(f"{k}:{v[0]:.0f}/{v[1]:.0f}ms" for k, v in sorted(lanes.items()) if v[0])
             extra = f" verify {verify['overhead_pct']:+.1f}% identical={verify['identical']}" if verify else ""
             same = evid.get("plain") == evid.get("v2")
-            cloud = f" cloud-embed {search['candidates']} in {search['embed_ms']:.0f}ms" if search else ""
-            print(f"[{model}] {preset['chip']}: {summary}{extra} evidence-same={same}{cloud}", flush=True)
+            cloud = ""
+            if search:
+                cloud = f" cloud-embed {search.get('embedded', search['candidates'])}/{search['candidates']} in {search['embed_ms']:.0f}ms"
+            kind = preset.get("kind", "mail")
+            print(f"[{model}] [{kind}] {preset['chip']}: {summary}{extra} evidence-same={same}{cloud}", flush=True)
+            if flags:
+                print("   !", "; ".join(flags), flush=True)
             print("   v2:", " ".join(text.get("v2", "").split())[:160], flush=True)
 
 

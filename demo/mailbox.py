@@ -177,6 +177,12 @@ class Mailbox:
         with open(self.path, "rb") as fh:
             yield from fh
 
+    def close(self):
+        with self._lock:
+            if self._fh is not None:
+                self._fh.close()
+                self._fh = None
+
     # ------------------------------------------------------------------ facts
     @cached_property
     def presets(self) -> list[dict]:

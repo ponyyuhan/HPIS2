@@ -11,6 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEMO = ROOT / "demo"
 DATA = Path(os.environ.get("HPIS_DEMO_DATA", DEMO / "data"))
+# Photo / watch / car data of the other three devices (optional: without it the demo is mail-only).
+DEVICES = Path(os.environ.get("HPIS_DEMO_DEVICES", DATA / "devices"))
 WEB = DEMO / "web"
 ACCEPTANCE = Path(os.environ.get("HPIS_DEMO_ACCEPTANCE", ROOT / "acceptance" / "results" / "summary.json"))
 
@@ -77,8 +79,30 @@ class Network:
 # Retrieval and generation sizes shared by all lanes (same evidence budget).
 RETRIEVE_K = 10  # ranked candidates fetched by the encrypted search
 EVIDENCE_K = 5  # evidence items handed to the model
+EVIDENCE_K_BY_KIND = {"photo": 6}  # photos: six pictures
 UPLOAD_BATCH_BYTES = 16 * 1024 * 1024  # single-upload limit of the ordinary cloud
 INGEST_BATCH = 400
+INGEST_BATCH_BYTES = 8 * 1024 * 1024  # photo bodies are large; HPIC/HPIS accept 64 MB per request
+
+
+def evidence_k(kind: str | None) -> int:
+    return EVIDENCE_K_BY_KIND.get(kind or "mail", EVIDENCE_K)
+
+
+def _seconds(name: str, default: float) -> float:
+    try:
+        return max(0.1, float(os.environ.get(name, default)))
+    except ValueError:
+        return default
+
+
+# Never hang: limits on every stage that waits for something outside the demo.
+RUN_LIMIT_S = _seconds("HPIS_DEMO_RUN_LIMIT_S", 90.0)  # a whole run, click to end
+FIRST_TOKEN_S = _seconds("HPIS_DEMO_FIRST_TOKEN_S", 25.0)  # model: first visible token
+ANSWER_LIMIT_S = _seconds("HPIS_DEMO_ANSWER_LIMIT_S", 60.0)  # model: whole answer
+CLOUD_EMBED_BUDGET_S = _seconds("HPIS_DEMO_CLOUD_EMBED_BUDGET_S", 6.0)  # plain cloud, on-the-fly vectors
+CLOUD_SHORTLIST = 100  # plain cloud: lexical shortlist before the on-the-fly vectors
+VERIFY_LIMIT_S = _seconds("HPIS_DEMO_VERIFY_LIMIT_S", 6.0)  # the paired plain/cipher re-check
 
 DEFAULT_MODEL = os.environ.get("HPIS_DEMO_MODEL", "qwen")
 WEB_PORT = int(os.environ.get("HPIS_DEMO_PORT", "8780"))

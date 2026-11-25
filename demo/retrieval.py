@@ -1,9 +1,11 @@
 """Index fields and the plaintext search used by the comparison lanes.
 
 All lanes apply the same plan: exact filters (organisation, month window,
-category, people involved) followed by cosine ranking over the same
-512-d embeddings.  HPIS 2.0 evaluates the filters as SSE tokens and the ranking
-over the encrypted vector index; the plaintext lanes evaluate them directly.
+category, people involved; for photos country / city / trip / type, for watch
+records the activity, for car records the event and city) followed by cosine
+ranking over the same 512-d embeddings.  HPIS 2.0 evaluates the filters as SSE
+tokens and the ranking over the encrypted vector index; the plaintext lanes
+evaluate them directly.
 """
 
 from __future__ import annotations
@@ -18,6 +20,19 @@ OWNER_NAMES = {"林舟"}
 
 
 PEOPLE_SLOTS = 4
+
+# Plan key -> index field, in the order the device builds its SSE token groups
+# (mail plans only use the first two, so their requests are unchanged).
+FILTER_KEYS = (
+    ("orgs", "org"),
+    ("categories", "category"),
+    ("countries", "country"),
+    ("cities", "city"),
+    ("trips", "trip"),
+    ("types", "type"),
+    ("activities", "activity"),
+    ("events", "event"),
+)
 
 
 def people_of(mail: dict) -> list[str]:
@@ -58,7 +73,7 @@ def index_fields(mail: dict) -> dict:
 def sse_groups(labels: Labels, plan: dict) -> list[list[bytes]]:
     """One OR-group per filter dimension; HPIS intersects the groups."""
     groups = []
-    for field, key in (("org", "orgs"), ("category", "categories")):
+    for key, field in FILTER_KEYS:
         values = plan.get(key) or []
         if values:
             groups.append([labels.encode(field_label(field, v)) for v in values])
@@ -82,7 +97,7 @@ def in_window(date_text: str, plan: dict) -> bool:
 
 
 def matches(fields: dict, plan: dict) -> bool:
-    for field, key in (("org", "orgs"), ("category", "categories")):
+    for key, field in FILTER_KEYS:
         values = plan.get(key) or []
         if values and fields.get(field) not in values:
             return False
@@ -119,6 +134,68 @@ def top_k(ids: np.ndarray, vectors: np.ndarray, query: np.ndarray, k: int) -> np
     distances = cosine_distances(data[shortlist], q)
     order = exact_nearest(ids[shortlist], distances, k, q, data[shortlist])
     return shortlist[np.asarray(order, dtype=np.int64)]
+
+
+# ----------------------------------------------------------------- lexical shortlist
+# The ordinary cloud receives the raw collection with every question, so it has
+# no standing index: it narrows the filtered records to a short list by word
+# overlap (BM25 over character bigrams, the usual approach for Chinese) and
+# computes vectors only for that list.
+
+_STOP_CHARS = set("的了吗呢吧么我你他她它们这那哪啊呀")
+_STOP_TERMS = {
+    "一下", "总结", "最近", "有没", "没有", "情况", "多少", "时候", "分别", "一共", "是否", "告诉", "找到", "找一",
+    "一封", "相关", "关于", "提到", "怎样", "如何", "哪里", "什么", "整理", "给出", "列出", "看看", "帮忙", "需要",
+}
+
+
+def query_terms(text: str) -> list[str]:
+    """Character bigrams of the Chinese runs plus whole ASCII words / numbers, without filler."""
+    import re
+
+    terms: list[str] = []
+    for run in re.findall(r"[一-鿿]+|[A-Za-z0-9][A-Za-z0-9.\-]*", text or ""):
+        if run[0].isascii():
+            if len(run) >= 2:
+                terms.append(run.lower())
+            continue
+        for i in range(len(run) - 1):
+            pair = run[i : i + 2]
+            if pair not in _STOP_TERMS and not (_STOP_CHARS & set(pair)):
+                terms.append(pair)
+    return list(dict.fromkeys(terms))
+
+
+def lexical_scores(texts: list[str], query: str) -> np.ndarray:
+    """BM25-style score per text (term frequency saturates; rare terms weigh more)."""
+    n = len(texts)
+    scores = np.zeros(n, dtype=np.float64)
+    terms = query_terms(query)
+    if not n or not terms:
+        return scores
+    blob = "\n".join(texts).lower()
+    starts = np.cumsum([0] + [len(t) + 1 for t in texts[:-1]], dtype=np.int64)
+    for term in terms:
+        found = []
+        pos = blob.find(term)
+        while pos >= 0:
+            found.append(pos)
+            pos = blob.find(term, pos + 1)
+        if not found:
+            continue
+        docs = np.searchsorted(starts, np.asarray(found, dtype=np.int64), side="right") - 1
+        tf = np.bincount(docs, minlength=n).astype(np.float64)
+        df = int(np.count_nonzero(tf))
+        idf = np.log(1 + (n - df + 0.5) / (df + 0.5))
+        scores += idf * tf * 2.2 / (tf + 1.2)
+    return scores
+
+
+def lexical_order(texts: list[str], query: str, limit: int) -> list[int]:
+    """Indices of the best ``limit`` texts by lexical score, ties (and no match) newest first."""
+    scores = lexical_scores(texts, query)
+    order = np.lexsort((-np.arange(len(texts)), -scores))
+    return [int(i) for i in order[:limit]]
 
 
 def post_filter(records: list[tuple[int, dict]], plan: dict, limit: int) -> list[tuple[int, dict]]:

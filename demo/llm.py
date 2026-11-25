@@ -285,10 +285,84 @@ def describe_profiles(env: Mapping[str, str] | None = None) -> list[dict[str, An
     out = []
     for name in PROFILES:
         try:
-            out.append(resolve_endpoint(name, env).describe())
+            ep = resolve_endpoint(name, env)
+            row = ep.describe()
+            row["vision"] = vision_cached(ep, env)
+            out.append(row)
         except LLMConfigError as exc:
-            out.append({"id": name, "label": PROFILES[name]["label"], "configured": False, "detail": str(exc)})
+            out.append(
+                {"id": name, "label": PROFILES[name]["label"], "configured": False, "detail": str(exc), "vision": None}
+            )
     return out
+
+
+def _b64(data: Any) -> str:
+    import base64
+
+    if isinstance(data, str):
+        return data  # already base64
+    return base64.b64encode(bytes(data)).decode("ascii")
+
+
+def openai_messages(messages: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Chat messages for OpenAI-style servers (OpenRouter, vLLM).
+
+    A message whose content is a list of parts keeps text parts and turns the
+    demo's ``{"type": "image", "data": bytes, "mime": …}`` parts into
+    ``image_url`` data URLs; string contents pass through unchanged.
+    """
+    out = []
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            out.append(dict(msg))
+            continue
+        parts = []
+        for part in content:
+            if not isinstance(part, Mapping):
+                continue
+            if part.get("type") == "image":
+                mime = part.get("mime") or "image/jpeg"
+                parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{_b64(part.get('data'))}"}})
+            elif part.get("type") == "text":
+                parts.append({"type": "text", "text": str(part.get("text") or "")})
+            else:
+                parts.append(dict(part))
+        out.append({**msg, "content": parts})
+    return out
+
+
+def ollama_messages(messages: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Chat messages for Ollama's /api/chat: text joined, images as a base64 ``images`` list (in order)."""
+    out = []
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            out.append(dict(msg))
+            continue
+        texts, images = [], []
+        for part in content:
+            if not isinstance(part, Mapping):
+                continue
+            if part.get("type") == "image":
+                images.append(_b64(part.get("data")))
+                texts.append(f"（第{len(images)}张图）")
+            elif part.get("type") in ("text", None):
+                texts.append(str(part.get("text") or ""))
+        item = {k: v for k, v in msg.items() if k != "content"}
+        item["content"] = "".join(texts)
+        if images:
+            item["images"] = images
+        out.append(item)
+    return out
+
+
+def has_images(messages: list[Mapping[str, Any]]) -> bool:
+    return any(
+        isinstance(m.get("content"), list)
+        and any(isinstance(p, Mapping) and p.get("type") in ("image", "image_url") for p in m["content"])
+        for m in messages
+    )
 
 
 def build_payload(
@@ -302,7 +376,7 @@ def build_payload(
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": endpoint.model,
-        "messages": list(messages),
+        "messages": openai_messages(messages),
         "max_tokens": int(max_tokens),
         "temperature": float(temperature),
         "stream": stream,
@@ -325,7 +399,7 @@ def build_ollama_payload(
     """Body for Ollama's native POST /api/chat."""
     payload: dict[str, Any] = {
         "model": endpoint.model,
-        "messages": list(messages),
+        "messages": ollama_messages(messages),
         "stream": stream,
         "options": {"temperature": float(temperature), "num_predict": int(max_tokens)},
     }
@@ -997,6 +1071,122 @@ async def probe(
         "max_model_len": entry.get("max_model_len") if entry else None,
         "message": None if entry is not None else f"{ep.model} is not listed by {ep.netloc}",
     }
+
+
+# ------------------------------------------------------------------ vision
+
+VISION_TTL = 600.0
+_VISION: dict[tuple[str, str], tuple[float, bool | None]] = {}
+
+
+def vision_override(env: Mapping[str, str] | None = None) -> bool | None:
+    """HPIS_LLM_VISION=1 / 0 forces images on / off for every model."""
+    raw = ((os.environ if env is None else env).get("HPIS_LLM_VISION") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    return None
+
+
+def vision_cached(profile: str | Endpoint | Mapping[str, Any], env: Mapping[str, str] | None = None) -> bool | None:
+    """The last probe result (or the override); None when not known yet."""
+    override = vision_override(env)
+    if override is not None:
+        return override
+    try:
+        ep = resolve_endpoint(profile, env)
+    except LLMConfigError:
+        return None
+    hit = _VISION.get((ep.base_url, ep.model))
+    return hit[1] if hit else None
+
+
+def _modalities(arch: Any) -> bool | None:
+    if not isinstance(arch, Mapping):
+        return None
+    mods = arch.get("input_modalities")
+    if isinstance(mods, list):
+        return "image" in mods
+    if isinstance(arch.get("modality"), str):
+        return "image" in arch["modality"].split("->")[0]
+    return None
+
+
+async def probe_vision(
+    profile: str | Endpoint | Mapping[str, Any],
+    *,
+    timeout: float = 6.0,
+    env: Mapping[str, str] | None = None,
+    refresh: bool = False,
+) -> bool | None:
+    """Does the configured model accept images?
+
+    Ollama: ``/api/show`` lists "vision" among the model's capabilities.
+    OpenRouter: the model's ``architecture.input_modalities`` contains "image".
+    ``HPIS_LLM_VISION=0|1`` overrides both.  None when it cannot be told
+    (vLLM does not say, or the server is unreachable); callers treat None as no.
+    """
+    override = vision_override(env)
+    if override is not None:
+        return override
+    try:
+        ep = resolve_endpoint(profile, env)
+    except LLMConfigError:
+        return None
+    key = (ep.base_url, ep.model)
+    hit = _VISION.get(key)
+    if hit and hit[1] is not None and not refresh and time.monotonic() - hit[0] < VISION_TTL:
+        return hit[1]
+    if not (ep.is_ollama or ep.is_openrouter or ep.kind == "openrouter"):
+        return None  # vLLM does not say; HPIS_LLM_VISION=1 turns images on
+    headers = {"Authorization": f"Bearer {ep.api_key}"} if ep.api_key else {}
+    host = urlsplit(ep.base_url).hostname or ""
+    limit = aiohttp.ClientTimeout(total=timeout)
+    result: bool | None = None
+    try:
+        async with aiohttp.ClientSession(trust_env=not _is_local_host(host)) as session:
+            if ep.is_ollama:
+                body = {"model": ep.model, "name": ep.model}
+                async with session.post(ep.native_url("api/show"), json=body, headers=headers, timeout=limit) as resp:
+                    obj = await resp.json(content_type=None) if resp.status == 200 else None
+                if isinstance(obj, Mapping):
+                    caps = obj.get("capabilities")
+                    if isinstance(caps, list):
+                        result = "vision" in caps
+                    elif obj.get("projector_info"):
+                        result = True  # Ollama before capabilities: a vision projector is loaded
+            else:
+                async with session.get(ep.url(f"models/{ep.model}/endpoints"), headers=headers, timeout=limit) as resp:
+                    obj = await resp.json(content_type=None) if resp.status == 200 else None
+                if isinstance(obj, Mapping) and isinstance(obj.get("data"), Mapping):
+                    result = _modalities(obj["data"].get("architecture"))
+                if result is None:
+                    async with session.get(ep.url("models"), headers=headers, timeout=limit) as resp:
+                        obj = await resp.json(content_type=None) if resp.status == 200 else None
+                    rows = obj.get("data") if isinstance(obj, Mapping) else None
+                    for row in rows if isinstance(rows, list) else []:
+                        if isinstance(row, Mapping) and row.get("id") == ep.model:
+                            result = _modalities(row.get("architecture"))
+                            break
+    except (asyncio.TimeoutError, aiohttp.ClientError, ValueError):
+        result = None
+    _VISION[key] = (time.monotonic(), result)
+    return result
+
+
+async def probe_vision_all(env: Mapping[str, str] | None = None) -> dict[str, bool | None]:
+    """Vision of every profile on both lanes' servers: {profile: True only if both accept images}."""
+    out: dict[str, bool | None] = {}
+    for name in PROFILES:
+        try:
+            lanes = _lane_endpoints(name, env)
+        except LLMConfigError:
+            out[name] = None
+            continue
+        results = [await probe_vision(ep, env=env) for _, ep in lanes]
+        out[name] = None if any(r is None for r in results) else all(results)
+    return out
 
 
 def _same_model(listed: str, wanted: str, ollama: bool) -> bool:

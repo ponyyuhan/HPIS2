@@ -143,15 +143,154 @@ def build_messages(
     evidence: Sequence[Mapping[str, Any]],
     *,
     max_context_tokens: int = MAX_CONTEXT_TOKENS,
-) -> list[dict[str, str]]:
-    """Chat messages (system + user) for one grounded answer."""
+    kind: str = "mail",
+    note: str | None = None,
+) -> list[dict[str, Any]]:
+    """Chat messages (system + user) for one grounded answer.
+
+    ``kind`` picks the prompt for the device's data (mail, photo, sport, car);
+    ``note`` (a relaxed search) is placed before the question.  Photo evidence
+    that carries ``image`` bytes becomes an image part right after its text,
+    so the user message is then a list of parts (see demo.llm for the wire forms).
+    """
+    if kind != "mail":
+        return _build_kind_messages(question, evidence, kind, note, max_context_tokens)
     question = _clean(question)
     intro = f"证据（共{len(evidence)}封邮件，按编号引用）：" if evidence else "证据：无（本次检索没有找到相关邮件）。"
     outro = f"问题：{question}"
+    extra = _clean(note) if note else ""
     overhead = estimate_tokens(SYSTEM_PROMPT) + estimate_tokens(intro) + estimate_tokens(outro) + _SAFETY_TOKENS
+    overhead += estimate_tokens(extra)
     body = format_evidence(evidence, max_context_tokens - overhead) if evidence else ""
-    user = "\n\n".join(part for part in (intro, body, outro) if part)
+    user = "\n\n".join(part for part in (intro, body, extra, outro) if part)
     return [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}]
+
+
+# ------------------------------------------------------------ other devices
+
+_COMMON_RULES = """1. 只依据证据回答，不使用证据以外的知识，不猜测。证据中没有的信息写“{missing}”，可顺带给出证据里最接近的信息。
+2. 每个事实后紧跟来源编号，如“{example}”；依据多条证据时写[1][2]。只引用给出的编号。
+3. 开门见山给出结论，不寒暄，不复述问题，不写推理过程。
+4. 问题涉及多个方面时，每个方面单独一行，以加粗标签开头，如“**{label}**：…”；只问一件事时用一两句话回答。
+5. 日期、地点、数字和单位照抄证据，不换算，不四舍五入。
+{extra}
+全文一般不超过200字。"""
+
+KIND_PROMPTS = {
+    "photo": (
+        "你是个人相册问答助手。系统已在用户设备上解密并检索出与问题相关的几张照片，按编号作为证据提供给你，"
+        "每张附拍摄时间、地点和画面描述{images}。\n\n回答规则：\n"
+        + _COMMON_RULES.format(
+            missing="相册中未找到",
+            example="玛利亚广场的街景[2]",
+            label="9月16日 慕尼黑",
+            extra="6. 按时间或地点归纳照片，只描述画面中确实有的内容。",
+        )
+    ),
+    "sport": (
+        "你是个人运动健康问答助手。系统已在用户设备上解密并检索出与问题相关的几条手表记录"
+        "（单次运动、睡眠、日常数据和周报、月报），按编号作为证据提供给你。\n\n回答规则：\n"
+        + _COMMON_RULES.format(
+            missing="记录中未找到",
+            example="跑步12次[1]",
+            label="跑步",
+            extra="6. 有周报、月报时优先引用其中的汇总数字；需要比较或合计时，逐条核对原始数字后再下结论。",
+        )
+    ),
+    "car": (
+        "你是个人用车出行问答助手。系统已在用户设备上解密并检索出与问题相关的几条车机记录"
+        "（行程、充电、导航、保养、提醒和周报、月报），按编号作为证据提供给你。\n\n回答规则：\n"
+        + _COMMON_RULES.format(
+            missing="记录中未找到",
+            example="充电3次[1]",
+            label="去过的地方",
+            extra="6. 有周报、月报时优先引用其中的汇总数字；需要比较或合计时，逐条核对原始数字后再下结论。",
+        )
+    ),
+}
+KIND_UNITS = {"photo": ("张照片", "照片"), "sport": ("条手表记录", "记录"), "car": ("条车机记录", "记录")}
+_ITEM_TOKENS = 700  # cap per evidence item (photo captions and watch/car records are short)
+
+
+def system_prompt(kind: str, *, images: bool = False) -> str:
+    if kind == "mail":
+        return SYSTEM_PROMPT
+    text = KIND_PROMPTS[kind]
+    return text.replace("{images}", "；照片本身也一并给出，顺序与编号一致" if images else "")
+
+
+def _kind_block(item: Mapping[str, Any], n: int, kind: str, budget: float) -> str:
+    date = _clean(item.get("date")) or "未知"
+    if kind == "photo":
+        lines = [f"[{n}] 拍摄时间：{date}"]
+        if _clean(item.get("place")):
+            lines.append(f"地点：{_clean(item.get('place'))}")
+        if _clean(item.get("title")):
+            lines.append(f"标题：{_clean(item.get('title'))[:80]}")
+        caption = _clean(item.get("caption"))
+        body = _clean(item.get("body"))
+        if caption:
+            lines.append("画面：" + _cut(caption, budget / 2))
+        if body and body != caption:
+            lines.append("说明：" + _cut(body, budget / 2))
+        tags = [str(t) for t in item.get("tags") or [] if t]
+        if tags:
+            lines.append("标签：" + "、".join(tags[:8]))
+        return "\n".join(lines)
+    lines = [f"[{n}] 日期：{date}"]
+    if _clean(item.get("title")):
+        lines.append(f"标题：{_clean(item.get('title'))[:80]}")
+    body = _clean(item.get("body"))
+    if body:
+        lines.append("内容：" + _cut(body, budget))
+    for fact in item.get("facts") or []:
+        lines.append(_clean(fact)[:400])
+    return "\n".join(lines)
+
+
+def _build_kind_messages(question, evidence, kind, note, max_context_tokens) -> list[dict[str, Any]]:
+    if kind not in KIND_PROMPTS:
+        raise ValueError(f"unknown kind {kind!r}")
+    question = _clean(question)
+    count, noun = KIND_UNITS[kind]
+    images = [item.get("image") for item in evidence]
+    has_images = kind == "photo" and any(isinstance(x, (bytes, bytearray)) and x for x in images)
+    system = system_prompt(kind, images=has_images)
+    intro = f"证据（共{len(evidence)}{count}，按编号引用）：" if evidence else f"证据：无（本次检索没有找到相关{noun}）。"
+    outro = f"问题：{question}"
+    extra = _clean(note) if note else ""
+    overhead = estimate_tokens(system) + estimate_tokens(intro) + estimate_tokens(outro + extra) + _SAFETY_TOKENS
+    per_item = min(_ITEM_TOKENS, (max_context_tokens - overhead) / max(1, len(evidence)))
+    blocks = []
+    for index, item in enumerate(evidence, 1):
+        try:
+            n = int(item.get("n", index))
+        except (TypeError, ValueError):
+            n = index
+        blocks.append(_kind_block(item, n, kind, per_item))
+    tail = "\n\n".join(part for part in (extra, outro) if part)
+    if not has_images:
+        user = "\n\n".join(part for part in (intro, "\n\n".join(blocks), tail) if part)
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    parts: list[dict[str, Any]] = [{"type": "text", "text": intro}]
+    for block, image in zip(blocks, images):
+        parts.append({"type": "text", "text": "\n\n" + block})
+        if isinstance(image, (bytes, bytearray)) and image:
+            parts.append({"type": "image", "data": bytes(image), "mime": "image/jpeg"})
+    parts.append({"type": "text", "text": "\n\n" + tail})
+    return [{"role": "system", "content": system}, {"role": "user", "content": parts}]
+
+
+def message_text(messages: Sequence[Mapping[str, Any]]) -> str:
+    """All text of a message list (image parts left out), e.g. for logging or estimates."""
+    out = []
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, str):
+            out.append(content)
+        elif isinstance(content, list):
+            out.extend(str(p.get("text") or "") for p in content if isinstance(p, Mapping) and p.get("type") == "text")
+    return "\n".join(out)
 
 
 # ----------------------------------------------------------------- citations

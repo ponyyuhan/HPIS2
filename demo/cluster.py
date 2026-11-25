@@ -1,10 +1,13 @@
 """Device-side client and the local process cluster (HPIS, HPIC, ordinary cloud).
 
-Two HPIS deployments are provisioned from the same mailbox:
-  tee    HPIS 2.0 tenant: AES-256-GCM bodies, HMAC-SHA256 SSE labels, AES-GCM
+Two HPIS deployments are provisioned from the same device data:
+  tee    HPIS 2.0 tenants: AES-256-GCM bodies, HMAC-SHA256 SSE labels, AES-GCM
          vector index opened only inside HPIS' trusted compute region.
   plain  the same service stack with plaintext storage (baseline for the
          "密文 vs 明文" overhead check, never used by the race lanes).
+
+Each deployment holds one tenant per device (folder ``devices/<tenant>``:
+default = PC mail, phone, watch, car) plus decoy tenants (``decoy-NN``).
 """
 
 from __future__ import annotations
@@ -30,8 +33,16 @@ def deploy_root(name: str) -> Path:
     return config.RUNTIME / "deploy" / name
 
 
-def device_folder(name: str) -> Path:
-    return deploy_root(name) / "devices" / "default"
+def device_folder(name: str, tenant: str = "default") -> Path:
+    return deploy_root(name) / "devices" / tenant
+
+
+def device_tenants(name: str) -> list[str]:
+    """Tenants of the user's own devices in one deployment (decoys never query)."""
+    folder = deploy_root(name) / "devices"
+    if not folder.exists():
+        return []
+    return sorted(p.name for p in folder.iterdir() if p.is_dir() and not p.name.startswith("decoy-"))
 
 
 def free_port() -> int:
@@ -119,9 +130,14 @@ class Cluster:
         await wait_port(hpic_port, proc=p2)
         self.hpic_url[key] = f"https://127.0.0.1:{hpic_port}"
 
-    async def start(self):
+    def renew_tickets(self):
         for name in self.deployments:
-            renew(deploy_root(name), "default")  # fresh one-day anonymous ticket
+            for tenant in device_tenants(name):
+                renew(deploy_root(name), tenant)  # fresh one-day anonymous ticket
+
+    async def start(self):
+        self.renew_tickets()
+        for name in self.deployments:
             await self._pair(name, name)
             if name == "tee" and self.with_cloud and os.environ.get("HPIS_DEMO_V1") == "1":
                 # The HPIS 1.0 lane reads the same encrypted store through its own
@@ -145,8 +161,8 @@ class Cluster:
                 proc.kill()
         self.procs.clear()
 
-    def device(self, key: str) -> DemoDevice:
-        return DemoDevice(device_folder(key.split("-")[0]), self.hpic_url[key])
+    def device(self, key: str, tenant: str = "default") -> DemoDevice:
+        return DemoDevice(device_folder(key.split("-")[0], tenant), self.hpic_url[key])
 
     def cloud_session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession(
