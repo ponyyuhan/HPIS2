@@ -146,9 +146,10 @@ class Engine:
         return self
 
     async def close(self):
-        if self.active is not None and not self.active.done.is_set():
-            self.active.stop("closed")
-            await asyncio.wait({self.active.task}, timeout=5)
+        ctl = self.active
+        if ctl is not None and not ctl.done.is_set():
+            ctl.stop("closed")
+            await asyncio.wait({ctl.task}, timeout=5)
         for device in self.tenants.values():
             await device.__aexit__(None, None, None)
         self.mailbox.close()

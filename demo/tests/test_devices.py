@@ -346,6 +346,11 @@ class DevicesTest(unittest.TestCase):
             phase="ready", mailbox=eng.mailbox, catalog=eng.catalog, build=info, engine=eng, cluster=eng.cluster,
             store=server.store_view(eng), progress={}, error=None,
         )
+        self.assertTrue((self.config.RUNTIME / "storeview.npz").exists())  # the next start reads the counts
+        again = server.store_view(eng)
+        self.assertEqual(again.tenants(), state["store"].tenants())
+        self.assertEqual((again.docs, again.bytes, again.postings), (state["store"].docs, state["store"].bytes,
+                                                                     state["store"].postings))
         async with TestClient(TestServer(app)) as client:
             st = await (await client.get("/api/status")).json()
             self.assertEqual([d["id"] for d in st["devices"]], ["pc", "phone", "watch", "car"])

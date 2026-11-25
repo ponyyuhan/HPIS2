@@ -294,5 +294,30 @@ class PlannerTest(unittest.TestCase):
         self.assertNotIn("数据", {c["kind"] for c in self.planner.describe(mail)})
 
 
+class LexicalTest(unittest.TestCase):
+    """The ordinary cloud's shortlist: content words only, BM25 order, newest first on ties."""
+
+    def test_terms_skip_question_filler(self):
+        from demo.retrieval import query_terms
+
+        terms = query_terms("帮我总结一下最近和客户沟通中提到的风险")
+        self.assertIn("风险", terms)
+        self.assertIn("沟通", terms)
+        for junk in ("帮我", "最近", "近和", "中提", "提到", "总结"):
+            self.assertNotIn(junk, terms)
+        self.assertEqual(query_terms("关于预算的邮件"), ["预算"])
+        self.assertIn("sdk", query_terms("天枢 SDK 2.0 交付"))
+
+    def test_order(self):
+        from demo.retrieval import lexical_order
+
+        texts = ["季度预算 预算 调整", "周末聚餐", "预算", "部门预算初稿 " + "说明" * 80, "周末聚餐"]
+        order = lexical_order(texts, "预算", 3)
+        self.assertEqual(set(order), {0, 2, 3})
+        self.assertEqual(order[-1], 3)  # the long text with one mention ranks last
+        self.assertEqual(lexical_order(texts, "天气", 2), [4, 3])  # nothing matches: newest first
+        self.assertEqual(lexical_order([], "预算", 5), [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -20,21 +20,10 @@ import numpy as np
 
 
 class StoreView:
-    def __init__(self, path: Path, mine: dict[bytes, str] | None = None):
+    def __init__(self, path: Path, mine: dict[bytes, str] | None = None, cache: Path | None = None):
         self.path = Path(path)
         self.mine = dict(mine or {})  # aid -> device id
-        with closing(self.connect()) as db:
-            aids = [row[0] for row in db.execute("SELECT aid FROM tenants")]
-            stats = {
-                aid: (int(n), int(size or 0))
-                for aid, n, size in db.execute("SELECT aid, count(*), sum(length(body)) FROM docs GROUP BY aid")
-            }
-            self.postings = int(db.execute("SELECT count(*) FROM postings").fetchone()[0])
-            self.rids = {
-                aid: np.fromiter((r[0] for r in db.execute("SELECT rid FROM docs WHERE aid=? ORDER BY rid", (aid,))),
-                                 dtype=np.int64)
-                for aid in aids
-            }
+        aids, stats, self.postings, self.rids = self._load(cache)
         # A stable but meaningless order: tenants are numbered by a hash of their AID.
         aids = [a for a in aids if stats.get(a, (0, 0))[0] > 0]
         aids.sort(key=lambda a: hashlib.sha256(b"tenant-order" + a).digest())
@@ -43,6 +32,53 @@ class StoreView:
         self.stats = stats
         self.docs = sum(n for n, _ in stats.values())
         self.bytes = sum(b for _, b in stats.values())
+
+    def _load(self, cache: Path | None):
+        """Tenants, their record counts and bytes, posting count and record ids.
+
+        Counting reads the whole store (seconds for 1.3 GB), so the result is kept next to
+        it, keyed by the store file's size and time, and reused on the next start."""
+        st = self.path.stat()
+        stamp = f"{st.st_size}-{int(st.st_mtime)}"
+        if cache is not None and cache.exists():
+            try:
+                data = np.load(cache, allow_pickle=False)
+                if str(data["stamp"]) == stamp:
+                    aids = [bytes.fromhex(a) for a in data["aids"].tolist()]
+                    counts, sizes = data["counts"].tolist(), data["sizes"].tolist()
+                    stats = {a: (int(n), int(s)) for a, n, s in zip(aids, counts, sizes)}
+                    rids = {a: data[f"rids_{a.hex()}"] for a in aids}
+                    return aids, stats, int(data["postings"]), rids
+            except (OSError, ValueError, KeyError):
+                pass
+        with closing(self.connect()) as db:
+            aids = [row[0] for row in db.execute("SELECT aid FROM tenants")]
+            stats = {
+                aid: (int(n), int(size or 0))
+                for aid, n, size in db.execute("SELECT aid, count(*), sum(length(body)) FROM docs GROUP BY aid")
+            }
+            postings = int(db.execute("SELECT count(*) FROM postings").fetchone()[0])
+            rids = {
+                aid: np.fromiter((r[0] for r in db.execute("SELECT rid FROM docs WHERE aid=? ORDER BY rid", (aid,))),
+                                 dtype=np.int64)
+                for aid in aids
+            }
+        if cache is not None:
+            try:
+                tmp = cache.with_suffix(".tmp.npz")
+                np.savez(
+                    tmp,
+                    stamp=np.asarray(stamp),
+                    aids=np.asarray([a.hex() for a in aids]),
+                    counts=np.asarray([stats.get(a, (0, 0))[0] for a in aids], dtype=np.int64),
+                    sizes=np.asarray([stats.get(a, (0, 0))[1] for a in aids], dtype=np.int64),
+                    postings=np.asarray(postings),
+                    **{f"rids_{a.hex()}": rids[a] for a in aids},
+                )
+                tmp.replace(cache)
+            except OSError:
+                pass
+        return aids, stats, postings, rids
 
     def connect(self):
         return sqlite3.connect(f"file:{self.path}?mode=ro", uri=True)

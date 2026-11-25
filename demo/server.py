@@ -125,7 +125,7 @@ def store_view(engine: Engine):
             info = next((d for d in BY_ID.values() if d.tenant == tenant), None)
             if info is not None:
                 mine[device.aid] = info.id
-    return StoreView(deploy_root("tee") / "hpis" / "store.sqlite", mine)
+    return StoreView(deploy_root("tee") / "hpis" / "store.sqlite", mine, cache=config.RUNTIME / "storeview.npz")
 
 
 TICKET_RENEW_SECONDS = 6 * 3600
