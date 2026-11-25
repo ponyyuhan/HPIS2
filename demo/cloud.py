@@ -208,7 +208,7 @@ def make_cloud_app():
             # No index survives between questions: a lexical shortlist, then vectors for it only.
             t1 = perf_counter()
             query = " ".join(x for x in (plan.get("semantic"), payload.get("question")) if x)
-            order = retrieval.lexical_order([session.lex[i] for i in keep], query, config.CLOUD_SHORTLIST)
+            order = retrieval.lexical_order([session.lex[i] for i in keep], query, config.cloud_shortlist(kind))
             short = [keep[j] for j in order]
             lex_ms = (perf_counter() - t1) * 1000
             t2 = perf_counter()

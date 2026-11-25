@@ -79,7 +79,7 @@ class Network:
 # Retrieval and generation sizes shared by all lanes (same evidence budget).
 RETRIEVE_K = 10  # ranked candidates fetched by the encrypted search
 EVIDENCE_K = 5  # evidence items handed to the model
-EVIDENCE_K_BY_KIND = {"photo": 6}  # photos: six pictures
+EVIDENCE_K_BY_KIND = {"photo": 6, "sport": 8, "car": 8}  # six pictures; watch/car records are short
 UPLOAD_BATCH_BYTES = 16 * 1024 * 1024  # single-upload limit of the ordinary cloud
 INGEST_BATCH = 400
 INGEST_BATCH_BYTES = 8 * 1024 * 1024  # photo bodies are large; HPIC/HPIS accept 64 MB per request
@@ -87,6 +87,12 @@ INGEST_BATCH_BYTES = 8 * 1024 * 1024  # photo bodies are large; HPIC/HPIS accept
 
 def evidence_k(kind: str | None) -> int:
     return EVIDENCE_K_BY_KIND.get(kind or "mail", EVIDENCE_K)
+
+
+def cloud_shortlist(kind: str | None) -> int:
+    """Plain cloud: candidates kept for on-the-fly vectors. Emails are long; photo, watch and car
+    records are a sentence or two, so a few hundred of them still embed within the time budget."""
+    return CLOUD_SHORTLIST if (kind or "mail") == "mail" else CLOUD_SHORTLIST_SHORT_RECORDS
 
 
 def _seconds(name: str, default: float) -> float:
@@ -101,7 +107,8 @@ RUN_LIMIT_S = _seconds("HPIS_DEMO_RUN_LIMIT_S", 90.0)  # a whole run, click to e
 FIRST_TOKEN_S = _seconds("HPIS_DEMO_FIRST_TOKEN_S", 25.0)  # model: first visible token
 ANSWER_LIMIT_S = _seconds("HPIS_DEMO_ANSWER_LIMIT_S", 60.0)  # model: whole answer
 CLOUD_EMBED_BUDGET_S = _seconds("HPIS_DEMO_CLOUD_EMBED_BUDGET_S", 6.0)  # plain cloud, on-the-fly vectors
-CLOUD_SHORTLIST = 100  # plain cloud: lexical shortlist before the on-the-fly vectors
+CLOUD_SHORTLIST = 100  # plain cloud: lexical shortlist before the on-the-fly vectors (emails)
+CLOUD_SHORTLIST_SHORT_RECORDS = 400  # the same for photo captions and watch/car records
 VERIFY_LIMIT_S = _seconds("HPIS_DEMO_VERIFY_LIMIT_S", 6.0)  # the paired plain/cipher re-check
 
 DEFAULT_MODEL = os.environ.get("HPIS_DEMO_MODEL", "qwen")

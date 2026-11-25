@@ -183,8 +183,8 @@ class DevicesTest(unittest.TestCase):
             events = await self.ask(eng, question)
             plan, evidence = self.check_run(events, kind, device)
             items = by_type(events, "evidence", "v2")[0]["items"]
+            self.assertLessEqual(len(items), self.config.evidence_k(kind))
             if kind == "photo":
-                self.assertLessEqual(len(items), 6)
                 self.assertTrue(all(i["thumb"].startswith("/api/photo/") and i["place"].get("city") for i in items))
                 sent = model.requests[before:]
                 self.assertEqual(len(sent), 2)  # one request per lane, both with the pictures
@@ -193,7 +193,6 @@ class DevicesTest(unittest.TestCase):
                     self.assertEqual(sum(p["type"] == "image_url" for p in parts), len(items))
                 self.assertTrue(by_type(events, "plan")[0]["vision"])
             else:
-                self.assertLessEqual(len(items), 5)
                 if kind != "mail":
                     self.assertTrue(all(i["kind"] == kind and i["title"] and i["date"] for i in items))
             if question == "我在慕尼黑拍的照片":
