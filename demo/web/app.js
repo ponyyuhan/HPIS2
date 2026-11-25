@@ -1420,7 +1420,7 @@ function archSvg() {
 
   ${box(50, 340, 530, 272)}
   <text x="70" y="374" class="arch-h">用户多端设备</text>
-  <text x="70" y="398" class="arch-sub">多端数据各自加密上传 · 本地掌控数据授权使用</text>
+  <text x="70" y="398" class="arch-sub">多端数据加密共享 · 本地掌控授权 · 数据可用不可见</text>
   ${tiles}
   ${chip(68, 518, 152, "数据密钥 DEK", "key")}${chip(230, 518, 152, "检索密钥 SSE", "key")}${chip(392, 518, 170, "向量密钥 VEK", "key")}
   ${chip(68, 562, 242, "HPIS SDK · 生成目标索引密文", "new")}${chip(320, 562, 242, "HPIS SDK · 密封目标向量", "new")}
