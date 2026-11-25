@@ -15,9 +15,9 @@ Two retrieval semantics are served from the same encrypted store:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
-from time import perf_counter
 
 import aiohttp
 import numpy as np
@@ -29,9 +29,8 @@ from hpis.codec import F32, decrypt_item, pack, unpack
 from hpis.network import tls_client
 from hpis.services import PUBLIC_TICKETS, Window, check_deadline, make_hpic_app
 
-from . import config, retrieval
+from . import config, records, retrieval
 from .answer import generate
-from .mailbox import card, model_text
 from .netem import link_from, now, pace
 
 
@@ -83,6 +82,8 @@ def make_demo_hpic_app(folder, store_url):
         ask = grant["ask"]
         lane = ask.get("lane", "v2")
         plan = ask.get("plan") or {}
+        kind = plan.get("kind") or "mail"
+        vision = bool(ask.get("vision")) and kind == "photo"
         cloud = link_from(ask.get("cloud"), config.Network().cloud)
 
         response = web.StreamResponse(headers={"Content-Type": "application/x-ndjson", "Cache-Control": "no-store"})
@@ -143,28 +144,32 @@ def make_demo_hpic_app(folder, store_url):
         else:
             ranked = [(rid, b["content"]) for rid, b in opened]
             candidates = stats.get("vector_rows", len(opened))
-        evidence_pairs = retrieval.post_filter(ranked, plan, int(ask.get("evidence_k", config.EVIDENCE_K)))
+        evidence_k = int(ask.get("evidence_k") or config.evidence_k(kind))
+        evidence_pairs = retrieval.post_filter(ranked, plan, evidence_k)
+        cards, evidence = records.evidence(kind, evidence_pairs, vision=vision)
         await emit(
             {
                 "ev": "evidence",
+                "kind": kind,
                 "candidates": int(candidates),
                 "rank_ms": round((now() - t2) * 1000, 3),
-                "items": [card(m) for _, m in evidence_pairs],
+                "items": cards,
             }
         )
 
         # ---- business model inside HPIC -----------------------------------
-        evidence = []
-        for n, (_, mail) in enumerate(evidence_pairs, 1):
-            item = model_text(mail)
-            item["n"] = n
-            evidence.append(item)
         if ask.get("generate", True):
-            async for event in generate(ask["question"], evidence, ask.get("model", config.DEFAULT_MODEL)):
-                if event["type"] == "token":
-                    await emit({"ev": "token", "text": event["text"]})
-                elif event["type"] == "done":
-                    await emit({"ev": "done", **{k: v for k, v in event.items() if k != "type"}})
+            stream = generate(
+                ask["question"], evidence, ask.get("model", config.DEFAULT_MODEL), kind=kind, note=ask.get("note")
+            )
+            async with contextlib.aclosing(stream):
+                async for event in stream:
+                    if event["type"] == "token":
+                        await emit({"ev": "token", "text": event["text"]})
+                    elif event["type"] == "done":
+                        if event.get("timed_out"):
+                            await emit({"ev": "notice", "text": event.get("error") or "模型超时"})
+                        await emit({"ev": "done", **{k: v for k, v in event.items() if k != "type"}})
         else:
             await emit({"ev": "done", "skipped": True})
         await response.write_eof()

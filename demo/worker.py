@@ -39,7 +39,13 @@ def main():
 
         app = make_cloud_app()
         ssl = tls_server(args.folder, False)
-    web.run_app(app, host="127.0.0.1", port=args.port, ssl_context=ssl, access_log=None, print=None)
+    # HPIC and the ordinary cloud stop work for a device that hung up (POST /api/stop closes
+    # its connections): the handler is cancelled, which also closes the model request.
+    cancel = args.role in ("hpic", "cloud")
+    web.run_app(
+        app, host="127.0.0.1", port=args.port, ssl_context=ssl, access_log=None, print=None,
+        handler_cancellation=cancel,
+    )
 
 
 if __name__ == "__main__":
