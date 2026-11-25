@@ -684,7 +684,7 @@ body.scoreboard main { padding-bottom: 1rem; }
 .cover__title { font-size: clamp(2.9rem, 4.7vw, 5.6rem); line-height: 1.14; margin: 1.4rem 0 1.3rem; letter-spacing: .01em; font-weight: 820; color: var(--text); }
 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .grad--alt { background: linear-gradient(115deg, #7b61e8, #d6488c); -webkit-background-clip: text; background-clip: text; }
-.cover__sub { color: var(--muted); font-size: 1.22rem; line-height: 1.8; max-width: 40rem; margin: 0 0 2.4rem; }
+.cover__sub { color: var(--muted); font-size: 1.22rem; line-height: 1.8; max-width: 40rem; margin: 0 0 2.4rem; word-break: keep-all; } /* lines break at punctuation, not inside a word */
 .cover__sub b { color: var(--text); font-weight: 700; }
 .cover__stats { display: grid; grid-template-columns: repeat(3, auto); gap: 0; justify-content: start; margin-bottom: 2.8rem; }
 /* three promotional points under the cover text */
