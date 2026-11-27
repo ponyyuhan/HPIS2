@@ -315,6 +315,8 @@ class Flow {
     this.nodes[nid(d)]?.g.classList.toggle("shade", on);
     this.links[`s_${d}`]?.base.classList.toggle("shade", on);
   }
+  // a link that fades out for the run (back on reset)
+  fade(id, on) { this.links[id]?.base.classList.toggle("gone", on); }
   linkOff(id, on) { this.links[id]?.base.classList.toggle("off", on); }
   // the terminal node follows the device the question is about (plan.device)
   setTerminal({ icon, label }, sub) {
@@ -394,7 +396,7 @@ class Flow {
     for (const p of this.packets) { p.c.remove(); p.tail.forEach((x) => x.remove()); }
     this.packets = [];
     for (const [id, n] of Object.entries(this.nodes)) { this.node(id, null, n.sub, n.subcls); n.g.classList.remove("shade"); }
-    for (const id of Object.keys(this.links)) { this.linkValue(id, ""); this.links[id].base.classList.remove("shade"); }
+    for (const id of Object.keys(this.links)) { this.linkValue(id, ""); this.links[id].base.classList.remove("shade", "gone"); }
   }
   destroy() {
     this.quiet();
@@ -966,9 +968,10 @@ function handle(ev, question) {
         stage(id, "upload", "end", t);
         stage(id, "retrieve", "start", t);
         f.node("cloud", "active", "现场检索中", "hot");
+        if (L.multi && state.run?.route !== "direct") f.node("dev", "active", "已上传全部数据", "hot");
       } else if (ev.stage === "request" && ev.state === "start") {
         stage(id, "request", "start", t);
-        f.node("dev", "active");
+        f.node("dev", "active", L.multi ? "发出密封请求" : undefined, "hot");
         if (L.multi) { // 密封请求: one small request, shown long enough to see
           f.glow("edge", 1000);
           f.burst("edge", 3, { kind: "cipher", r: 4, every: 150, dur: 620 });
@@ -1086,17 +1089,14 @@ function handle(ev, question) {
     case "device_search": {
       if (!L || L.done) break;
       const label = deviceOf(ev.device).label;
-      const hit = `${ev.device === "phone" ? "照片" : ""}命中 ${intText(ev.rows)} 条`;
+      // 多端协同: the search runs in HPIS (HPIC 2.0) or in what was uploaded (HPIC 1.0), not on the devices, so the
+      // devices keep their fixed status; the count of devices searched shows on HPIS, the hits on the board
       if (id === "v2") {
-        // the search runs in HPIS on the data stored there: the device and its link stay still, only its hits show;
-        // the phone is the one asking, so it alone stays lit
-        L.flow.node(nid(ev.device), ev.device === "phone" ? "active" : null, hit, "ok");
         L.flow.glow("cloudl", 1200);
         L.flow.send("cloudl", { reverse: true, kind: "cipher", r: 3.2, dur: 480 });
         L.searched = (L.searched || 0) + 1;
         L.flow.node("hpis", "active", `密态检索 ${L.searched}/${(state.run?.devices || []).length || L.searched} 台`, "hot");
       } else {
-        L.flow.node(nid(ev.device), ev.device === "phone" ? "active" : null, `✓ ${hit}`, "ok");
         L.flow.node("cloud", "active", `检索${label}数据`, "hot");
       }
       break;
@@ -2152,6 +2152,10 @@ function shadeDevices() {
   for (const d of DEVICE_ORDER) {
     P.flow.shade(d, d !== sender);
     V.flow.shade(d, d !== "phone");
+    // HPIC 2.0: the data was stored in HPIS once, before the question, so its dotted links fade for the run and
+    // each device says where its data is
+    V.flow.fade(`s_${d}`, true);
+    if (d !== "phone") V.flow.node(nid(d), null, "✓ 已存入 HPIS", "ok");
   }
 }
 // a new scenario or device choice: redraw HPIC 1.0's topology and clear the last run
@@ -2192,6 +2196,8 @@ function applyMulti() {
   }
   // before the run, the link says what HPIC 1.0 gets per question
   if (!state.running && !P.final) P.flow.linkValue("edge", `${direct ? "直传 " : ""}${bytesText(size)}`, "big");
+  // a run on screen (running or finished) keeps its look: shadows, faded HPIS links, each device's fixed status
+  if (ctx.live) shadeDevices();
   setTicker("plain");
   renderBoard();
 }

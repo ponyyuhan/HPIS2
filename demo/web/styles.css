@@ -1301,3 +1301,6 @@ body[data-mode="multi"] #device { display: none; }
 .flow .node.shade use { opacity: .32; }
 .flow .node.shade:not(.off) .nlabel { opacity: .55; }
 .flow .link.shade { opacity: .4; }
+/* HPIC 2.0 during a run: the dotted device-to-HPIS links (data stored before the question) fade out */
+.flow .link--store { transition: opacity .4s; }
+.flow .link.gone { opacity: 0; }
