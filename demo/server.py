@@ -1,10 +1,11 @@
-"""Web server for the demo (面向个人敏感数据的智能问答): static UI + JSON/NDJSON API.
+"""Web server for the demo (个人智能计算平台2.0): static UI + JSON/NDJSON API.
 
 Endpoints (PLAN-v3 §3; older fields are kept):
   GET  /api/status                 phase, models (+vision), presets (+kind, device, scene), devices, build,
-                                   multi {presets, hpic1_options} …
+                                   multi {presets, scenarios, hpic1_options} …
   POST /api/run                    NDJSON events of one question (plan, notice, stage, …, finish, end);
-                                   {"mode": "multi", "hpic1": [device ids]} asks across the devices (多端协同)
+                                   {"mode": "multi", "route": "phone"|"direct", "hpic1": [device ids]} asks
+                                   across the devices (多端协同; route = HPIC 1.0 scenario 一 or 二)
   POST /api/stop                   stop the run in progress -> {"ok", "stopped"}
   GET  /api/mail/{id}              one email (plaintext, the PC's own copy)
   GET  /api/record/{kind}/{id}     one record of any kind (plaintext, the device's own copy)
@@ -234,6 +235,13 @@ HPIC1_OPTIONS = [
     {"id": "pc", "label": "仅 PC 数据", "devices": ["pc"]},
     {"id": "phone_watch", "label": "手机 + 手表", "devices": ["phone", "watch"]},
 ]
+# The two HPIC 1.0 scenarios of 多端协同 (HPIC 2.0 is the third): the page picks one and the devices.
+MULTI_SCENARIOS = [
+    {"id": "sync", "label": "场景一 · 先同步到手机", "issue": "性能差", "route": "phone", "choose": "many",
+     "devices": ["watch", "pc", "car"], "default": ["watch", "pc", "car"]},
+    {"id": "direct", "label": "场景二 · 单设备直传", "issue": "准确性差", "route": "direct", "choose": "one",
+     "devices": ["watch", "pc", "car"], "default": ["watch"]},
+]
 
 
 def device_rows(state) -> list[dict]:
@@ -286,6 +294,10 @@ def multi_rows(state) -> dict:
             for p in presets
         ],
         "hpic1_options": [o for o in HPIC1_OPTIONS if set(o["devices"]) <= have] or HPIC1_OPTIONS[:1],
+        "scenarios": [
+            {**s, "devices": [d for d in s["devices"] if d in have], "default": [d for d in s["default"] if d in have]}
+            for s in MULTI_SCENARIOS
+        ],
     }
 
 
@@ -367,7 +379,8 @@ async def run(request):
         hpic1 = payload.get("hpic1")
         if not isinstance(hpic1, list):
             hpic1 = HPIC1_OPTIONS[0]["devices"]
-        multi = {"hpic1": [d for d in hpic1 if d in BY_ID]}
+        route = "direct" if payload.get("route") == "direct" else "phone"
+        multi = {"hpic1": [d for d in hpic1 if d in BY_ID], "route": route}
     response = web.StreamResponse(headers={"Content-Type": "application/x-ndjson", "Cache-Control": "no-store"})
     await response.prepare(request)
     try:

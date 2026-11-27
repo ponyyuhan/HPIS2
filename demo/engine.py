@@ -377,16 +377,22 @@ class Engine:
                 sent,
             )
 
-    async def _plain_multi(self, emit, ctl: Control, question, mp: dict, units: dict, model, net, hpic1):
-        """HPIC 1.0, several devices: the phone uploads its own data and what the watch, PC and car
-        synced to it beforehand (``hpic1``), the same batches as a single-device question."""
+    async def _plain_multi(self, emit, ctl: Control, question, mp: dict, units: dict, model, net, multi: dict):
+        """HPIC 1.0, several devices, in one of two scenarios (``multi["route"]``):
+        "phone" (场景一) — the phone uploads its own data and what the watch, PC and car synced to it
+        beforehand; "direct" (场景二) — one device sends only its own data straight to HPIC 1.0.
+        ``multi["hpic1"]`` is the devices whose data HPIC 1.0 receives; same batches as a single-device question."""
+        hpic1, route = multi["hpic1"], multi.get("route", "phone")
         lane = "plain"
         devices = mp["devices"]
-        for device in [d for d in BY_ID if d in hpic1 and d != "phone"]:
+        for device in [d for d in BY_ID if d in hpic1 and (route == "direct" or d != "phone")]:
             kind = BY_ID[device].kind
             if self.catalog.has(kind) and kind in self.uploads:
-                emit({"lane": lane, "type": "sync", "device": device, "via": "phone",
-                      "records": self.catalog.count(kind), "bytes": int(self.uploads[kind].plan.get("bytes") or 0)})
+                info = {"device": device, "records": self.catalog.count(kind), "bytes": int(self.uploads[kind].plan.get("bytes") or 0)}
+                if route == "direct":
+                    emit({"lane": lane, "type": "direct", **info})
+                else:
+                    emit({"lane": lane, "type": "sync", "via": "phone", **info})
         have = [d for d in devices if d in hpic1 and BY_ID[d].kind in self.uploads]
         emit({"lane": lane, "type": "missing", "devices": [d for d in devices if d not in have]})
         jobs = [(d, BY_ID[d].kind, i) for d in have for i in range(len(self.uploads[BY_ID[d].kind]))]
@@ -898,6 +904,7 @@ class Engine:
         deadline = run.t0 + config.RUN_LIMIT_S
         loop = asyncio.get_running_loop()
         hpic1 = [d for d in BY_ID if d in (multi.get("hpic1") or [])]
+        route = "direct" if multi.get("route") == "direct" else "phone"
         mp = await loop.run_in_executor(None, self.plan_multi, question)
         t0 = now()
         units = {}
@@ -912,6 +919,7 @@ class Engine:
                 "preset": mp["preset"],
                 "devices": mp["devices"],
                 "hpic1": hpic1,
+                "route": route,
                 "plans": {
                     d: {
                         "kind": plan["kind"],
@@ -940,7 +948,7 @@ class Engine:
 
         def make(lane):
             if lane == "plain":
-                return self.lane_plain(ctl, question, mp, units, model, net, None, multi=hpic1)
+                return self.lane_plain(ctl, question, mp, units, model, net, None, multi={"hpic1": hpic1, "route": route})
             return self.lane_hpis_multi(ctl, question, mp, units, model, net)
 
         if await self._race(ctl, out, lanes, make, deadline):

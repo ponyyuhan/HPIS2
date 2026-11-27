@@ -25,10 +25,11 @@ const state = {
   verify: null,
   plainTicker: "",
   mode: "single", // 单端问答 | 多端协同 ("multi", when the server offers status.multi)
-  multi: null, // status.multi: { presets, hpic1_options }
+  multi: null, // status.multi: { presets, scenarios }
   single: [], // the 单端问答 presets in screen order; state.presets is the current mode's list
   mpreset: null, // the selected 多端协同 preset
-  hpic1: null, // id of the selected 「HPIC 1.0 收到的数据」 option
+  scen: "sync", // the HPIC 1.0 scenario of 多端协同: "sync" (场景一, via the phone) | "direct" (场景二, one device)
+  pick: { sync: null, direct: null }, // its device choice: the devices synced to the phone / the one device that uploads
   kind: "mail", // data kind the lanes are set up for: the selected preset's, then the run's plan
   device: null, // device id, only when the server names devices
   run: null, // { kind, device, total } of the current or last run
@@ -148,7 +149,7 @@ const LANES = {
     links: [["edge", "dev", "cloud", "邮件与附件 · 分批上传"]],
   },
   v2: {
-    title: "HPIC2.0：端侧+机密计算平台+安全存储平台", tag: "2.0", icon: "shield-check",
+    title: "HPIC2.0：<wbr>端侧+<wbr>机密计算平台+<wbr>安全存储平台", tag: "2.0", icon: "shield-check", // <wbr>: wraps after a + only
     ribbon: "HPIC 2.0 · 一次加密存储，按需密态检索", ribbonIcon: "database",
     desc: "SSE 在密文索引上精确筛选，向量在可信计算区内精确排序，只取回命中的几封密文",
     stages: [["request", "加密上传"], ["search", "密态检索"], ["generate", "模型作答"]],
@@ -156,44 +157,71 @@ const LANES = {
     links: [["edge", "dev", "hpic", "推理请求 + 目标索引密文"], ["cloudl", "hpic", "hpis", "部分数据密文"]],
   },
 };
-// 多端协同 (SPEC §4): the same two lanes; each draws its devices instead of the two-node flow.
+// 多端协同 (SPEC-scenarios): HPIC 1.0 in one of two scenarios (left), HPIC 2.0 as 场景三 (right).
+// Each lane draws its devices instead of the two-node flow; texts that depend on the scenario are set in applyMulti.
 const MULTI = {
-  plain: {
-    ...LANES.plain,
-    ribbon: "HPIC 1.0 · 只能用已同步到手机的数据",
-    desc: "只有手机连接 HPIC 1.0。手表、PC、车机的数据要先同步到手机，没同步的这次用不上",
-    stages: [["upload", "上传数据"], ["retrieve", "云端检索"], ["generate", "模型作答"]],
-  },
+  plain: { ...LANES.plain, stages: [["upload", "上传数据"], ["retrieve", "现场检索"], ["generate", "模型作答"]] },
   v2: {
     ...LANES.v2,
-    ribbon: "HPIC 2.0 · 每台设备的数据都在 HPIS",
-    desc: "手机、手表、PC、车机各自加密存入 HPIS。提问只发一次密封请求，按设备逐个密态检索",
+    ribbon: "场景三 · HPIC 2.0",
+    desc: "各设备的数据已加密存入 HPIS。手机只发一次密封请求，HPIC 2.0 按设备逐个密态检索",
   },
 };
-// the phone is node "dev" in both topologies, so the run events that light up "dev" work in both modes
-const nid = (d) => (d === "phone" ? "dev" : d);
-// HPIC 1.0: watch, PC and car sync to the phone (主设备), and only the phone uploads to HPIC 1.0
-function topoPlain() {
-  const nodes = [["dev", 318, "smartphone", "手机（主设备）", "", { y: 62 }], ["cloud", 500, "cpu", "HPIC 1.0", "机密计算", { y: 62 }]];
-  const links = [["edge", "dev", "cloud", "分批上传"]];
-  for (const [d, y] of [["watch", 24], ["pc", 68], ["car", 112]]) {
-    nodes.push([d, 24, DEVICES[d].icon, DEVICES[d].label, "", { y, small: true }]);
-    links.push([`s_${d}`, d, "dev", "", { from: [172, y], to: [280, 62] }]);
-  }
-  return { view: "0 0 568 136", nodes, links };
+// The two HPIC 1.0 scenarios (status.multi.scenarios; this copy only for a server that does not send them yet)
+const SCENARIOS = [
+  { id: "sync", label: "场景一 · 先同步到手机", issue: "性能差", route: "phone", choose: "many", devices: ["watch", "pc", "car"], default: ["watch", "pc", "car"] },
+  { id: "direct", label: "场景二 · 单设备直传", issue: "准确性差", route: "direct", choose: "one", devices: ["watch", "pc", "car"], default: ["watch"] },
+];
+const scenarios = () => (state.multi?.scenarios?.length ? state.multi.scenarios : SCENARIOS);
+const scenario = () => scenarios().find((s) => s.id === state.scen) || scenarios()[0];
+// what HPIC 1.0 gets in the chosen scenario: route "phone" → the phone and the devices synced to it; "direct" → one device
+function hpic1Pick() {
+  const sc = scenario();
+  const pick = state.pick[sc.id] || sc.default || [];
+  const route = sc.route || (sc.choose === "one" ? "direct" : "phone");
+  return { sc, route, devices: route === "direct" ? pick.slice(0, 1) : ["phone", ...pick] };
 }
-// HPIC 2.0: every device stores its own data in HPIS under its own AID; the phone sends one sealed request
-function topoV2() {
-  const nodes = [["hpis", 318, "database", "HPIS", "安全存储平台", { y: 70 }], ["hpic", 500, "cpu", "HPIC 2.0", "机密计算平台", { y: 70 }]];
-  const links = [
-    ["edge", "dev", "hpic", "密封请求", { from: [172, 12], to: [474, 41], lpos: [300, 13], vpos: [420, 22] }],
-    ["cloudl", "hpic", "hpis", "按设备密态检索", { from: [460, 70], to: [358, 70] }],
-  ];
-  for (const [d, y] of [["phone", 18], ["watch", 54], ["pc", 90], ["car", 126]]) {
-    nodes.push([nid(d), 24, DEVICES[d].icon, DEVICES[d].label, "", { y, small: true }]);
-    links.push([`s_${d}`, nid(d), "hpis", "", { from: [172, y], to: [280, 70] }]);
+// the phone is node "dev" in every topology, so the run events that light up "dev" work in both modes
+const nid = (d) => (d === "phone" ? "dev" : d);
+// Topologies (one 480 x 160 drawing): the phone (主设备) always sits on top, apart from the column of watch, PC
+// and car; HPIC top right. Device nodes are small with their text on the right, the others wide pills.
+const TOPO_VIEW = "0 -2 480 162";
+const COL = [["watch", 68], ["pc", 106], ["car", 144]];
+const PHONE = ["dev", 214, "smartphone", "手机（主设备）", "", { y: 22, wide: 140 }];
+// 场景一: watch, PC and car sync to the phone; the phone uploads everything to HPIC 1.0 for every question
+function topoSync() {
+  const nodes = [PHONE, ["cloud", 420, "cpu", "HPIC 1.0", "机密计算", { y: 22, wide: 120 }]];
+  const links = [["edge", "dev", "cloud", "每次提问上传", { from: [286, 22], to: [358, 22], lpos: [322, 14], vpos: [322, 40] }]];
+  for (const [d, y] of COL) {
+    nodes.push([d, 20, DEVICES[d].icon, DEVICES[d].label, "", { y, small: true }]);
+    links.push([`s_${d}`, d, "dev", "", { from: [122, y - 8], to: [168 + (y - 68) / 3, 44], cls: "sync" }]);
   }
-  return { view: "0 -2 568 148", nodes, links };
+  return { view: TOPO_VIEW, nodes, links };
+}
+// 场景二: one device uploads only its own data straight to HPIC 1.0; the phone and the other devices are not involved
+function topoDirect(dev) {
+  const nodes = [PHONE, ["cloud", 420, "cpu", "HPIC 1.0", "机密计算", { y: 22, wide: 120 }]];
+  const links = [];
+  for (const [d, y] of COL) {
+    nodes.push([d, 20, DEVICES[d].icon, DEVICES[d].label, "", { y, small: true }]);
+    if (d === dev) links.push(["edge", d, "cloud", "", { from: [122, y], to: [372, 44], vpos: [250, y - (y - 44) * 0.51 + 22] }]);
+  }
+  return { view: TOPO_VIEW, nodes, links };
+}
+// 场景三: every device stored its data once in HPIS under its own AID (the phone its photos too); the phone asks
+// HPIC 2.0 with one sealed request, and HPIC 2.0 searches each device's data in HPIS
+function topoV2() {
+  const nodes = [PHONE, ["hpic", 420, "cpu", "HPIC 2.0", "机密计算平台", { y: 22, wide: 120 }], ["hpis", 420, "database", "HPIS", "安全存储平台", { y: 106, wide: 120 }]];
+  const links = [
+    ["edge", "dev", "hpic", "密封请求", { from: [286, 22], to: [358, 22], lpos: [322, 14], vpos: [322, 40] }],
+    ["cloudl", "hpic", "hpis", "密态检索", { from: [420, 44], to: [420, 84], lpos: [452, 62], vpos: [452, 78] }],
+    ["s_phone", "dev", "hpis", "", { from: [232, 44], to: [372, 84], cls: "store" }],
+  ];
+  for (const [d, y] of COL) {
+    nodes.push([d, 20, DEVICES[d].icon, DEVICES[d].label, "", { y, small: true }]);
+    links.push([`s_${d}`, d, "hpis", "", { from: [122, y], to: [358, 106 + (y - 106) / 3], cls: "store" }]);
+  }
+  return { view: TOPO_VIEW, nodes, links };
 }
 
 // ------------------------------------------------------------------ flow diagram
@@ -215,7 +243,7 @@ class Flow {
       const [x1, y1] = o.from || [pos[a].x + 40, pos[a].y];
       const [x2, y2] = o.to || [pos[b].x - 40, pos[b].y];
       const g = this.el("g", {});
-      const base = this.el("path", { d: `M${x1} ${y1} L${x2} ${y2}`, class: "link" }, g);
+      const base = this.el("path", { d: `M${x1} ${y1} L${x2} ${y2}`, class: `link${o.cls ? " link--" + o.cls : ""}` }, g);
       const dash = this.el("path", { d: `M${x1} ${y1} L${x2} ${y2}`, class: "link-dash" }, g);
       const [lx, ly] = o.lpos || [(x1 + x2) / 2, (y1 + y2) / 2 - 14];
       const lab = this.el("text", { x: lx, y: ly, class: "llabel" }, g);
@@ -226,6 +254,21 @@ class Flow {
     }
     for (const [id, x, icon, label, sub, o = {}] of cfg.nodes) {
       const y = o.y ?? 58;
+      if (o.wide) {
+        // a wide pill (多端协同): icon on the left, label and status inside
+        const [w, h] = [o.wide, 40];
+        const g = this.el("g", { class: "node node--w", transform: `translate(${x - w / 2} ${y - h / 2})` });
+        this.el("rect", { width: w, height: h, rx: 12, class: "ripple" }, g);
+        this.el("rect", { width: w, height: h, rx: 12, class: "box" }, g);
+        const use = this.el("use", { href: `${SPRITE}#${icon}`, x: 10, y: 10, width: 20, height: 20 }, g);
+        use.setAttribute("style", "fill:none;stroke:currentColor");
+        const l = this.el("text", { x: 38, y: 17, class: "nlabel nlabel--w" }, g);
+        l.textContent = label;
+        const s = this.el("text", { x: 38, y: 32, class: "nsub nsub--w" }, g);
+        s.textContent = sub;
+        this.nodes[id] = { g, s, sub, subcls: "", use, l, base: "nsub nsub--w" };
+        continue;
+      }
       const small = !!o.small;
       const [w, h, r, ic] = small ? [30, 30, 9, 18] : [72, 56, 16, 28];
       const g = this.el("g", { class: `node${small ? " node--s" : ""}`, transform: `translate(${x - w / 2} ${y - h / 2})` });
@@ -363,12 +406,11 @@ function buildLanes() {
   host.innerHTML = "";
   host.classList.add("two");
   const multi = state.mode === "multi";
+  host.classList.toggle("three", multi);
   for (const id of ["plain", "v2"]) {
     const cfg = (multi ? MULTI : LANES)[id];
-    // 单端问答: upload and cloud-to-cloud traffic; 多端协同: upload, device coverage and key facts
-    const metrics = multi
-      ? [["edge", "signal", "上传云端", id === "plain" ? "bad" : "good"], ["cover", "layers", "覆盖设备", ""], ["facts", "check-circle", "关键信息", ""]]
-      : [["edge", "signal", "上传云端", id === "plain" ? "bad" : "good"], ["cloud", "server", "云云传输", id === "v2" ? "good" : ""]];
+    // 单端问答: upload and cloud-to-cloud traffic; 多端协同: none (the comparison column between the lanes has them)
+    const metrics = multi ? [] : [["edge", "signal", "上传云端", id === "plain" ? "bad" : "good"], ["cloud", "server", "云云传输", id === "v2" ? "good" : ""]];
     const el = document.createElement("article");
     el.className = `lane card lane--${id}${multi ? " lane--multi" : ""}`;
     el.dataset.lane = id;
@@ -383,7 +425,7 @@ function buildLanes() {
       </header>
       <div class="flow" data-flow></div>
       <ol class="rail">${cfg.stages.map(([k, l]) => `<li data-stage="${k}"><span>${l}</span><b>—</b></li>`).join("")}<li class="rail__total" data-total><span>完整回答</span><b>—</b></li></ol>
-      <div class="metrics">${metrics.map(([k, ic, l, c]) => `<div class="metric ${c}" data-mbox="${k}"><label>${ICON(ic)}${l}</label><output data-m="${k}">—</output></div>`).join("")}</div>
+      ${metrics.length ? `<div class="metrics">${metrics.map(([k, ic, l, c]) => `<div class="metric ${c}" data-mbox="${k}"><label>${ICON(ic)}${l}</label><output data-m="${k}">—</output></div>`).join("")}</div>` : ""}
       <div class="answer">
         <div class="answer__head"><span>${ICON("brain")} <b data-model></b> 的回答<em class="answer__mode" data-mode></em></span><span class="answer__q" data-quality></span><span data-evcount></span></div>
         <div class="answer__notice" data-notice hidden></div>
@@ -391,10 +433,22 @@ function buildLanes() {
         <div class="evlist" data-evlist></div>
       </div>`;
     host.appendChild(el);
-    const flow = new Flow($("[data-flow]", el), multi ? (id === "plain" ? topoPlain() : topoV2()) : cfg);
+    // 多端协同: the comparison column (scoreboard + key-facts checklist) sits between the two lanes
+    if (multi && id === "plain") host.insertAdjacentHTML("beforeend", BOARD);
+    const flow = new Flow($("[data-flow]", el), multi ? (id === "plain" ? plainTopo() : topoV2()) : cfg);
     state.lanes[id] = { id, el, cfg, flow, multi, kind: "mail", text: "", evidence: [], stageT: {}, ends: {}, m: {} };
     setTicker(id);
   }
+}
+const plainTopo = () => { const h = hpic1Pick(); return h.route === "direct" ? topoDirect(h.devices[0]) : topoSync(); };
+// the HPIC 1.0 lane's drawing follows the scenario and its device choice (rebuilt while no run is on)
+function redrawPlain() {
+  const P = lane("plain");
+  if (!P?.multi || state.running) return;
+  P.flow.destroy();
+  const host = $("[data-flow]", P.el);
+  host.innerHTML = "";
+  P.flow = new Flow(host, plainTopo());
 }
 
 function lane(id) { return state.lanes[id]; }
@@ -470,11 +524,16 @@ function setTicker(id, text) {
 const REUPLOAD = "HPIC 1.0 不保存数据，下次提问还要重新上传";
 function plainExposure() {
   if (lane("plain")?.multi) {
-    const opt = hpic1Option();
-    const got = opt?.devices || [];
-    const miss = DEVICE_ORDER.filter((d) => d !== "phone" && !got.includes(d)).map((d) => deviceOf(d).label);
-    const gaps = [miss.length ? `${miss.join("、")}的数据没有同步到手机` : "", got.includes("phone") ? "" : "手机本机的数据没有上传"].filter(Boolean);
-    return `HPIC 1.0 收到的数据：${opt?.label || "—"}${gaps.length ? `　｜　${gaps.join("，")}，本次用不上` : ""}　｜　${REUPLOAD}`;
+    const { route, devices } = state.running && state.run?.hpic1 ? { route: state.run.route, devices: state.run.hpic1 } : hpic1Pick();
+    const names = (ds) => ds.map((d) => deviceOf(d).label).join("、");
+    const size = bytesText(devices.reduce((a, d) => a + (deviceOf(d).bytes || 0), 0));
+    if (route === "direct") {
+      const rest = DEVICE_ORDER.filter((d) => !devices.includes(d));
+      return `${names(devices)}直接上传自己的全部数据 · ${size}　｜　${names(rest)}的数据这次用不上　｜　${REUPLOAD}`;
+    }
+    const synced = devices.filter((d) => d !== "phone");
+    const left = ["watch", "pc", "car"].filter((d) => !synced.includes(d));
+    return `手机每次提问上传：本机照片${synced.length ? ` + 已同步的${names(synced)}数据` : ""} · ${size}${left.length ? `　｜　${names(left)}未同步，这次用不上` : ""}　｜　${REUPLOAD}`;
   }
   if (state.kind === "mail") return state.plainTicker || `每次提问由手机上传整个邮箱：邮件原文、附件、体检报告、账单、合同　｜　${REUPLOAD}`;
   const K = kindOf(state.kind);
@@ -523,6 +582,8 @@ function resetLanes() {
     L.final = null;
     L.llm = null;
     L.decryptRows = null;
+    L.up = null;
+    L.missing = null;
     L.el.classList.remove("running", "done", "halted");
     for (const li of $$(".rail li", L.el)) {
       li.className = li.hasAttribute("data-total") ? "rail__total" : "";
@@ -547,6 +608,7 @@ function resetLanes() {
     pill(L.id, "待命");
     setTicker(L.id);
   }
+  $("#board")?.classList.remove("final");
   applyMulti();
   $("#verdict").classList.remove("on");
   document.body.classList.remove("scoreboard", "results");
@@ -650,8 +712,9 @@ async function run() {
   state.running = true;
   state.stopping = null;
   const multi = !!lane("plain")?.multi;
+  const pick = multi ? hpic1Pick() : null;
   state.run = multi
-    ? { mode: "multi", devices: state.mpreset?.devices || DEVICE_ORDER, facts: state.mpreset?.facts || [], hpic1: hpic1Option()?.devices || [] }
+    ? { mode: "multi", devices: state.mpreset?.devices || DEVICE_ORDER, facts: state.mpreset?.facts || [], scen: pick.sc.id, route: pick.route, hpic1: pick.devices, t0: performance.now() }
     : { kind: state.kind, device: state.device, total: null };
   const ctrl = new AbortController();
   state.abort = ctrl;
@@ -669,9 +732,10 @@ async function run() {
   }
   $("#device-chips").innerHTML = "";
   const body = JSON.stringify(multi
-    ? { question, model: state.model, mode: "multi", hpic1: state.run.hpic1, lanes, net: state.net }
+    ? { question, model: state.model, mode: "multi", route: state.run.route, hpic1: state.run.hpic1, lanes, net: state.net }
     : { question, model: state.model, lanes, net: state.net });
   $("#modes").classList.add("locked");
+  $("#presets").classList.add("locked");
   const t0 = performance.now();
   clearInterval(state.clock);
   state.clock = setInterval(() => {
@@ -683,6 +747,7 @@ async function run() {
       b.textContent = msText(msr(el));
       b.classList.add("ticking");
     }
+    if (multi) boardTime(el);
   }, 60);
   clearTimeout(state.watchdog);
   state.watchdog = setTimeout(() => {
@@ -724,6 +789,8 @@ async function run() {
     $("#run span").textContent = "开始对比";
     $("#stop").hidden = true;
     $("#modes").classList.remove("locked");
+    $("#presets").classList.remove("locked");
+    if (multi) renderBoard();
   }
 }
 
@@ -822,15 +889,9 @@ function handle(ev, question) {
   switch (ev.type) {
     case "plan": {
       if (lane("plain")?.multi) {
-        state.run = { ...state.run, mode: "multi", devices: ev.devices || state.run.devices, hpic1: ev.hpic1 || state.run.hpic1, facts: ev.facts || state.run.facts, plans: ev.plans || {} };
+        state.run = { ...state.run, mode: "multi", devices: ev.devices || state.run.devices, hpic1: ev.hpic1 || state.run.hpic1, route: ev.route || state.run.route, facts: ev.facts || state.run.facts, plans: ev.plans || {} };
         applyMulti();
-        for (const d of state.run.devices) {
-          const pl = ev.plans?.[d] || {};
-          // one short chip per device: its filters without the year (the device and data kind are the label)
-          const chips = (pl.chips || []).filter((c) => c.kind !== "语义" && c.kind !== "数据").slice(0, 2)
-            .map((c) => `${c.kind} ${String(c.value).replace(/\b20\d\d-(\d\d-\d\d)/g, "$1")}`);
-          dchip(deviceOf(d).label, chips.join(" · ") || kindOf(pl.kind || DEVICES[d]?.kind).label);
-        }
+        renderBoard();
         break;
       }
       const info = planInfo(ev);
@@ -860,7 +921,8 @@ function handle(ev, question) {
       const f = L.flow;
       if (id === "plain" && ev.stage === "upload" && ev.state === "start") {
         stage(id, "upload", "start", t);
-        f.node("dev", "active");
+        // 场景二 uploads from the one device, otherwise the phone uploads
+        f.node(L.multi && state.run?.route === "direct" ? state.run.hpic1?.[0] || "dev" : "dev", "active");
         f.node("cloud", "active", "接收数据中", "hot");
         f.hot("edge", true);
         f.stream("edge", true, { kind: "plaintext", every: 45, dur: 700 });
@@ -877,6 +939,7 @@ function handle(ev, question) {
         f.send("edge", { kind: "cipher", r: 4 });
         metric(id, "edge", ev.edge_up, "bytes");
         f.linkValue("edge", bytesText(ev.edge_up), "small");
+        if (L.multi) { L.up = ev.edge_up; renderBoard(); }
       } else if (ev.stage === "generate" && ev.state === "first") {
         stage(id, "generate", "start", L.stageT.generate ?? t);
       }
@@ -885,7 +948,13 @@ function handle(ev, question) {
     case "upload": {
       if (L.done) break;
       metric(id, "edge", ev.edge_up, "bytes");
-      L.flow.linkValue("edge", `${bytesText(ev.edge_up)} · ${ev.batch}/${ev.batches} 批`, "big");
+      if (L.multi) {
+        // the link is short in the device drawings: the size on the link, the batches on HPIC 1.0
+        L.flow.linkValue("edge", `${state.run?.route === "direct" ? "直传 " : ""}${bytesText(ev.edge_up)}`, "big");
+        L.flow.node("cloud", "active", `接收 ${ev.batch}/${ev.batches} 批`, "hot");
+        L.up = ev.edge_up;
+        renderBoard();
+      } else L.flow.linkValue("edge", `${bytesText(ev.edge_up)} · ${ev.batch}/${ev.batches} 批`, "big");
       stage(id, "upload", "progress", t, ev.batch / ev.batches);
       break;
     }
@@ -936,32 +1005,46 @@ function handle(ev, question) {
     }
     case "search": { // HPIC 1.0
       if (L.done) break;
-      L.flow.node("cloud", "active", `解析 ${intText(ev.scanned)} ${unit} · 现算向量 ${intText(ev.embedded ?? ev.candidates)} ${unit}`, "hot");
+      L.flow.node("cloud", "active", L.multi ? `现场检索 ${wanText(ev.scanned)}条` : `解析 ${intText(ev.scanned)} ${unit} · 现算向量 ${intText(ev.embedded ?? ev.candidates)} ${unit}`, "hot");
       break;
     }
-    // 多端协同 (SPEC §3): data the watch, PC or car synced to the phone before the question (HPIC 1.0)
+    // 多端协同, 场景一: data the watch, PC or car synced to the phone before the question
     case "sync": {
       if (!L || L.done) break;
-      L.flow.node(nid(ev.device), null, `✓ 已同步 ${intText(ev.records)} 条`, "ok");
+      L.flow.node(nid(ev.device), null, "✓ 已同步", "ok");
       L.flow.send(`s_${ev.device}`, { kind: "plaintext", dur: 520 });
+      break;
+    }
+    // 场景二: the one device sends its own data straight to HPIC 1.0
+    case "direct": {
+      if (!L || L.done) break;
+      L.flow.node(nid(ev.device), "active", "✓ 直传", "ok");
+      if (ev.bytes) L.flow.linkValue("edge", `直传 ${bytesText(ev.bytes)}`, "big");
       break;
     }
     case "missing": {
       if (!L || L.done) break;
-      for (const d of ev.devices || []) L.flow.node(nid(d), null, d === "phone" ? "✗ 本机数据未上传" : "✗ 未同步 · 缺失", "miss");
+      L.missing = ev.devices || [];
+      const direct = state.run?.route === "direct";
+      for (const d of L.missing) {
+        L.flow.off(nid(d), true);
+        L.flow.node(nid(d), null, direct ? "未上传" : d === "phone" ? "✗ 本机数据未上传" : "✗ 未同步", direct ? "" : "miss");
+      }
+      renderBoard();
       break;
     }
     // one search per device: in the uploaded data (HPIC 1.0), or in that device's AID in HPIS (HPIC 2.0)
     case "device_search": {
       if (!L || L.done) break;
       const label = deviceOf(ev.device).label;
+      const hit = `${ev.device === "phone" ? "照片" : ""}命中 ${intText(ev.rows)} 条`;
       if (id === "v2") {
-        L.flow.node(nid(ev.device), "active", `AID ${String(ev.aid || "").slice(0, 8)} · 命中 ${intText(ev.rows)} 条`, "ok");
+        L.flow.node(nid(ev.device), "active", hit, "ok");
         L.flow.send("cloudl", { reverse: true, kind: "cipher", r: 3.2, dur: 420 });
         L.searched = (L.searched || 0) + 1;
-        L.flow.node("hpis", "active", `密态检索 ${L.searched}/${(state.run?.devices || []).length || L.searched} 台设备`, "hot");
+        L.flow.node("hpis", "active", `密态检索 ${L.searched}/${(state.run?.devices || []).length || L.searched} 台`, "hot");
       } else {
-        L.flow.node(nid(ev.device), ev.device === "phone" ? "active" : null, `✓ ${ev.device === "phone" ? "本机" : ""}命中 ${intText(ev.rows)} 条`, "ok");
+        L.flow.node(nid(ev.device), ev.device === "phone" ? "active" : null, `✓ ${hit}`, "ok");
         L.flow.node("cloud", "active", `检索${label}数据`, "hot");
       }
       break;
@@ -970,7 +1053,7 @@ function handle(ev, question) {
       if (L.done) break;
       L.evidence = ev.items || [];
       renderEvidence(id);
-      if (L.multi) multiQuality(id);
+      if (L.multi) renderBoard();
       // retrieval (whatever it took in this lane) ends when the evidence is ready; the model's part starts here
       const keys = L.cfg.stages.map(([k]) => k);
       stage(id, keys[keys.indexOf("generate") - 1], "end", t);
@@ -982,7 +1065,7 @@ function handle(ev, question) {
       if (L.done) break;
       L.text += ev.text;
       renderAnswer(id);
-      if (L.multi) multiQuality(id);
+      if (L.multi) renderBoard();
       break;
     }
     case "done": {
@@ -1000,14 +1083,20 @@ function handle(ev, question) {
       metric(id, "edge", ev.edge_up, "bytes");
       if (L.m.cloud == null) metric(id, "cloud", id === "plain" ? 0 : null, "bytes");
       L.final = ev;
-      L.q = L.multi ? multiQuality(id) : quality(id, question);
+      if (L.multi) {
+        // the drawing keeps what each device did, without the pulsing
+        L.flow.quiet();
+        for (const n of Object.values(L.flow.nodes)) n.g.classList.remove("active", "alert");
+        L.q = multiScore(id);
+        renderBoard();
+      } else L.q = quality(id, question);
       if (ev.timed_out) pill(id, "超时 · 已截断", "warn");
       else pill(id, L.llm?.replay ? "完成 · 回放" : L.llm?.fallback ? "完成 · 摘录" : "完成", "ok");
       L.el.classList.remove("running");
       L.el.classList.add("done", "flash");
       setTimeout(() => L.el.classList.remove("flash"), 1200);
       for (const o of $$(".metric output", L.el)) { o.classList.remove("pop"); void o.offsetWidth; o.classList.add("pop"); }
-      if (id === "plain") L.flow.node("cloud", null, "处理完毕 · 不保存数据");
+      if (id === "plain") L.flow.node("cloud", null, L.multi ? "完成 · 不保存数据" : "处理完毕 · 不保存数据");
       break;
     }
     case "verify": {
@@ -1061,7 +1150,7 @@ function timeTile(P, V2) {
 function verdict() {
   const P = lane("plain"), V2 = lane("v2");
   if (!P?.final || !V2?.final) return;
-  if (P.multi) return verdictMulti(P, V2);
+  if (P.multi) { renderBoard(); $("#board")?.classList.add("final"); return; }
   const kind = state.run?.kind || "mail";
   const K = kindOf(kind);
   // records of this kind: the plan says how many when the server sends it
@@ -1089,54 +1178,135 @@ function verdict() {
   showVerdict("本次提问 · HPIC 2.0 对比 HPIC 1.0", tiles);
 }
 
-// ------------------------------------------------------------------ 多端协同: coverage and key facts
+// ------------------------------------------------------------------ 多端协同: the comparison column
+// Between the two lanes: the scoreboard of the chosen scenario (场景一 → upload and full-answer time, 场景二 →
+// devices covered and key facts) and the key-facts checklist, both filled in live as the events arrive.
 // A device counts as covered when the lane's evidence has a record from it; a key fact counts when its
 // device is covered and one of its match strings is in the answer (spaces and thousands separators ignored).
+const BOARD = `<aside class="board card" id="board" aria-label="对比"></aside>`;
+const FACT_DEVICES = ["phone", "pc", "watch", "car"];
 const normFact = (x) => String(x).replace(/\s/g, "").replace(/[￥¥]/g, "").replace(/[,，]/g, "").replace(/：/g, ":");
-function multiScore(id) {
+const devNames = (ds) => ds.map((d) => deviceOf(d).label).join("、");
+// what the board shows: the run on screen (running or finished), else the current choice
+function boardCtx() {
+  const shown = state.running || ["plain", "v2"].some((id) => { const L = lane(id); return L && (L.final || L.halted || L.evidence.length || L.text); });
+  if (shown && state.run?.mode === "multi") {
+    return { live: true, scen: state.run.scen, route: state.run.route, hpic1: state.run.hpic1 || [], need: state.run.devices || DEVICE_ORDER, facts: state.run.facts || [] };
+  }
+  const h = hpic1Pick();
+  return { live: false, scen: h.sc.id, route: h.route, hpic1: h.devices, need: state.mpreset?.devices || DEVICE_ORDER, facts: state.mpreset?.facts || [] };
+}
+// per lane: each fact's cell (wait | ok | no | nodata), the devices covered and the facts answered
+function multiScore(id, ctx = boardCtx()) {
   const L = lane(id);
-  const need = state.run?.devices || [];
-  const facts = state.run?.facts || [];
   const evDevs = new Set(L.evidence.map(evDevice));
+  const seen = L.evidence.length > 0 || !!L.done;
+  const gone = new Set(L.missing || []);
   const text = normFact(L.text);
-  return {
-    need,
-    facts,
-    covered: need.filter((d) => evDevs.has(d)),
-    hit: facts.filter((f) => (!f.device || evDevs.has(f.device)) && [f.value, ...(f.match || [])].some((m) => m && text.includes(normFact(m)))),
-  };
+  const cells = ctx.facts.map((f) => {
+    if (f.device && (gone.has(f.device) || (seen && !evDevs.has(f.device)))) return "nodata";
+    const hit = (!f.device || evDevs.has(f.device)) && [f.value, ...(f.match || [])].some((m) => m && text.includes(normFact(m)));
+    return hit ? "ok" : L.done ? "no" : "wait";
+  });
+  return { cells, seen, done: !!L.done, covered: ctx.need.filter((d) => evDevs.has(d)), need: ctx.need, hit: cells.filter((c) => c === "ok").length, n: ctx.facts.length };
 }
-function multiQuality(id) {
-  const L = lane(id);
-  const q = multiScore(id);
-  const show = (key, x, n) => {
-    const out = $(`[data-m="${key}"]`, L.el);
-    if (!out) return;
-    out.innerHTML = n ? `${x}<small>/${n}</small>` : "—";
-    out.parentElement.classList.toggle("full", !!n && x === n);
-    out.parentElement.classList.toggle("low", !!n && x < n);
-  };
-  if (L.evidence.length) show("cover", q.covered.length, q.need.length);
-  show("facts", q.hit.length, q.facts.length);
-  const badge = (ok, icon, text) => `<span class="qbadge ${ok ? "ok" : "warn"}">${ICON(icon)}${text}</span>`;
-  $("[data-quality]", L.el).innerHTML = (L.evidence.length ? badge(q.covered.length === q.need.length, "layers", `覆盖设备 ${q.covered.length}/${q.need.length}`) : "")
-    + (q.facts.length ? badge(q.hit.length === q.facts.length, "check-circle", `关键信息 ${q.hit.length}/${q.facts.length}`) : "");
-  return q;
+function buildBoard(ctx) {
+  const host = $("#board");
+  const perf = ctx.route !== "direct";
+  const sc = scenarios().find((x) => x.id === ctx.scen) || scenario();
+  const stats = perf ? [["up", "上传数据"], ["time", "完整回答"]] : [["cover", "覆盖设备"], ["facts", "关键信息"]];
+  const rows = FACT_DEVICES.filter((d) => ctx.facts.some((f) => f.device === d)).map((d) => {
+    const dev = deviceOf(d);
+    const facts = ctx.facts.map((f, i) => [f, i]).filter(([f]) => f.device === d);
+    return `<div class="fgroup">${ICON(dev.icon)}${esc(dev.label)} · ${esc(kindOf(DEVICES[d].kind).short)}</div>`
+      + facts.map(([f, i]) => `<div class="brow fact" data-f="${i}"><span class="fact__k" title="${esc(f.label)}">${esc(f.label)}</span><i class="cell" data-c="plain"></i><i class="cell" data-c="v2"></i></div>`).join("");
+  }).join("");
+  host.className = `board card board--${perf ? "perf" : "acc"}`;
+  host.innerHTML = `
+    <header class="brow board__head"><span class="board__title">${ICON(perf ? "gauge" : "check-circle")}${perf ? "性能对比" : "准确性对比"}</span><span class="bcol c1"><b>HPIC 1.0</b><small>${esc((sc.label || "").split(" · ")[0])}</small></span><span class="bcol c2"><b>HPIC 2.0</b><small>场景三</small></span></header>
+    <div class="board__stats">${stats.map(([k, l]) => `<div class="brow bstat" data-k="${k}"><span class="bstat__k">${l}<em data-x></em></span><b class="bval c1" data-v="plain">—</b><b class="bval c2" data-v="v2">—</b></div>`).join("")}</div>
+    <p class="board__note" data-note></p>
+    <div class="facts">
+      <div class="brow facts__head"><span>关键信息核对</span>${perf ? `<span class="fcount" data-fc="plain"></span><span class="fcount" data-fc="v2"></span>` : ""}</div>
+      ${perf ? `<div class="brow facts__cover"><span>覆盖设备</span><span class="fcount" data-cv="plain"></span><span class="fcount" data-cv="v2"></span></div>` : ""}
+      <div class="facts__list">${rows || `<p class="facts__none">这个问题没有预设的关键信息，换一个预设问题即可核对</p>`}</div>
+    </div>`;
 }
-function verdictMulti(P, V2) {
-  const p = multiScore("plain"), v = multiScore("v2");
-  const frac = (x, n) => (n ? `${x}<small>/${n}</small>` : "—");
-  const opt = hpic1Option();
-  const tiles = [
-    { big: frac(v.covered.length, v.need.length), title: "HPIC 2.0 覆盖设备", sub: `HPIC 1.0 ${p.covered.length}/${p.need.length}${opt ? `（${opt.label}）` : ""}` },
-    { big: frac(v.hit.length, v.facts.length), title: "HPIC 2.0 答出关键信息", sub: `HPIC 1.0 ${p.hit.length}/${p.facts.length}` },
-  ];
-  const pe = P.final.edge_up, ve = V2.final.edge_up;
-  if (pe && ve) tiles.push({ big: fold(pe / ve), title: "上传云端减少", sub: `HPIC 1.0 ${bytesText(pe)} → ${bytesText(ve)}` });
-  if (P.final.total_ms && V2.final.total_ms) tiles.push(timeTile(P, V2));
-  const missed = p.facts.filter((f) => !p.hit.includes(f));
-  tiles.push({ big: `${missed.length}<small>条</small>`, title: "HPIC 1.0 漏掉的关键信息", sub: missed.map((f) => f.label).join("、") || "无" });
-  showVerdict("本次提问 · 多端协同 · HPIC 2.0 对比 HPIC 1.0", tiles);
+// innerHTML only when it changed, so streaming tokens do not restart the cells' animations
+function put(el, html, cls) {
+  if (!el) return;
+  if (el._h !== html) { el.innerHTML = html; el._h = html; }
+  if (cls != null && el._c !== cls) { el.className = cls; el._c = cls; }
+}
+const frac = (x, n) => `${x}<small>/${n}</small>`;
+const CELL = { wait: "", ok: ICON("check"), no: ICON("x"), nodata: "无数据" };
+function renderBoard() {
+  const host = $("#board");
+  if (!host || !lane("plain")?.multi) return;
+  const ctx = boardCtx();
+  const key = `${ctx.route}|${ctx.scen}|${ctx.facts.map((f) => f.label).join(",")}`;
+  if (host._key !== key) { buildBoard(ctx); host._key = key; }
+  host.classList.toggle("idle", !ctx.live);
+  const sc = { plain: multiScore("plain", ctx), v2: multiScore("v2", ctx) };
+  const P = lane("plain"), V = lane("v2");
+  const cellOf = (k, id) => $(`[data-k="${k}"] [data-v="${id}"]`, host);
+  if (ctx.route !== "direct") {
+    // 场景一: performance. Upload per question, then the full-answer time (ticking while a lane runs).
+    const up = { plain: P.final?.edge_up ?? P.up, v2: V.final?.edge_up ?? V.up };
+    for (const id of ["plain", "v2"]) put(cellOf("up", id), up[id] ? bytes(up[id]).map((x, i) => (i ? `<small>${x}</small>` : x)).join("") : "—");
+    put($(`[data-k="up"] [data-x]`, host), up.plain && up.v2 && P.done ? `减少 ${fold(up.plain / up.v2)}` : "");
+    for (const id of ["plain", "v2"]) {
+      const L = lane(id);
+      if (L.final?.total_ms != null) put(cellOf("time", id), secs(L.final.total_ms).map((x, i) => (i ? `<small>${x}</small>` : x)).join(""), `bval c${id === "plain" ? 1 : 2}`);
+      else if (!state.running) put(cellOf("time", id), "—", `bval c${id === "plain" ? 1 : 2}`);
+    }
+    const pt = P.final?.total_ms, vt = V.final?.total_ms;
+    let tx = "";
+    if (pt && vt) { const r = pt / Math.max(1, vt); tx = r >= 1.1 ? `快 ${fold(r)}` : r > 0.9 ? "用时相近" : `慢 ${fold(1 / r)}`; }
+    put($(`[data-k="time"] [data-x]`, host), tx);
+    const left = ["watch", "pc", "car"].filter((d) => ctx.need.includes(d) && !ctx.hpic1.includes(d));
+    put($("[data-note]", host), ctx.live || left.length
+      ? (left.length ? `${ICON("alert")}<span>${devNames(left)}未同步到手机，HPIC 1.0 缺这部分数据</span>` : `${ICON("layers")}<span>数据都已同步到手机，两边覆盖的设备相同</span>`)
+      : `${ICON("info")}<span>比较每次提问要上传多少数据、多久拿到完整回答</span>`, `board__note${left.length ? " warn" : ""}`);
+    for (const id of ["plain", "v2"]) {
+      const s = sc[id];
+      put($(`[data-fc="${id}"]`, host), ctx.live && s.n ? frac(s.hit, s.n) : "—", `fcount${ctx.live && s.done ? (s.hit === s.n ? " full" : " low") : ""}`);
+      put($(`[data-cv="${id}"]`, host), ctx.live && s.seen ? frac(s.covered.length, s.need.length) : "—", `fcount${ctx.live && s.seen ? (s.covered.length === s.need.length ? " full" : " low") : ""}`);
+    }
+  } else {
+    // 场景二: accuracy. Devices covered and key facts answered, then what HPIC 1.0 missed.
+    for (const id of ["plain", "v2"]) {
+      const s = sc[id], c = id === "plain" ? 1 : 2;
+      put(cellOf("cover", id), ctx.live && s.seen ? frac(s.covered.length, s.need.length) : "—", `bval c${c}${ctx.live && s.seen ? (s.covered.length === s.need.length ? " full" : " low") : ""}`);
+      put(cellOf("facts", id), ctx.live && s.n ? frac(s.hit, s.n) : "—", `bval c${c}${ctx.live && s.done && s.n ? (s.hit === s.n ? " full" : " low") : ""}`);
+    }
+    const missed = ctx.facts.filter((f, i) => sc.plain.cells[i] === "no" || sc.plain.cells[i] === "nodata");
+    put($("[data-note]", host), !ctx.live
+      ? `${ICON("info")}<span>比较两边用到了几台设备的数据、答出了几条关键信息</span>`
+      : missed.length
+        ? `${ICON("x")}<span><b>HPIC 1.0 漏掉 ${missed.length} 条：</b>${missed.map((f) => esc(f.label)).join("、")}</span>`
+        : sc.plain.done ? `${ICON("check")}<span>HPIC 1.0 没有漏掉关键信息</span>` : `${ICON("clock")}<span>核对中…</span>`, `board__note${missed.length ? " miss" : ""}`);
+  }
+  // the checklist: one row per fact, a cell per lane
+  ctx.facts.forEach((f, i) => {
+    const row = $(`[data-f="${i}"]`, host);
+    if (!row) return;
+    for (const id of ["plain", "v2"]) {
+      const st = ctx.live ? sc[id].cells[i] : "idle";
+      put($(`[data-c="${id}"]`, row), CELL[st] ?? "", `cell ${st}${st === "wait" && state.running && !lane(id).done ? " run" : ""}`);
+    }
+    row.classList.toggle("gap", ctx.live && (sc.plain.cells[i] === "no" || sc.plain.cells[i] === "nodata"));
+  });
+}
+// the full-answer time ticks while a lane runs (场景一)
+function boardTime(ms) {
+  const host = $("#board");
+  if (!host || state.run?.route === "direct") return;
+  for (const id of ["plain", "v2"]) {
+    const L = lane(id);
+    if (!L || L.done) continue;
+    put($(`[data-k="time"] [data-v="${id}"]`, host), secs(ms).map((x, i) => (i ? `<small>${x}</small>` : x)).join(""), `bval c${id === "plain" ? 1 : 2} ticking`);
+  }
 }
 
 // ------------------------------------------------------------------ drawer
@@ -1654,7 +1824,11 @@ async function poll() {
     if (s.mailbox) {
       renderMeta();
     }
-    if (first || (s.presets && s.presets.length !== state.single.length) || !!s.multi?.presets?.length !== !!state.multi) initPresets(s);
+    const scenChanged = !!state.multi && JSON.stringify(s.multi?.scenarios || null) !== JSON.stringify(state.multi.scenarios || null);
+    if (first || (s.presets && s.presets.length !== state.single.length) || !!s.multi?.presets?.length !== !!state.multi || (scenChanged && !state.running)) {
+      initPresets(s);
+      if (scenChanged && !first && state.mode === "multi") { redrawPlain(); resetLanes(); }
+    }
     if (first) initModels(s);
     if (first || hadDevices !== state.devices.size) onDevices();
     bootOverlay(s);
@@ -1726,8 +1900,7 @@ function initPresets(s) {
   state.single = grouped ? SCENES.flatMap((sc) => list.filter((p) => sceneOf(p) === sc.id)) : list;
   state.grouped = grouped;
   state.multi = s.multi?.presets?.length ? s.multi : null;
-  const opts = state.multi?.hpic1_options || [];
-  if (!opts.some((o) => o.id === state.hpic1)) state.hpic1 = opts[0]?.id || null;
+  if (!scenarios().some((x) => x.id === state.scen)) state.scen = scenarios()[0].id;
   $("#modes").hidden = !state.multi;
   const want = state.multi && (state.mode === "multi" || (!state.moded && PARAMS.get("mode") === "multi")) ? "multi" : "single";
   state.moded = true;
@@ -1739,11 +1912,7 @@ function renderPresets() {
   const host = $("#presets");
   if (state.mode === "multi") {
     state.presets = state.multi.presets;
-    const opts = state.multi.hpic1_options || [];
-    host.innerHTML = `<span class="pgroup"><span class="pscene">${ICON("layers")}多端协同</span>${state.presets.map(chipHtml).join("")}</span>
-      <span class="hsel" role="radiogroup" aria-label="HPIC 1.0 收到的数据"><span class="hsel__label">${ICON("cloud-upload")}HPIC 1.0 收到的数据</span>${opts
-        .map((o) => `<button type="button" role="radio" class="hopt${o.id === state.hpic1 ? " active" : ""}" data-opt="${esc(o.id)}" aria-checked="${o.id === state.hpic1}">${(o.devices || []).map((d) => ICON(deviceOf(d).icon)).join("")}${esc(o.label)}</button>`)
-        .join("")}</span>`;
+    host.innerHTML = `<span class="pgroup"><span class="pscene">${ICON("layers")}多端协同</span>${state.presets.map(chipHtml).join("")}</span>${scenHtml()}`;
     host.className = "presets multi";
   } else {
     state.presets = state.single;
@@ -1789,26 +1958,59 @@ function setMode(mode, quiet = false) {
   $("#question").placeholder = mode === "multi" ? "向手机、手表、PC、车机上的全部数据提问…" : state.devices.size ? "向你的照片、邮件、运动与出行数据提问…" : "向你的私人邮箱提问…";
   if (!quiet) $("#question").focus({ preventScroll: true });
 }
-const hpic1Option = () => (state.multi?.hpic1_options || []).find((o) => o.id === state.hpic1) || state.multi?.hpic1_options?.[0] || null;
-// 多端协同: which devices the question needs and which reached HPIC 1.0 through the phone, before and during a run
+// The HPIC 1.0 scenario switch, then its device choice: 场景一 toggles the devices synced to the phone,
+// 场景二 picks the one device that uploads.
+function scenHtml() {
+  const { sc } = hpic1Pick();
+  const pick = state.pick[sc.id] || sc.default || [];
+  const one = sc.choose === "one" || sc.route === "direct";
+  const opts = scenarios().map((x) => `<button type="button" role="radio" class="sopt${x.id === sc.id ? " active" : ""}" data-scen="${esc(x.id)}" aria-checked="${x.id === sc.id}"><span>${esc(x.label)}</span><em>${esc(x.issue)}</em></button>`).join("");
+  const devs = (sc.devices || []).map((d) => {
+    const on = pick.includes(d);
+    return `<button type="button" role="${one ? "radio" : "checkbox"}" aria-checked="${on}" class="sdev${on ? " on" : ""}${one ? " one" : ""}" data-dev="${esc(d)}">${ICON(deviceOf(d).icon)}${esc(deviceOf(d).label)}</button>`;
+  }).join("");
+  return `<span class="scen"><span class="scen__label">${ICON("cloud-upload")}HPIC 1.0</span><span class="scen__opts" role="radiogroup" aria-label="HPIC 1.0 的场景">${opts}</span><span class="sdevs" role="${one ? "radiogroup" : "group"}" aria-label="${one ? "直传的设备" : "同步到手机的设备"}"><span class="sdevs__label">${one ? "直传设备" : "同步到手机"}</span>${devs}</span></span>`;
+}
+// a new scenario or device choice: redraw HPIC 1.0's topology and clear the last run
+function changeScen() {
+  renderPresets();
+  redrawPlain();
+  resetLanes();
+}
+// 多端协同: the lanes' texts and the idle state of both drawings for the chosen scenario (or the run on screen)
 function applyMulti() {
   const P = lane("plain"), V = lane("v2");
   if (!P?.multi) return;
-  const need = (state.running ? state.run?.devices : state.mpreset?.devices) || DEVICE_ORDER;
-  const got = state.running ? state.run?.hpic1 || [] : hpic1Option()?.devices || [];
+  const ctx = boardCtx();
+  const sc = scenarios().find((x) => x.id === ctx.scen) || scenario();
+  const direct = ctx.route === "direct", got = ctx.hpic1;
+  $(".lane__id", P.el).innerHTML = `${esc(sc.label)}<em class="lane__issue">${esc(sc.issue)}</em>`;
+  $("[data-desc]", P.el).textContent = direct
+    ? `${devNames(got)}只把自己的数据直接上传到 HPIC 1.0，手机和其他设备的数据这次用不上`
+    : "手表、PC、车机先把数据同步到手机，每次提问由手机全部上传到 HPIC 1.0";
+  $('[data-stage="upload"] span', P.el).textContent = direct ? "直传数据" : "手机上传";
+  const size = got.reduce((a, d) => a + (deviceOf(d).bytes || 0), 0);
+  const photos = deviceOf("phone").records;
   for (const d of DEVICE_ORDER) {
-    const needed = need.includes(d), has = got.includes(d);
-    if (d === "phone") P.flow.idle("dev", !needed ? "本题未用到本机数据" : has ? "✓ 含本机数据" : "✗ 不含本机数据", has ? "ok" : "miss");
-    else {
-      P.flow.off(d, !has || !needed);
+    const has = got.includes(d);
+    if (direct) {
+      P.flow.off(nid(d), !has);
+      P.flow.idle(nid(d), has ? "只传本机数据" : "未上传");
+    } else if (d === "phone") {
+      P.flow.idle("dev", photos ? `含本机照片 ${intText(photos)} 张` : "含本机照片");
+    } else {
+      P.flow.off(d, !has);
       P.flow.linkOff(`s_${d}`, !has);
-      P.flow.idle(d, !needed ? "本题未用到" : has ? "✓ 已同步到手机" : "✗ 未同步", !needed ? "" : has ? "ok" : "miss");
+      P.flow.idle(d, has ? "已同步" : "未同步", has ? "" : "miss");
     }
     const aid = deviceOf(d).aid;
-    V.flow.off(nid(d), !needed);
-    V.flow.idle(nid(d), !needed ? "本题未用到" : aid ? `AID ${aid.slice(0, 8)} · 已加密存入` : "已加密存入 HPIS");
+    V.flow.off(nid(d), !ctx.need.includes(d));
+    V.flow.idle(nid(d), d === "phone" ? (aid ? `照片 AID ${aid.slice(0, 8)}` : "照片已加密存入") : aid ? `AID ${aid.slice(0, 8)}` : "已加密存入");
   }
+  // before the run, the link says what HPIC 1.0 gets per question
+  if (!state.running && !P.final) P.flow.linkValue("edge", `${direct ? "直传 " : ""}${bytesText(size)}`, "big");
   setTicker("plain");
+  renderBoard();
 }
 // Dark by default; the light theme is one click away for bright rooms. The page sets the theme before first paint.
 function initTheme() {
@@ -1833,7 +2035,7 @@ function selectPreset(i) {
   idleStrip();
   if (state.mode === "multi") {
     state.mpreset = p;
-    if (!state.running) applyMulti();
+    if (!state.running) resetLanes();
     return;
   }
   if (!state.running && (p.kind || p.device)) applyKind(p.kind || DEVICES[p.device]?.kind || "mail", p.device || deviceFor(p.kind));
@@ -2064,11 +2266,16 @@ function init() {
   $("#presets").addEventListener("click", (e) => {
     const b = e.target.closest(".preset");
     if (b) selectPreset(Number(b.dataset.i));
-    const o = e.target.closest(".hopt");
-    if (o && !state.running) {
-      state.hpic1 = o.dataset.opt;
-      $$(".hopt").forEach((x) => { x.classList.toggle("active", x === o); x.setAttribute("aria-checked", x === o); });
-      applyMulti();
+    const so = e.target.closest(".sopt");
+    if (so && !state.running && so.dataset.scen !== state.scen) { state.scen = so.dataset.scen; changeScen(); }
+    const sd = e.target.closest(".sdev");
+    if (sd && !state.running) {
+      const { sc } = hpic1Pick();
+      const cur = state.pick[sc.id] || sc.default || [];
+      const d = sd.dataset.dev;
+      if (sc.choose === "one" || sc.route === "direct") state.pick[sc.id] = [d];
+      else state.pick[sc.id] = (sc.devices || []).filter((x) => (x === d ? !cur.includes(x) : cur.includes(x)));
+      changeScen();
     }
   });
   $("#modes").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });

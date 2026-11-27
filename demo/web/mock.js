@@ -1,5 +1,5 @@
 // Dev-only fixture: ?mock=1 on the page URL (?mock=edge adds a lane notice and a model timeout,
-// ?mock=multi adds status.multi and 多端协同 runs, SPEC §3).
+// ?mock=multi adds status.multi and 多端协同 runs: scenarios, route phone | direct, SPEC-scenarios).
 //
 // Serves sample data for what the backend is adding (PLAN-v3 §3: devices, photo / sport / car runs,
 // records, photos, the multi-tenant HPIS view), so the page can be checked before the backend has it.
@@ -265,6 +265,10 @@ const MULTI_STATUS = {
       ],
     },
   ],
+  scenarios: [
+    { id: "sync", label: "场景一 · 先同步到手机", issue: "性能差", route: "phone", choose: "many", devices: ["watch", "pc", "car"], default: ["watch", "pc", "car"] },
+    { id: "direct", label: "场景二 · 单设备直传", issue: "准确性差", route: "direct", choose: "one", devices: ["watch", "pc", "car"], default: ["watch"] },
+  ],
   hpic1_options: [
     { id: "watch", label: "仅手表数据", devices: ["watch"] },
     { id: "pc", label: "仅 PC 数据", devices: ["pc"] },
@@ -277,7 +281,8 @@ function mockMultiRun(body) {
   const devs = devices || [];
   const preset = MULTI_STATUS.presets.find((x) => x.question.replace(/\s/g, "") === (body.question || "").replace(/\s/g, "")) || MULTI_STATUS.presets[0];
   const need = preset.devices;
-  const got = (body.hpic1 || ["watch"]).filter((d) => need.includes(d));
+  const route = body.route === "direct" ? "direct" : "phone";
+  const got = (body.hpic1 || (route === "direct" ? ["watch"] : ["phone", "watch", "pc", "car"])).filter((d) => need.includes(d));
   const dev = (id) => devs.find((d) => d.id === id) || { records: 1000, bytes: 3e6, aid: hex(32, 99) };
   const sched = [];
   const at = (t, e) => sched.push([t, e]);
@@ -287,7 +292,7 @@ function mockMultiRun(body) {
     watch: { kind: "sport", chips: [{ kind: "时间", value: preset.id === "multi_trip" ? "9月14日~21日" : "11-22" }] },
     car: { kind: "car", chips: [{ kind: "时间", value: preset.id === "multi_trip" ? "9月14日~21日" : "11-22" }] },
   };
-  at(0, { type: "plan", mode: "multi", question: body.question, preset: preset.id, devices: need, hpic1: got, plans, facts: preset.facts, model: body.model, net: body.net });
+  at(0, { type: "plan", mode: "multi", route, question: body.question, preset: preset.id, devices: need, hpic1: got, plans, facts: preset.facts, model: body.model, net: body.net });
   // one answer per lane, put together from the devices the lane has
   const answer = (have) => {
     let n = 0;
@@ -321,7 +326,9 @@ function mockMultiRun(body) {
   at(vend, { type: "finish", lane: "v2", ttft_ms: 1600, total_ms: vend, edge_up: 3296, edge_down: 11800 });
   // HPIC 1.0: what reached the phone, uploaded in 16 MB batches
   const pa = answer(got);
-  got.filter((d) => d !== "phone").forEach((d, i) => at(8 + i * 6, { type: "sync", lane: "plain", device: d, via: "phone", records: dev(d).records, bytes: dev(d).bytes }));
+  // 场景一: the synced devices reached the phone beforehand; 场景二: the one device sends its own data directly
+  if (route === "direct") got.forEach((d) => at(8, { type: "direct", lane: "plain", device: d, records: dev(d).records, bytes: dev(d).bytes }));
+  else got.filter((d) => d !== "phone").forEach((d, i) => at(8 + i * 6, { type: "sync", lane: "plain", device: d, via: "phone", records: dev(d).records, bytes: dev(d).bytes }));
   at(26, { type: "missing", lane: "plain", devices: need.filter((d) => !got.includes(d)) });
   const bytes = got.reduce((a, d) => a + dev(d).bytes, 0);
   const batches = Math.max(1, Math.ceil(bytes / 16777216));

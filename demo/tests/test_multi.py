@@ -88,6 +88,7 @@ class MultiTest(unittest.TestCase):
                     await eng.warmup()
                     await self.watch_only(eng, model)
                     await self.phone_and_watch(eng)
+                    await self.direct_watch(eng)
                     await self.free_question(eng)
                     await self.stop_during_upload(eng)
                     await self.http(eng, info, server)
@@ -186,6 +187,21 @@ class MultiTest(unittest.TestCase):
         self.assertEqual(set(plain), {"phone", "watch"})
         self.assertEqual(len(by_type(events, "sync", "plain")), 1)  # the phone's own data needs no sync
 
+    async def direct_watch(self, eng):
+        """场景二: the watch sends only its own data straight to HPIC 1.0 (no phone, no sync)."""
+        events = [ev async for ev in eng.run(QUESTION, "qwen", multi={"hpic1": ["watch"], "route": "direct"})]
+        plan = by_type(events, "plan")[0]
+        self.assertEqual((plan["route"], plan["hpic1"]), ("direct", ["watch"]))
+        self.assertEqual(by_type(events, "sync", "plain"), [])
+        direct = by_type(events, "direct", "plain")
+        self.assertEqual([(e["device"], e["records"]) for e in direct], [("watch", eng.catalog.count("sport"))])
+        self.assertGreater(direct[0]["bytes"], 0)
+        self.assertEqual(by_type(events, "missing", "plain")[0]["devices"], [d for d in plan["devices"] if d != "watch"])
+        self.assertEqual(set(self.lane_evidence(events, "plain")), {"watch"})
+        self.assertEqual(set(self.lane_evidence(events, "v2")), set(plan["devices"]))
+        route = by_type(events, "plan")[0]
+        self.assertNotIn("phone", route["hpic1"])
+
     async def free_question(self, eng):
         events = await self.ask(eng, "最近的工作、照片、运动和用车情况", ["pc"])
         plan, plain, v2 = self.check_common(events, ["pc"], same=False)
@@ -232,6 +248,8 @@ class MultiTest(unittest.TestCase):
             self.assertEqual(preset["devices"], DEVICES)
             self.assertEqual(preset["facts"], MULTI_PRESETS[0]["facts"])
             self.assertEqual([o["id"] for o in multi["hpic1_options"]], ["watch", "pc", "phone_watch"])
+            self.assertEqual([(sc["id"], sc["route"]) for sc in multi["scenarios"]], [("sync", "phone"), ("direct", "direct")])
+            self.assertEqual(multi["scenarios"][1]["default"], ["watch"])
             self.assertTrue(all("可读取" not in d["exposure"] for d in st["devices"]))
             # a multi run over HTTP, stopped while both answers stream
             resp = await client.post("/api/run", json={"question": "慢慢说：德国的照片和十月的跑步", "model": "qwen",
