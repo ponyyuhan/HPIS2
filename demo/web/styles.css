@@ -1291,3 +1291,7 @@ body[data-mode="multi"] #device { display: none; }
 .cell .cell__x .i { width: .7rem; height: .7rem; }
 /* the answer's 「这部分无法回答」 (a device whose data HPIC 1.0 did not get) */
 .answer__text .miss { color: var(--risk); font-weight: 800; }
+/* 场景一: a device synced to the phone has a solid link in the lane colour, an unsynced one a grey dashed link;
+   once the run starts both stay still (the phone uploads; nothing moves from the devices) */
+.flow .link--sync, .flow .link--sync.hot { stroke: color-mix(in srgb, var(--c) 62%, var(--track)); }
+.flow .link--sync.off { stroke: var(--track); }

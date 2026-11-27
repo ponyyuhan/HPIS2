@@ -984,10 +984,8 @@ function handle(ev, question) {
         // the link is short in the device drawings: the size on the link, the batches on HPIC 1.0
         L.flow.linkValue("edge", `${state.run?.route === "direct" ? "直传 " : ""}${bytesText(ev.edge_up)}`, "big");
         L.flow.node("cloud", "active", `接收 ${ev.batch}/${ev.batches} 批`, "hot");
-        // 场景一: the phone uploads device by device; the device whose synced data is going up lights with its link
+        // 场景一: the phone uploads, device by device, the data synced to it (the devices themselves stay still)
         if (state.run?.route !== "direct" && ev.device) {
-          L.flow.flash(nid(ev.device), 600);
-          if (ev.device !== "phone") L.flow.glow(`s_${ev.device}`, 600);
           L.flow.node("dev", "active", ev.device === "phone" ? "上传本机照片" : `上传${deviceOf(ev.device).label}的数据`, "hot");
         }
         L.up = ev.edge_up;
@@ -1055,10 +1053,8 @@ function handle(ev, question) {
     // 多端协同, 场景一: data the watch, PC or car synced to the phone before the question
     case "sync": {
       if (!L || L.done) break;
+      // synced before the question: the device and its link stay still (nothing moves from it during the run)
       L.flow.node(nid(ev.device), null, "✓ 已同步", "ok");
-      L.flow.flash(ev.device);
-      L.flow.glow(`s_${ev.device}`, 900);
-      L.flow.burst(`s_${ev.device}`, 3, { kind: "plaintext", every: 150, dur: 560 });
       break;
     }
     // 场景二: the one device sends its own data straight to HPIC 1.0
@@ -1085,10 +1081,9 @@ function handle(ev, question) {
       const label = deviceOf(ev.device).label;
       const hit = `${ev.device === "phone" ? "照片" : ""}命中 ${intText(ev.rows)} 条`;
       if (id === "v2") {
-        L.flow.node(nid(ev.device), "active", hit, "ok");
-        // the search reaches this device's encrypted data where it is stored (nothing comes from the device)
-        L.flow.glow(`s_${ev.device}`, 1000);
-        L.flow.burst(`s_${ev.device}`, 2, { reverse: true, kind: "cipher", r: 3.2, every: 160, dur: 560 });
+        // the search runs in HPIS on the data stored there: the device and its link stay still, only its hits show;
+        // the phone is the one asking, so it alone stays lit
+        L.flow.node(nid(ev.device), ev.device === "phone" ? "active" : null, hit, "ok");
         L.flow.glow("cloudl", 1200);
         L.flow.send("cloudl", { reverse: true, kind: "cipher", r: 3.2, dur: 480 });
         L.searched = (L.searched || 0) + 1;
