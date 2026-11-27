@@ -733,7 +733,7 @@ body.scoreboard main { padding-bottom: 1rem; }
 .cover__credit-brand { gap: .55em; white-space: nowrap; }
 .cover__credit-brand svg { display: block; width: 6.6em; height: auto; color: #24272a; }
 :root[data-theme="dark"] .cover__credit-brand svg { color: #fff; }
-.cover__credit-brand small { font: 550 .74em/1 var(--mono); letter-spacing: .06em; }
+.cover__credit-site { font: 650 .95em/1 var(--mono); letter-spacing: .08em; color: var(--muted); }
 .cover__credit-labs { gap: .9rem; }
 .cover__credit-labs span { white-space: nowrap; }
 .cover__credit i { width: 2.8em; height: .14em; border-radius: 2px; background: var(--grad); }
