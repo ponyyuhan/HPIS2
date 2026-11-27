@@ -142,9 +142,9 @@ const LANES = {
   plain: {
     title: "端侧直传机密计算平台HPIC1.0", tag: "1.0", icon: "cloud-upload",
     ribbon: "HPIC 1.0 · 每次提问上传全部数据", ribbonIcon: "cloud-upload",
-    desc: "每次提问把整个邮箱上传到 HPIC 1.0，在机密计算环境内现场检索并回答",
+    desc: "每次提问由手机把同步来的整个邮箱上传到 HPIC 1.0，在机密计算环境内现场检索并回答",
     stages: [["upload", "上传邮箱"], ["retrieve", "云端检索"], ["generate", "模型作答"]],
-    nodes: [["dev", 70, "smartphone", "终端", "10 万封邮件"], ["cloud", 486, "cpu", "HPIC 1.0", "机密计算"]],
+    nodes: [["dev", 70, "smartphone", "手机", "已同步 10 万封邮件"], ["cloud", 486, "cpu", "HPIC 1.0", "机密计算"]],
     links: [["edge", "dev", "cloud", "邮件与附件 · 分批上传"]],
   },
   v2: {
@@ -152,7 +152,7 @@ const LANES = {
     ribbon: "HPIC 2.0 · 一次加密存储，按需密态检索", ribbonIcon: "database",
     desc: "SSE 在密文索引上精确筛选，向量在可信计算区内精确排序，只取回命中的几封密文",
     stages: [["request", "加密上传"], ["search", "密态检索"], ["generate", "模型作答"]],
-    nodes: [["dev", 56, "smartphone", "终端", "掌控密钥"], ["hpic", 290, "cpu", "HPIC", "机密计算平台"], ["hpis", 512, "database", "HPIS", "安全存储平台"]],
+    nodes: [["dev", 56, "smartphone", "手机", "掌控密钥"], ["hpic", 290, "cpu", "HPIC", "机密计算平台"], ["hpis", 512, "database", "HPIS", "安全存储平台"]],
     links: [["edge", "dev", "hpic", "推理请求 + 目标索引密文"], ["cloudl", "hpic", "hpis", "部分数据密文"]],
   },
 };
@@ -476,10 +476,10 @@ function plainExposure() {
     const gaps = [miss.length ? `${miss.join("、")}的数据没有同步到手机` : "", got.includes("phone") ? "" : "手机本机的数据没有上传"].filter(Boolean);
     return `HPIC 1.0 收到的数据：${opt?.label || "—"}${gaps.length ? `　｜　${gaps.join("，")}，本次用不上` : ""}　｜　${REUPLOAD}`;
   }
-  if (state.kind === "mail") return state.plainTicker || `每次提问上传整个邮箱：邮件原文、附件、体检报告、账单、合同　｜　${REUPLOAD}`;
+  if (state.kind === "mail") return state.plainTicker || `每次提问由手机上传整个邮箱：邮件原文、附件、体检报告、账单、合同　｜　${REUPLOAD}`;
   const K = kindOf(state.kind);
   const dev = deviceOf(state.device || deviceFor(state.kind));
-  return `每次提问上传：全部 ${dev.records ? intText(dev.records) + " " + K.unit : ""}${K.noun}　｜　${REUPLOAD}`;
+  return `每次提问由手机上传：全部 ${dev.records ? intText(dev.records) + " " + K.unit : ""}${K.noun}　｜　${REUPLOAD}`;
 }
 
 // Set the lanes up for one kind of data and device (from a preset before the run, from the plan during it).
@@ -490,20 +490,22 @@ function applyKind(kind, device) {
   state.device = device || null;
   const K = kindOf(kind);
   const dev = device ? deviceOf(device) : null;
-  const term = dev ? { icon: dev.icon, label: dev.label } : { icon: "smartphone", label: "终端" };
+  // the phone (主设备) asks in both lanes; data of the PC, watch or car reaches HPIC 1.0 only once synced to the phone
+  const phone = { icon: "smartphone", label: "手机" };
+  const synced = !dev || dev.id !== "phone";
   for (const L of Object.values(state.lanes)) {
     L.kind = kind;
     L.el.dataset.kind = kind;
-    L.flow.setTerminal(term, L.id === "plain" ? holdings(kind, device) : "掌控密钥");
+    L.flow.setTerminal(phone, L.id === "plain" ? `${synced ? "已同步 " : ""}${holdings(kind, device)}` : "掌控密钥");
     if (L.id === "plain") {
       L.flow.linkLabel("edge", K.link);
       $('[data-stage="upload"] span', L.el).textContent = K.stage;
-      $("[data-desc]", L.el).textContent = `每次提问把${K.whole}上传到 HPIC 1.0，在机密计算环境内现场检索并回答`;
+      $("[data-desc]", L.el).textContent = `每次提问由手机把${synced ? "同步来的" : ""}${K.whole}上传到 HPIC 1.0，在机密计算环境内现场检索并回答`;
     } else {
       $("[data-desc]", L.el).textContent = kind === "mail" ? L.cfg.desc : L.cfg.desc.replace("几封", "几条");
     }
   }
-  $("#device .device__tag use").setAttribute("href", `${SPRITE}#${term.icon}`);
+  $("#device .device__tag use").setAttribute("href", `${SPRITE}#${(dev || phone).icon}`);
   setTicker("plain");
   renderMeta();
 }
@@ -1700,7 +1702,7 @@ function renderMeta() {
     return;
   }
   const dev = state.device ? deviceOf(state.device) : null;
-  const tag = dev ? `<span class="mdev">${ICON(dev.icon)}${esc(dev.label)}</span>` : "";
+  const tag = dev ? `<span class="mdev">${ICON(dev.icon)}数据来自${esc(dev.label)}</span>` : "";
   if (state.kind === "mail" || !dev) {
     $("#mailbox-meta").innerHTML = `${tag}<span>${ICON("mail")} <b>${intText(s.mailbox.emails)}</b> 封邮件</span><span>${ICON("paperclip")} <b>${intText(s.mailbox.attachments)}</b> 个附件</span><span>${ICON("clock")} ${s.mailbox.first.slice(0, 7)} ~ ${s.mailbox.last.slice(0, 7)}</span>`;
     return;
@@ -1869,7 +1871,7 @@ function scrambleCipher() {
 function loadPlainTicker() {
   const sens = state.status?.mailbox?.sensitive || {};
   const head = Object.values(sens).filter((x) => x.count).map((x) => `${x.label} ${intText(x.count)} 封`).join(" · ");
-  if (head) state.plainTicker = `每次提问上传整个邮箱：${head}　｜　${REUPLOAD}`;
+  if (head) state.plainTicker = `每次提问由手机上传整个邮箱：${head}　｜　${REUPLOAD}`;
   if (!state.running) setTicker("plain");
 }
 
