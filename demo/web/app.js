@@ -252,7 +252,7 @@ class Flow {
       lab.textContent = label;
       const [vx, vy] = o.vpos || [(x1 + x2) / 2, (y1 + y2) / 2 + 24];
       const val = this.el("text", { x: vx, y: vy, class: "lbytes" }, g);
-      this.links[id] = { x1, x2, y1, y2, base, dash, lab, val };
+      this.links[id] = { x1, x2, y1, y2, base, dash, lab, val, g, lx, ly, vx, vy };
     }
     for (const [id, x, icon, label, sub, o = {}] of cfg.nodes) {
       const y = o.y ?? 58;
@@ -268,7 +268,7 @@ class Flow {
         l.textContent = label;
         const s = this.el("text", { x: 38, y: 32, class: "nsub nsub--w" }, g);
         s.textContent = sub;
-        this.nodes[id] = { g, s, sub, subcls: "", use, l, base: "nsub nsub--w" };
+        this.nodes[id] = { g, s, sub, subcls: "", use, l, base: "nsub nsub--w", x, y, w, h };
         continue;
       }
       const small = !!o.small;
@@ -282,8 +282,9 @@ class Flow {
       l.textContent = label;
       const s = this.el("text", small ? { x: 40, y: 27, class: "nsub nsub--s" } : { x: 36, y: 92, class: "nsub" }, g);
       s.textContent = sub;
-      this.nodes[id] = { g, s, sub, subcls: "", use, l, base: small ? "nsub nsub--s" : "nsub" };
+      this.nodes[id] = { g, s, sub, subcls: "", use, l, base: small ? "nsub nsub--s" : "nsub", x, y, w, h };
     }
+    this.home = this.layout(); // where everything starts, and returns to on reset
     flows.add(this);
   }
   el(tag, attrs, parent = this.svg) {
@@ -309,15 +310,38 @@ class Flow {
   }
   // a device whose data is not there for this lane: greyed, its link dashed
   off(id, on) { this.nodes[id]?.g.classList.toggle("off", on); }
-  // 多端协同, during a run: a device that sends nothing for the question is a shadow (device id, not node id);
-  // its status text stays fully readable
-  shade(d, on) {
-    this.nodes[nid(d)]?.g.classList.toggle("shade", on);
-    this.links[`s_${d}`]?.base.classList.toggle("shade", on);
-  }
-  // a link that fades out for the run (back on reset)
-  fade(id, on) { this.links[id]?.base.classList.toggle("gone", on); }
   linkOff(id, on) { this.links[id]?.base.classList.toggle("off", on); }
+  // where every node (centre) and link (ends, label and value spots) is now
+  layout() {
+    return {
+      nodes: Object.fromEntries(Object.entries(this.nodes).map(([id, n]) => [id, [n.x, n.y]])),
+      links: Object.fromEntries(Object.entries(this.links).map(([id, l]) => [id, [l.x1, l.y1, l.x2, l.y2, l.lx, l.ly, l.vx, l.vy]])),
+    };
+  }
+  place(id, [x, y]) {
+    const n = this.nodes[id];
+    if (!n) return;
+    Object.assign(n, { x, y });
+    n.g.setAttribute("transform", `translate(${x - n.w / 2} ${y - n.h / 2})`);
+  }
+  route(id, [x1, y1, x2, y2, lx, ly, vx, vy]) {
+    const l = this.links[id];
+    if (!l) return;
+    Object.assign(l, { x1, y1, x2, y2, lx, ly, vx, vy }); // packets in flight follow the new ends
+    const d = `M${x1} ${y1} L${x2} ${y2}`;
+    l.base.setAttribute("d", d);
+    l.dash.setAttribute("d", d);
+    l.lab.setAttribute("x", lx);
+    l.lab.setAttribute("y", ly);
+    l.val.setAttribute("x", vx);
+    l.val.setAttribute("y", vy);
+  }
+  // 多端协同, once a run starts: nodes and links in `to` slide to their new places (eased over `ms`) while the
+  // nodes and links named in `hide` fade out; reset() puts everything back
+  morph(to, hide = [], ms = 750) {
+    for (const id of hide) (this.nodes[id] || this.links[id])?.g.classList.add("gone");
+    this.moving = { from: this.layout(), to, t0: performance.now(), ms };
+  }
   // the terminal node follows the device the question is about (plan.device)
   setTerminal({ icon, label }, sub) {
     const n = this.nodes.dev;
@@ -395,14 +419,28 @@ class Flow {
     this.quiet();
     for (const p of this.packets) { p.c.remove(); p.tail.forEach((x) => x.remove()); }
     this.packets = [];
-    for (const [id, n] of Object.entries(this.nodes)) { this.node(id, null, n.sub, n.subcls); n.g.classList.remove("shade"); }
-    for (const id of Object.keys(this.links)) { this.linkValue(id, ""); this.links[id].base.classList.remove("shade", "gone"); }
+    for (const [id, n] of Object.entries(this.nodes)) this.node(id, null, n.sub, n.subcls);
+    for (const id of Object.keys(this.links)) this.linkValue(id, "");
+    // back to the starting picture, at once
+    this.moving = null;
+    this.lined = false;
+    for (const [id, p] of Object.entries(this.home.nodes)) { this.place(id, p); this.nodes[id].g.classList.remove("gone"); }
+    for (const [id, p] of Object.entries(this.home.links)) { this.route(id, p); this.links[id].g.classList.remove("gone"); }
   }
   destroy() {
     this.quiet();
     flows.delete(this);
   }
   frame(now) {
+    if (this.moving) {
+      const { from, to, t0, ms } = this.moving;
+      const t = Math.min(1, (now - t0) / ms);
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const mix = (a, b) => a.map((v, i) => v + (b[i] - v) * e);
+      for (const [id, p] of Object.entries(to.nodes || {})) if (from.nodes[id]) this.place(id, mix(from.nodes[id], p));
+      for (const [id, p] of Object.entries(to.links || {})) if (from.links[id]) this.route(id, mix(from.links[id], p));
+      if (t >= 1) this.moving = null;
+    }
     const at = (p, t) => {
       const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       const k = p.reverse ? 1 - e : e;
@@ -759,7 +797,7 @@ async function run() {
   $("#stop").disabled = false;
   $("#stop span").textContent = "停止";
   resetLanes();
-  if (multi) shadeDevices();
+  if (multi) lineUp();
   const lanes = ["plain", "v2"];
   for (const id of lanes) {
     pill(id, "运行中", "run");
@@ -2142,20 +2180,31 @@ function syncShow(d) {
   V.flow.glow(`s_${d}`, 1100);
   V.flow.burst(`s_${d}`, 4, { kind: "cipher", every: 150, dur: 620 });
 }
-// once a run starts, only the device that sends something for the question stays lit: the phone (its upload to
-// HPIC 1.0, its sealed request to HPIC 2.0), or in 场景二 on the left the one device that uploads. The others
-// become shadows until the next choice; their data still counts (synced to the phone, or stored in HPIS).
-function shadeDevices() {
+// While devices are chosen, the drawings show how the data got where it is (synced to the phone, stored in HPIS).
+// Once a run starts they turn into one straight line: the device that sends the question (the phone; in 场景二
+// on the left, the device that uploads) → HPIC 1.0, or the phone → HPIC 2.0 → HPIS. Everything else fades out.
+const ROW = 78; // the line's height in the 480 x 160 drawing
+const LINE = {
+  edge: [142, ROW, 190, ROW, 166, ROW - 28, 166, ROW + 36], // the sender → HPIC, label above, value below
+  cloudl: [310, ROW, 358, ROW, 334, ROW - 28, 334, ROW + 36], // HPIC 2.0 → HPIS
+};
+function lineUp() {
   const P = lane("plain"), V = lane("v2");
   if (!P?.multi || !V) return;
-  const sender = state.run?.route === "direct" ? state.run.hpic1?.[0] : "phone";
-  for (const d of DEVICE_ORDER) {
-    P.flow.shade(d, d !== sender);
-    V.flow.shade(d, d !== "phone");
-    // HPIC 2.0: the data was stored in HPIS once, before the question, so its dotted links fade for the run and
-    // each device says where its data is
-    V.flow.fade(`s_${d}`, true);
-    if (d !== "phone") V.flow.node(nid(d), null, "✓ 已存入 HPIS", "ok");
+  const links = DEVICE_ORDER.map((d) => `s_${d}`);
+  if (!P.flow.lined) {
+    P.flow.lined = true;
+    const direct = state.run?.route === "direct";
+    const sender = direct ? state.run.hpic1?.[0] : "phone";
+    // a device node is small with its text on the right, so the link starts after the text
+    const edge = direct ? [130, ROW, 190, ROW, 160, ROW - 28, 160, ROW + 36] : LINE.edge;
+    P.flow.morph({ nodes: { [nid(sender)]: [direct ? 40 : 72, ROW], cloud: [250, ROW] }, links: { edge } },
+      [...DEVICE_ORDER.filter((d) => d !== sender).map(nid), ...links]);
+  }
+  if (!V.flow.lined) {
+    V.flow.lined = true;
+    V.flow.morph({ nodes: { dev: [72, ROW], hpic: [250, ROW], hpis: [418, ROW] }, links: LINE },
+      [...DEVICE_ORDER.filter((d) => d !== "phone").map(nid), ...links]);
   }
 }
 // a new scenario or device choice: redraw HPIC 1.0's topology and clear the last run
@@ -2197,7 +2246,7 @@ function applyMulti() {
   // before the run, the link says what HPIC 1.0 gets per question
   if (!state.running && !P.final) P.flow.linkValue("edge", `${direct ? "直传 " : ""}${bytesText(size)}`, "big");
   // a run on screen (running or finished) keeps its look: shadows, faded HPIS links, each device's fixed status
-  if (ctx.live) shadeDevices();
+  if (ctx.live) lineUp();
   setTicker("plain");
   renderBoard();
 }
