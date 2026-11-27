@@ -237,6 +237,8 @@ class Flow {
     this.links = {};
     this.packets = [];
     this.streams = {};
+    this.timers = [];
+    this.glows = {};
     // a node: [id, x, icon, label, sub, {y, small}]; a big node is a 72 x 56 box, a small one 30 x 30 with its text on the right
     const pos = Object.fromEntries(cfg.nodes.map((n) => [n[0], { x: n[1], y: n[5]?.y ?? 58 }]));
     for (const [id, a, b, label, o = {}] of cfg.links) {
@@ -345,8 +347,32 @@ class Flow {
     delete this.streams[id];
     if (on) this.streams[id] = setInterval(() => this.send(id, opts), opts.every || 70);
   }
+  // a link that glows for `ms`, then goes quiet: a step that took a few milliseconds still shows
+  glow(id, ms = 900) {
+    if (!this.links[id]) return;
+    clearTimeout(this.glows[id]);
+    this.hot(id, true);
+    this.glows[id] = setTimeout(() => { delete this.glows[id]; this.hot(id, false); }, ms);
+  }
+  // a few packets on a link, one after another
+  burst(id, n = 3, { every = 140, ...opts } = {}) {
+    if (!this.links[id]) return;
+    for (let i = 0; i < n; i++) this.timers.push(setTimeout(() => this.send(id, opts), i * every));
+  }
+  // a node lit for a moment (its data just moved), apart from the active state the run events set
+  flash(id, ms = 900) {
+    const n = this.nodes[id];
+    if (!n) return;
+    clearTimeout(n.flashT);
+    n.g.classList.add("flash");
+    n.flashT = setTimeout(() => n.g.classList.remove("flash"), ms);
+  }
   quiet() {
     for (const k of Object.keys(this.streams)) this.stream(k, false);
+    for (const t of this.timers) clearTimeout(t);
+    this.timers = [];
+    for (const k of Object.keys(this.glows)) clearTimeout(this.glows[k]);
+    this.glows = {};
     for (const id of Object.keys(this.links)) this.hot(id, false);
   }
   // a stopped run: nothing glows any more, and "…中" (in progress) labels say it stopped
@@ -625,6 +651,7 @@ function renderAnswer(id, final = false) {
     .replace(/^\s*[-*]\s+/gm, "• ")
     .replace(/\[(\d+(?:\s*[,，、]\s*\d+)*)\]/g, (_, nums) =>
       nums.split(/[,，、]/).map((n) => `<button class="cite" data-n="${n.trim()}">${n.trim()}</button>`).join(""))
+    .replace(/这部分无法回答/g, `<strong class="miss">这部分无法回答</strong>`) // a device whose data HPIC 1.0 did not get
     .replace(/\n/g, "<br>");
   if (!final) html += `<span class="caret"></span>`;
   box.innerHTML = html;
@@ -935,8 +962,13 @@ function handle(ev, question) {
       } else if (ev.stage === "request" && ev.state === "start") {
         stage(id, "request", "start", t);
         f.node("dev", "active");
-        f.hot("edge", true);
-        f.send("edge", { kind: "cipher", r: 4 });
+        if (L.multi) { // 密封请求: one small request, shown long enough to see
+          f.glow("edge", 1000);
+          f.burst("edge", 3, { kind: "cipher", r: 4, every: 150, dur: 620 });
+        } else {
+          f.hot("edge", true);
+          f.send("edge", { kind: "cipher", r: 4 });
+        }
         metric(id, "edge", ev.edge_up, "bytes");
         f.linkValue("edge", bytesText(ev.edge_up), "small");
         if (L.multi) { L.up = ev.edge_up; renderBoard(); }
@@ -952,6 +984,12 @@ function handle(ev, question) {
         // the link is short in the device drawings: the size on the link, the batches on HPIC 1.0
         L.flow.linkValue("edge", `${state.run?.route === "direct" ? "直传 " : ""}${bytesText(ev.edge_up)}`, "big");
         L.flow.node("cloud", "active", `接收 ${ev.batch}/${ev.batches} 批`, "hot");
+        // 场景一: the phone uploads device by device; the device whose synced data is going up lights with its link
+        if (state.run?.route !== "direct" && ev.device) {
+          L.flow.flash(nid(ev.device), 600);
+          if (ev.device !== "phone") L.flow.glow(`s_${ev.device}`, 600);
+          L.flow.node("dev", "active", ev.device === "phone" ? "上传本机照片" : `上传${deviceOf(ev.device).label}的数据`, "hot");
+        }
         L.up = ev.edge_up;
         renderBoard();
       } else L.flow.linkValue("edge", `${bytesText(ev.edge_up)} · ${ev.batch}/${ev.batches} 批`, "big");
@@ -961,10 +999,16 @@ function handle(ev, question) {
     case "auth": {
       if (L.done) break;
       stage(id, "request", "end", t);
-      L.flow.hot("edge", false);
       L.flow.node("hpic", "active", "票据有效 · 转发");
       const key = id === "v1" ? "fetch" : "search";
       stage(id, key, "start", t);
+      if (L.multi) { // 密态检索: HPIC 2.0 hands the per-device searches to HPIS (the request link fades on its own)
+        L.flow.node("hpis", "active", "SSE 筛选 + 密态向量");
+        L.flow.glow("cloudl", 1200);
+        L.flow.burst("cloudl", 2, { kind: "cipher", r: 3.5, every: 160, dur: 480 });
+        break;
+      }
+      L.flow.hot("edge", false);
       L.flow.hot("cloudl", true);
       if (id === "v1") {
         L.flow.node("hpis", "active", "读取全部密文");
@@ -1012,7 +1056,9 @@ function handle(ev, question) {
     case "sync": {
       if (!L || L.done) break;
       L.flow.node(nid(ev.device), null, "✓ 已同步", "ok");
-      L.flow.send(`s_${ev.device}`, { kind: "plaintext", dur: 520 });
+      L.flow.flash(ev.device);
+      L.flow.glow(`s_${ev.device}`, 900);
+      L.flow.burst(`s_${ev.device}`, 3, { kind: "plaintext", every: 150, dur: 560 });
       break;
     }
     // 场景二: the one device sends its own data straight to HPIC 1.0
@@ -1040,7 +1086,11 @@ function handle(ev, question) {
       const hit = `${ev.device === "phone" ? "照片" : ""}命中 ${intText(ev.rows)} 条`;
       if (id === "v2") {
         L.flow.node(nid(ev.device), "active", hit, "ok");
-        L.flow.send("cloudl", { reverse: true, kind: "cipher", r: 3.2, dur: 420 });
+        // the search reaches this device's encrypted data where it is stored (nothing comes from the device)
+        L.flow.glow(`s_${ev.device}`, 1000);
+        L.flow.burst(`s_${ev.device}`, 2, { reverse: true, kind: "cipher", r: 3.2, every: 160, dur: 560 });
+        L.flow.glow("cloudl", 1200);
+        L.flow.send("cloudl", { reverse: true, kind: "cipher", r: 3.2, dur: 480 });
         L.searched = (L.searched || 0) + 1;
         L.flow.node("hpis", "active", `密态检索 ${L.searched}/${(state.run?.devices || []).length || L.searched} 台`, "hot");
       } else {
@@ -1340,7 +1390,7 @@ function put(el, html, cls) {
   if (cls != null && el._c !== cls) { el.className = cls; el._c = cls; }
 }
 const frac = (x, n) => `${x}<small>/${n}</small>`;
-const CELL = { wait: "", ok: ICON("check"), no: ICON("x"), nodata: "无数据" };
+const CELL = { wait: "", ok: ICON("check"), no: ICON("x"), nodata: `无数据<b class="cell__x">${ICON("x")}</b>` };
 function renderBoard() {
   const host = $("#board");
   if (!host || !lane("plain")?.multi) return;
@@ -2077,6 +2127,19 @@ function scenHtml() {
   }).join("");
   return `<span class="scen"><span class="scen__label">${ICON("cloud-upload")}HPIC 1.0</span><span class="scen__opts" role="radiogroup" aria-label="HPIC 1.0 的场景">${opts}</span><span class="sdevs" role="${one ? "radiogroup" : "group"}" aria-label="${one ? "直传的设备" : "同步到手机的设备"}"><span class="sdevs__label">${one ? "直传设备" : "同步到手机"}</span>${devs}</span></span>`;
 }
+// a device just chosen for HPIC 1.0 (场景一: synced to the phone; 场景二: the one that uploads): its data moves in
+// both drawings, to the phone or HPIC 1.0 on the left, and on the right into HPIS, where HPIC 2.0 keeps it encrypted
+function syncShow(d) {
+  const P = lane("plain"), V = lane("v2");
+  if (!P?.multi || !V || state.running) return;
+  const link = hpic1Pick().route === "direct" ? "edge" : `s_${d}`;
+  P.flow.flash(nid(d), 1100);
+  P.flow.glow(link, 1100);
+  P.flow.burst(link, 4, { kind: "plaintext", every: 150, dur: 620 });
+  V.flow.flash(nid(d), 1100);
+  V.flow.glow(`s_${d}`, 1100);
+  V.flow.burst(`s_${d}`, 4, { kind: "cipher", every: 150, dur: 620 });
+}
 // a new scenario or device choice: redraw HPIC 1.0's topology and clear the last run
 function changeScen() {
   renderPresets();
@@ -2383,6 +2446,7 @@ function init() {
       if (sc.choose === "one" || sc.route === "direct") state.pick[sc.id] = [d];
       else state.pick[sc.id] = (sc.devices || []).filter((x) => (x === d ? !cur.includes(x) : cur.includes(x)));
       changeScen();
+      if (state.pick[sc.id].includes(d)) syncShow(d);
     }
   });
   $("#modes").addEventListener("click", (e) => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });

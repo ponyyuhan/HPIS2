@@ -1280,3 +1280,14 @@ body[data-mode="multi"] #device { display: none; }
 .vres--plain b { color: var(--v2b); }
 .spy__local { color: var(--v2b); }
 .prov__cmp p { grid-template-columns: 9.6em auto 1fr; }
+
+/* 多端协同: a device whose data just moved (chosen for HPIC 1.0, uploaded, or searched in HPIS) lights for a moment */
+.flow .node.flash .box { stroke: var(--c); stroke-width: 1.6; fill: color-mix(in srgb, var(--c) 10%, var(--node-fill)); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--c) 34%, transparent)); }
+.flow .node.flash use { color: var(--c); }
+.flow .node.flash .ripple { animation: ripple 1.1s ease-out; }
+/* 关键信息核对: HPIC 1.0 without the device's data misses the fact, so 无数据 carries a red cross */
+.cell.nodata { grid-auto-flow: column; gap: .26rem; padding-right: .2rem; }
+.cell .cell__x { display: inline-grid; place-items: center; width: 1.02rem; height: 1.02rem; border-radius: 5px; color: #fff; background: var(--risk); }
+.cell .cell__x .i { width: .7rem; height: .7rem; }
+/* the answer's 「这部分无法回答」 (a device whose data HPIC 1.0 did not get) */
+.answer__text .miss { color: var(--risk); font-weight: 800; }
