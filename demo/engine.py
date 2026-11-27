@@ -1,10 +1,15 @@
 """Runs one question through the lanes concurrently and yields UI events.
 
 Lanes
-  plain  端侧直传普通云: upload the whole collection of the asked kind in 16 MB batches;
-         the cloud filters plaintext, shortlists lexically and computes vectors on the fly.
+  plain  HPIC 1.0 (端侧直传机密计算平台): upload the whole collection of the asked kind in 16 MB
+         batches; the service filters, shortlists lexically and computes vectors on the fly.
   v1     HPIS 1.0 (mail only, HPIS_DEMO_V1=1): HPIC fetches and decrypts every record.
-  v2     端侧+HPIC+HPIS: SSE + encrypted vector search inside HPIS, HPIC opens only K records.
+  v2     HPIC 2.0 (端侧+HPIC+HPIS): SSE + encrypted vector search inside HPIS, HPIC opens only K records.
+
+多端协同 (``multi``): one question needs the data of several devices.  HPIC 2.0 sends one
+sealed search per device AID and HPIC answers once from the merged evidence; HPIC 1.0
+receives only the data synced to the phone (``hpic1``), searches each kind the usual way and
+answers once from what it has.
 
 The question goes to the device whose data it asks about (PC mail, 手机 photos,
 手表 watch records, 车机 car records); each device queries HPIS under its own
@@ -39,7 +44,7 @@ from hpis.codec import pack, unit_vectors, unpack
 
 from . import config, planner
 from .cluster import Cluster, device_tenants
-from .devices import BY_KIND, Catalog
+from .devices import BY_ID, BY_KIND, Catalog
 from .mailbox import Mailbox
 from .netem import now, pace
 from .uploads import Uploader
@@ -182,6 +187,36 @@ class Engine:
         plan["total"] = self.catalog.count(kind)
         return plan
 
+    def plan_multi(self, question: str) -> dict:
+        """Sub-plans of a multi-device question: a preset's own plans, else each device's own planning.
+
+        Returns {"preset", "devices", "plans": {device: plan}, "facts"}; every plan is relaxed on its
+        device like a single-device plan (a filter that leaves nothing is dropped there)."""
+        clean = planner._clean(question)
+        preset = next((p for p in self.catalog.multi_presets() if planner._clean(p["question"]) == clean), None)
+        if preset is not None:
+            devices = list(preset["devices"])
+        else:  # a free question goes to every device that holds data
+            devices = [d.id for d in self.catalog.devices]
+        plans = {}
+        for device in devices:
+            kind = BY_ID[device].kind
+            if preset is not None:
+                raw = preset["plans"].get(device) or {}
+                plan = planner.finalize({**raw, "kind": kind, "semantic": raw.get("semantic") or question})
+                plan["preset"] = preset["id"]
+            else:
+                plan = planner.plan_question(question, [], self.mailbox.bible, catalog=self.catalog, kind=kind)
+            plan = planner.relax(plan, lambda p, k=kind: self.catalog.matching(k, p))
+            plan["total"] = self.catalog.count(kind)
+            plans[device] = plan
+        return {
+            "preset": preset["id"] if preset else None,
+            "devices": devices,
+            "plans": plans,
+            "facts": list(preset.get("facts") or []) if preset else [],
+        }
+
     def embed(self, plan: dict) -> np.ndarray:
         vec = Embedder.get().encode_query(plan.get("semantic") or "")
         return unit_vectors(np.asarray(vec, dtype=np.float64), len(vec))
@@ -245,7 +280,7 @@ class Engine:
             await device.request(op, {"dek": device.dek})
 
     # ------------------------------------------------------------------ lanes
-    async def lane_plain(self, ctl: Control, question, plan, unit, model, net, extras):
+    async def lane_plain(self, ctl: Control, question, plan, unit, model, net, extras, *, multi=None):
         """Runs on its own thread + event loop: TLS-encrypting hundreds of MB of
         uploads must not stall the event loop that relays the other lanes."""
         loop = asyncio.get_running_loop()
@@ -261,7 +296,11 @@ class Engine:
         def worker():
             inner = asyncio.new_event_loop()
             try:
-                task = inner.create_task(self._plain(emit, ctl, question, plan, unit, model, net, extras))
+                if multi is not None:
+                    coro = self._plain_multi(emit, ctl, question, plan, unit, model, net, multi)
+                else:
+                    coro = self._plain(emit, ctl, question, plan, unit, model, net, extras)
+                task = inner.create_task(coro)
                 with ctl.lock:
                     ctl.plain = (inner, task)
                     cancelled = ctl.cancelled
@@ -337,6 +376,145 @@ class Engine:
                 edge,
                 sent,
             )
+
+    async def _plain_multi(self, emit, ctl: Control, question, mp: dict, units: dict, model, net, hpic1):
+        """HPIC 1.0, several devices: the phone uploads its own data and what the watch, PC and car
+        synced to it beforehand (``hpic1``), the same batches as a single-device question."""
+        lane = "plain"
+        devices = mp["devices"]
+        for device in [d for d in BY_ID if d in hpic1 and d != "phone"]:
+            kind = BY_ID[device].kind
+            if self.catalog.has(kind) and kind in self.uploads:
+                emit({"lane": lane, "type": "sync", "device": device, "via": "phone",
+                      "records": self.catalog.count(kind), "bytes": int(self.uploads[kind].plan.get("bytes") or 0)})
+        have = [d for d in devices if d in hpic1 and BY_ID[d].kind in self.uploads]
+        emit({"lane": lane, "type": "missing", "devices": [d for d in devices if d not in have]})
+        jobs = [(d, BY_ID[d].kind, i) for d in have for i in range(len(self.uploads[BY_ID[d].kind]))]
+        edge = net.edge
+        sent = 0
+        loop = asyncio.get_running_loop()
+
+        def load(j):
+            _, kind, i = jobs[j]
+            return self.uploads[kind].load(i)
+
+        pending = loop.run_in_executor(None, load, 0) if jobs else None
+        async with self.cluster.cloud_session() as cloud:
+            emit({"lane": lane, "type": "stage", "stage": "upload", "state": "start", "batches": len(jobs),
+                  "devices": have})
+            t0 = now()
+            kinds = [BY_ID[d].kind for d in have]
+            async with cloud.post(
+                self.cluster.cloud_url + "/session", json={"kinds": kinds}, server_hostname="hpic.internal"
+            ) as r:
+                ctl.plain_sid = (await r.json())["sid"]
+            sid = ctl.plain_sid
+            await pace(t0, edge, 64, legs=2)
+            for j, (device, kind, _) in enumerate(jobs):
+                if ctl.cancelled:
+                    raise asyncio.CancelledError()
+                blob = await pending
+                pending = loop.run_in_executor(None, load, j + 1) if j + 1 < len(jobs) else None
+                t0 = now()
+                async with cloud.post(
+                    f"{self.cluster.cloud_url}/upload/{sid}", params={"kind": kind}, data=blob,
+                    server_hostname="hpic.internal",
+                ) as r:
+                    r.raise_for_status()
+                    await r.read()
+                await pace(t0, edge, len(blob), legs=2)
+                sent += len(blob)
+                emit({"lane": lane, "type": "upload", "batch": j + 1, "batches": len(jobs), "edge_up": sent,
+                      "device": device})
+            emit({"lane": lane, "type": "stage", "stage": "upload", "state": "end", "edge_up": sent})
+            body = {
+                "question": question,
+                "model": model,
+                "devices": devices,
+                "plans": {d: mp["plans"][d] for d in have},
+                "notes": {d: planner.model_note(mp["plans"][d]) for d in have},
+                "evidence_k": {d: config.evidence_k(BY_ID[d].kind) for d in have},
+            }
+            if os.environ.get("HPIS_DEMO_CLOUD_EMBED") == "stored":
+                body["qvecs"] = {d: units[d].tobytes().hex() for d in have}  # offline tests only
+            payload = json.dumps(body).encode()
+            await asyncio.sleep(edge.one_way_seconds(len(payload)))
+            sent += len(payload)
+            emit({"lane": lane, "type": "stage", "stage": "retrieve", "state": "start"})
+            await self._relay(
+                emit,
+                ctl.run,
+                lane,
+                cloud.post(f"{self.cluster.cloud_url}/ask_multi/{sid}", data=payload, server_hostname="hpic.internal"),
+                edge,
+                sent,
+            )
+
+    async def lane_hpis_multi(self, ctl: Control, question, mp: dict, units: dict, model, net):
+        """HPIC 2.0, several devices: one sealed search per device, each under that device's AID,
+        ticket and keys; HPIC runs them in HPIS, opens the K hits of each and answers once."""
+        run = ctl.run
+        lane = "v2"
+        parts, info = [], []
+        for device_id in mp["devices"]:
+            kind = BY_ID[device_id].kind
+            device = self.tenant("tee", kind)
+            plan = mp["plans"][device_id]
+            op = device.vector_op(units[device_id], config.RETRIEVE_K, plan)
+            ask = {
+                "lane": lane,
+                "mode": "multi",
+                "question": question,
+                "model": model,
+                "device": device_id,
+                "kind": kind,
+                "plan": plan,
+                "note": planner.model_note(plan),
+                "evidence_k": config.evidence_k(kind),
+                "cloud": {"bps": net.cloud.bps, "rtt_ms": net.cloud.rtt_ms},
+            }
+            envelope = device.ask_envelope(op, ask)
+            sealed = unpack(envelope[1][64:])[2]
+            parts.append(envelope)
+            info.append({"device": device_id, "aid": device.aid.hex()[:8], "bytes": len(pack(envelope)),
+                         "sealed_bytes": len(sealed), "preview": sealed[:40].hex(),
+                         "tokens": [g[0].hex()[:24] for g in op["groups"]]})
+        body = pack(parts)
+        run.put(
+            {
+                "lane": lane,
+                "type": "sealed",
+                "bytes": len(body),
+                "sealed_bytes": sum(i["sealed_bytes"] for i in info),
+                "preview": info[0]["preview"],
+                "tokens": [t for i in info for t in i["tokens"]],
+                "aid": info[0]["aid"],
+                "devices": info,
+            }
+        )
+        run.put({"lane": lane, "type": "stage", "stage": "request", "state": "start", "edge_up": len(body)})
+        await asyncio.sleep(net.edge.one_way_seconds(len(body)))
+        aids = {i["device"]: i["aid"] for i in info}
+
+        def emit(event):
+            if event.get("type") == "device_search":
+                event["aid"] = aids.get(event.get("device"))  # HPIS knows the AID; HPIC only sees the ticket
+            run.put(event)
+
+        sender = self.tenants.get(("tee", BY_ID["phone"].tenant)) or self.tenant("tee", BY_ID[mp["devices"][0]].kind)
+        await self._relay(
+            emit,
+            run,
+            lane,
+            sender.session.post(
+                sender.url + "/ask_multi",
+                data=body,
+                server_hostname="hpic.internal",
+                headers={"Content-Type": "application/msgpack"},
+            ),
+            net.edge,
+            len(body),
+        )
 
     async def lane_hpis(self, ctl: Control, lane: str, question, plan, unit, model, net, extras):
         run = ctl.run
@@ -497,9 +675,12 @@ class Engine:
         }
 
     # ------------------------------------------------------------------ run
-    async def run(self, question: str, model: str, lanes=("plain", "v2"), net: config.Network | None = None):
-        """NDJSON events of one run; closing this generator early stops the run."""
-        ctl = await self.start(question, model, lanes, net)
+    async def run(self, question: str, model: str, lanes=("plain", "v2"), net: config.Network | None = None, *,
+                  multi: dict | None = None):
+        """NDJSON events of one run; closing this generator early stops the run.
+
+        ``multi`` ({"hpic1": [device ids]}) makes it a multi-device run (多端协同)."""
+        ctl = await self.start(question, model, lanes, net, multi=multi)
         try:
             while True:
                 event = await ctl.out.get()
@@ -510,7 +691,7 @@ class Engine:
             if not ctl.done.is_set():
                 ctl.stop("closed")  # the page went away: stop the work it started
 
-    async def start(self, question: str, model: str, lanes=("plain", "v2"), net=None) -> Control:
+    async def start(self, question: str, model: str, lanes=("plain", "v2"), net=None, *, multi=None) -> Control:
         """Begin a run (after stopping one still in progress) and return its handle."""
         old = self.active
         if old is not None and not old.done.is_set():
@@ -521,7 +702,9 @@ class Engine:
                 print("previous run did not end within 10 s; starting the next one anyway", flush=True)
         ctl = Control(Run())
         self.active = ctl
-        ctl.task = asyncio.create_task(self._produce(ctl, question, model, tuple(lanes), net or config.Network()))
+        ctl.task = asyncio.create_task(
+            self._produce(ctl, question, model, tuple(lanes), net or config.Network(), multi)
+        )
         return ctl
 
     async def stop(self, wait: float = 5.0) -> bool:
@@ -536,7 +719,7 @@ class Engine:
             pass
         return True
 
-    async def _produce(self, ctl: Control, question, model, lanes, net):
+    async def _produce(self, ctl: Control, question, model, lanes, net, multi=None):
         run = ctl.run
 
         def out(event):
@@ -545,7 +728,10 @@ class Engine:
 
         ended = False
         try:
-            ended = await self._produce_events(ctl, out, question, model, lanes, net)
+            if multi is not None:
+                ended = await self._produce_multi(ctl, out, question, model, lanes, net, multi)
+            else:
+                ended = await self._produce_events(ctl, out, question, model, lanes, net)
         except Exception as exc:  # never leave the page without an end event
             traceback.print_exc()
             out({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
@@ -595,6 +781,40 @@ class Engine:
 
         if kind != "mail":
             lanes = tuple(lane for lane in lanes if lane != "v1")  # HPIS 1.0 covers the mailbox only
+
+        def make(lane):
+            if lane == "plain":
+                return self.lane_plain(ctl, question, plan, unit, model, net, extras)
+            return self.lane_hpis(ctl, lane, question, plan, unit, model, net, extras)
+
+        if await self._race(ctl, out, lanes, make, deadline):
+            return True
+
+        if "v2" in lanes:
+            remaining = deadline - now()
+            if remaining > 1:
+                check = asyncio.create_task(self.verify(plan, unit, limit_s=min(config.VERIFY_LIMIT_S, remaining - 1)))
+                waiter = asyncio.create_task(ctl.stop_event.wait())
+                finished, _ = await asyncio.wait({check, waiter}, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+                waiter.cancel()
+                if check in finished:
+                    try:
+                        result = check.result()
+                        if result:
+                            out({"type": "verify", **result, "t": run.t()})
+                    except Exception as exc:
+                        out({"type": "verify", "error": str(exc), "t": run.t()})
+                else:
+                    check.cancel()
+        stopped = ctl.reason is not None
+        out({"type": "end", "stopped": stopped, "timed_out": ctl.reason == "timeout", "reason": ctl.reason})
+        return True
+
+    async def _race(self, ctl: Control, out, lanes, make, deadline) -> bool:
+        """Run the lanes side by side and forward their events until all finish, a stop or the run limit.
+
+        ``make(lane)`` returns the lane's coroutine.  True when the run ended early (``end`` was sent)."""
+        run = ctl.run
         state = {lane: {"edge_up": 0, "edge_down": 0, "ttft_ms": None, "over": False} for lane in lanes}
         if ctl.stop_event.is_set():  # stopped while planning: no lane has started
             for lane in lanes:
@@ -611,14 +831,7 @@ class Engine:
             except Exception as exc:  # surface failures in the UI, keep other lanes alive
                 run.put({"lane": lane, "type": "error", "message": f"{type(exc).__name__}: {exc}"})
 
-        tasks = []
-        if "plain" in lanes:
-            coro = self.lane_plain(ctl, question, plan, unit, model, net, extras)
-            tasks.append(asyncio.create_task(guarded(coro, "plain")))
-        for lane in ("v1", "v2"):
-            if lane in lanes:
-                coro = self.lane_hpis(ctl, lane, question, plan, unit, model, net, extras)
-                tasks.append(asyncio.create_task(guarded(coro, lane)))
+        tasks = [asyncio.create_task(guarded(make(lane), lane)) for lane in ("plain", "v1", "v2") if lane in lanes]
 
         def forward(event):
             lane = event.get("lane")
@@ -677,24 +890,63 @@ class Engine:
             out({"type": "end", "stopped": not timeout, "timed_out": timeout, "reason": ctl.reason, "t": t_stop})
             return True
 
-        if "v2" in lanes:
-            remaining = deadline - now()
-            if remaining > 1:
-                check = asyncio.create_task(self.verify(plan, unit, limit_s=min(config.VERIFY_LIMIT_S, remaining - 1)))
-                waiter = asyncio.create_task(ctl.stop_event.wait())
-                finished, _ = await asyncio.wait({check, waiter}, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
-                waiter.cancel()
-                if check in finished:
-                    try:
-                        result = check.result()
-                        if result:
-                            out({"type": "verify", **result, "t": run.t()})
-                    except Exception as exc:
-                        out({"type": "verify", "error": str(exc), "t": run.t()})
-                else:
-                    check.cancel()
-        stopped = ctl.reason is not None
-        out({"type": "end", "stopped": stopped, "timed_out": ctl.reason == "timeout", "reason": ctl.reason})
+        return False
+
+    async def _produce_multi(self, ctl: Control, out, question, model, lanes, net, multi: dict) -> bool:
+        """A multi-device run: per-device plans, then both lanes with one model call each."""
+        run = ctl.run
+        deadline = run.t0 + config.RUN_LIMIT_S
+        loop = asyncio.get_running_loop()
+        hpic1 = [d for d in BY_ID if d in (multi.get("hpic1") or [])]
+        mp = await loop.run_in_executor(None, self.plan_multi, question)
+        t0 = now()
+        units = {}
+        for device in mp["devices"]:
+            units[device] = await loop.run_in_executor(None, self.embed, mp["plans"][device])
+        embed_ms = (now() - t0) * 1000
+        out(
+            {
+                "type": "plan",
+                "mode": "multi",
+                "question": question,
+                "preset": mp["preset"],
+                "devices": mp["devices"],
+                "hpic1": hpic1,
+                "plans": {
+                    d: {
+                        "kind": plan["kind"],
+                        "label": BY_ID[d].label,
+                        "kind_label": BY_ID[d].kind_label,
+                        "chips": planner.describe(plan),
+                        "total": plan["total"],
+                        "matched": plan.get("matched"),
+                        "relaxed": plan.get("relaxed") or [],
+                    }
+                    for d, plan in mp["plans"].items()
+                },
+                "facts": mp["facts"],
+                "embed_ms": round(embed_ms, 2),
+                "model": model,
+                "net": net.describe(),
+                "vision": False,
+            }
+        )
+        for device, plan in mp["plans"].items():
+            notice = planner.relax_notice(plan)
+            if notice:
+                out({"type": "notice", "lane": None, "device": device, "text": notice,
+                     "relaxed": plan.get("relaxed") or []})
+        lanes = tuple(lane for lane in lanes if lane in ("plain", "v2"))
+
+        def make(lane):
+            if lane == "plain":
+                return self.lane_plain(ctl, question, mp, units, model, net, None, multi=hpic1)
+            return self.lane_hpis_multi(ctl, question, mp, units, model, net)
+
+        if await self._race(ctl, out, lanes, make, deadline):
+            return True
+        out({"type": "end", "stopped": ctl.reason is not None, "timed_out": ctl.reason == "timeout",
+             "reason": ctl.reason})
         return True
 
     async def _abort(self, ctl: Control, tasks):

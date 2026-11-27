@@ -355,7 +355,7 @@ class DevicesTest(unittest.TestCase):
             for d in st["devices"]:
                 self.assertEqual(set(d) >= {"id", "label", "kind", "kind_label", "aid", "records", "bytes", "exposure"}, True)
                 self.assertEqual(len(d["aid"]), 32)
-                self.assertIn("普通云可读取", d["exposure"])
+                self.assertIn("HPIC 1.0 本次接收", d["exposure"])
             self.assertEqual(len({d["aid"] for d in st["devices"]}), 4)
             presets = {p["id"]: p for p in st["presets"]}
             self.assertEqual((presets["t"]["kind"], presets["t"]["device"]), ("mail", "pc"))

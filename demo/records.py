@@ -180,6 +180,26 @@ def evidence(kind: str, pairs: list[tuple[int, dict]], *, vision: bool = False) 
     return cards, items
 
 
+def multi_evidence(groups: list[tuple[str, str, list[tuple[int, dict]]]]) -> tuple[list[dict], list[dict]]:
+    """(UI cards, model evidence) of several devices, numbered across them (a multi-device answer).
+
+    ``groups`` is ``[(device, kind, ranked pairs)]`` in the order the answer lists the devices; every
+    card and item carries ``device``, ``kind`` and its citation number ``n``.  HPIC 2.0 and HPIC 1.0
+    call this with their own retrieval results, so a device's evidence is laid out the same in both.
+    """
+    cards, items = [], []
+    for device, kind, pairs in groups:
+        for _, rec in pairs:
+            n = len(items) + 1
+            c = card(kind, rec)
+            c.update(device=device, kind=kind, n=n)
+            cards.append(c)
+            item = model_item(kind, rec, n)
+            item.update(device=device, kind=kind)
+            items.append(item)
+    return cards, items
+
+
 # ----------------------------------------------------------------- embedding text
 
 _FIELD_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?")

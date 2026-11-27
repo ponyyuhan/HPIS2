@@ -1,10 +1,10 @@
-"""Device-side client and the local process cluster (HPIS, HPIC, ordinary cloud).
+"""Device-side client and the local process cluster (HPIS, HPIC, HPIC 1.0).
 
 Two HPIS deployments are provisioned from the same device data:
   tee    HPIS 2.0 tenants: AES-256-GCM bodies, HMAC-SHA256 SSE labels, AES-GCM
          vector index opened only inside HPIS' trusted compute region.
-  plain  the same service stack with plaintext storage (baseline for the
-         "密文 vs 明文" overhead check, never used by the race lanes).
+  plain  the same service stack with unencrypted storage (baseline for the
+         encrypted-vs-常规检索 overhead check, never used by the race lanes).
 
 Each deployment holds one tenant per device (folder ``devices/<tenant>``:
 default = PC mail, phone, watch, car) plus decoy tenants (``decoy-NN``).
@@ -109,7 +109,7 @@ class Cluster:
         if args[0] == "cloud":
             from .llm import lane_env
 
-            env = lane_env("plain", env)  # the plaintext cloud may have its own model server
+            env = lane_env("plain", env)  # HPIC 1.0 may have its own model server
         env["PYTHONPATH"] = str(config.ROOT) + os.pathsep + env.get("PYTHONPATH", "")
         try:
             proc = await asyncio.create_subprocess_exec(

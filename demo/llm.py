@@ -1298,7 +1298,7 @@ def _lane_endpoints(name: str, env: Mapping[str, str] | None = None) -> list[tup
     plain = resolve_endpoint(name, lane_env("plain", env))
     if (plain.base_url, plain.model) == (hpis.base_url, hpis.model):
         return [("", hpis)]
-    return [("端侧+HPIC+HPIS", hpis), ("端侧直传普通云", plain)]
+    return [("HPIC 2.0", hpis), ("HPIC 1.0", plain)]
 
 
 async def warm_all(env: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
@@ -1688,7 +1688,7 @@ async def check(profiles: list[str] | None = None, env: Mapping[str, str] | None
         "  systemctl --user status hpis2-ollama hpis2-ollama-plain --no-pager\n"
         "  journalctl --user -u hpis2-ollama -u hpis2-ollama-plain -n 40 --no-pager",
         "parallel": "两条通道会排队：这个 Ollama 一次只给这个模型处理一个请求（Ollama 默认如此，"
-        "Qwen 3.5 系列架构在 Ollama 里更是固定一次一个），明文通道的首字时间会被拉长，对比就不公平了。"
+        "Qwen 3.5 系列架构在 Ollama 里更是固定一次一个），HPIC 1.0 通道的首字时间会被拉长，对比就不公平了。"
         "不要改动或重启它，按 H200部署步骤.md 用 --ollama 给两条通道各起一个演示专用的 Ollama。",
         "context": "上下文太短，长邮件会被截断。--ollama 起的演示专用 Ollama 固定使用 16k 上下文。",
         "thinking": "模型没有关闭思考。Ollama 需要 0.9 或更新版本（ollama --version）。",

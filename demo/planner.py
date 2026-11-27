@@ -431,10 +431,12 @@ def places(question: str, vocab: dict | None = None) -> tuple[list[str], list[st
     return countries[:3], cities[:3]
 
 
-def plan_question(question: str, presets: list[dict], bible: dict, catalog=None) -> dict:
-    """The device's plan for one question (``catalog``: the device data, None = mail only)."""
+def plan_question(question: str, presets: list[dict], bible: dict, catalog=None, *, kind: str | None = None) -> dict:
+    """The device's plan for one question (``catalog``: the device data, None = mail only).
+
+    ``kind`` forces the device's data (a multi-device question asks every device in turn)."""
     clean = _clean(question)
-    for preset in presets:
+    for preset in presets if kind is None else ():
         if _clean(preset["question"]) == clean:
             plan = dict(preset["plan"])
             plan.setdefault("semantic", preset["question"])
@@ -445,7 +447,8 @@ def plan_question(question: str, presets: list[dict], bible: dict, catalog=None)
     orgs, people = _entities(bible)
     available = tuple(catalog.kinds) if catalog is not None else ("mail",)
     vocabulary = catalog.vocabulary if catalog is not None else {}
-    kind, scores = detect_kind(question, available, (orgs, people), vocabulary)
+    detected, scores = detect_kind(question, available, (orgs, people), vocabulary)
+    kind = kind or detected
     start, end = time_window(question, today)
     plan: dict = {"kind": kind, "semantic": question}
     if kind == "mail":

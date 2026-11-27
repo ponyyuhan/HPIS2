@@ -9,9 +9,9 @@ from pathlib import Path
 DESC = {
     "sse_exact": ("精确字段 SSE", "命中 1 条", "按唯一的字段值（如编号）查：终端把字段值变成 HMAC 令牌，HPIS 在倒排表上精确匹配，只读取并返回命中的那 1 条密文。"),
     "sse_keyword": ("关键词 SSE", "命中 10 条", "按关键词查：一个关键词令牌对应 10 条记录，HPIS 只读取这 10 条密文，HPIC 只解密这 10 条。"),
-    "vec_tee": ("向量 Top-10 · 软硬协同精确", "精确 · TEE", "向量以 AES-GCM 密文存放，只在可信计算区内解开、用与明文相同的内核精确排序，结果逐条一致。"),
-    "vec_ppe": ("向量 Top-10 · 纯密码学 PPE", "近似 · β=0.25", "无需硬件信任：HPIS 直接在 RAP 扰动表示上排序（近似检索），与同一排序内核的明文检索比较。"),
-    "vec_ppe_b0125": ("向量 Top-10 · PPE（β=0.125）", "近似 · β=0.125", "扰动更小的 RAP 表示：召回更高，同样与同核明文比较。"),
+    "vec_tee": ("向量 Top-10 · 软硬协同精确", "精确 · TEE", "向量以 AES-GCM 密文存放，只在可信计算区内解开、用与常规检索相同的内核精确排序，结果逐条一致。"),
+    "vec_ppe": ("向量 Top-10 · 纯密码学 PPE", "近似 · β=0.25", "无需硬件信任：HPIS 直接在 RAP 扰动表示上排序（近似检索），与同一排序内核的常规检索比较。"),
+    "vec_ppe_b0125": ("向量 Top-10 · PPE（β=0.125）", "近似 · β=0.125", "扰动更小的 RAP 表示：召回更高，同样与同核常规检索比较。"),
 }
 ORDER = ["sse_exact", "sse_keyword", "vec_tee", "vec_ppe", "vec_ppe_b0125"]
 
@@ -44,16 +44,24 @@ def _scenarios(data: dict) -> list[tuple[str, dict]]:
 SHORT = {
     "sse_exact": ("精确字段检索", "SSE", "按唯一的字段值（如编号）查，令牌只命中 1 条，只取这 1 条"),
     "sse_keyword": ("关键词检索", "SSE", "按关键词查，一个关键词对应 10 条，只取这 10 条"),
-    "vec_tee": ("向量 Top-10 · 精确", "TEE", "可信计算区内精确排序，结果与明文一致"),
+    "vec_tee": ("向量 Top-10 · 精确", "TEE", "可信计算区内精确排序，与常规检索结果一致"),
     "vec_ppe": ("向量 Top-10 · 纯密码学", "PPE", "无需可信硬件，在扰动密文上近似排序"),
 }
+
+
+_PLAIN = "\u660e\u6587"  # the result files' word for the unencrypted baseline
+
+
+def _plain_words(text: str) -> str:
+    """The page calls the unencrypted baseline 常规检索, whatever the result files call it."""
+    return str(text).replace(_PLAIN + "\u68c0\u7d22", "常规检索").replace(_PLAIN, "常规检索")
 
 
 def _short_correctness(text: str) -> str:
     m = re.search(r"Recall@10\s*([\d.]+)%", text)
     if m:
         return f"Recall@10 {float(m.group(1)):.1f}%"
-    return "与明文一致 100%" if ("一致" in text or "同序" in text) else text
+    return "与常规检索一致 100%" if ("一致" in text or "同序" in text) else _plain_words(text)
 
 
 def _rollup_view(data: dict) -> dict:
@@ -65,6 +73,9 @@ def _rollup_view(data: dict) -> dict:
         if row.get("key") in SHORT:
             row["name_zh"], row["tag"], row["desc_zh"] = SHORT[row["key"]]
         row["correctness"] = _short_correctness(str(row.get("correctness", "")))
+        for k in ("name_zh", "desc_zh", "tag"):
+            if row.get(k):
+                row[k] = _plain_words(row[k])
         scenarios.append(row)
     shown = [r for r in scenarios if r.get("headline") is not False]
     pairs = shown[0].get("pairs") if shown else None
@@ -74,7 +85,7 @@ def _rollup_view(data: dict) -> dict:
         "view": "dashboard",
         "headline": {
             "title": f"{len(shown)} 个验收场景的时延损耗均低于 10%",
-            "subtitle": " · ".join(x for x in (cpu, os_name, f"每个场景 {pairs:,} 对明密文请求" if pairs else "") if x),
+            "subtitle": " · ".join(x for x in (cpu, os_name, f"每个场景 {pairs:,} 对密态与常规检索请求" if pairs else "") if x),
         },
         "environment": {},
         "scenarios": scenarios,
@@ -96,7 +107,22 @@ def _rollup_view(data: dict) -> dict:
     return view
 
 
+def _scrub(obj):
+    """Every string the page may show uses the page's wording (nested run details included)."""
+    if isinstance(obj, str):
+        return _plain_words(obj)
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_scrub(v) for v in obj]
+    return obj
+
+
 def build_view(data: dict | None) -> dict:
+    return _scrub(_build_view(data))
+
+
+def _build_view(data: dict | None) -> dict:
     if not data:
         return {}
     if data.get("view") == "dashboard":  # already in dashboard form
@@ -134,7 +160,7 @@ def build_view(data: dict | None) -> dict:
                 "plaintext_mean_ms": float(h["plaintext_mean_ms"]),
                 "cipher_mean_ms": float(h["cipher_mean_ms"]),
                 "correctness_label": "正确性",
-                "correctness": correctness.replace("与明文逐条同序一致", "与明文一致"),
+                "correctness": _plain_words(correctness.replace(f"与{_PLAIN}逐条同序一致", "与常规检索一致")),
                 "pairs": h.get("pairs"),
             }
         )
@@ -152,7 +178,7 @@ def build_view(data: dict | None) -> dict:
             "title": "全部密文检索场景的平均端到端时延损耗均低于 10%" if worst < 10 else "部分场景损耗超过 10%",
             "subtitle": (
                 f"{env.get('distribution') or 'Linux'} · {env.get('cpu', '')} · "
-                f"{dataset} {rows:,} 行 × {dims} 维 · 每场景 {pairs:,} 对明密文请求交替配对"
+                f"{dataset} {rows:,} 行 × {dims} 维 · 每场景 {pairs:,} 对密态与常规检索请求交替配对"
                 if rows and dims and pairs
                 else (env.get("cpu") or "")
             ),

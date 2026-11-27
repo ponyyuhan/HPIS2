@@ -286,6 +286,24 @@ PRESETS = [
 ]
 
 
+MULTI_PRESETS = [
+    {"id": "multi_fixture", "chip": "多端测试", "question": "瀚海物流的事项、德国的照片、十月的跑步和充电",
+     "devices": ["pc", "phone", "watch", "car"],
+     "plans": {
+         "pc": {"orgs": ["瀚海物流"], "date_from": "2026-03-01", "date_to": "2026-06-30", "semantic": "瀚海物流 事项"},
+         "phone": {"countries": ["德国"], "semantic": "德国 出差 照片"},
+         "watch": {"activities": ["跑步"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "十月 跑步"},
+         "car": {"events": ["充电"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "十月 充电"},
+     },
+     "facts": [
+         {"device": "pc", "label": "瀚海物流", "match": ["瀚海物流"]},
+         {"device": "phone", "label": "慕尼黑", "match": ["慕尼黑"]},
+         {"device": "watch", "label": "晨跑", "match": ["晨跑"]},
+         {"device": "car", "label": "充电桩", "match": ["充电桩"]},
+     ]},
+]
+
+
 def make_devices(folder: Path, *, dim: int = 64, embed=None, images=None) -> dict:
     """Write the device folder.  ``embed(texts) -> [n, dim]`` (default: deterministic random
     vectors), ``images(record) -> (full_jpeg, thumb_jpeg)`` (default: tiny fake JPEGs)."""
@@ -318,5 +336,6 @@ def make_devices(folder: Path, *, dim: int = 64, embed=None, images=None) -> dic
         p["evidence_ids"] = []
         presets.append(p)
     (folder / "presets.json").write_text(json.dumps(presets, ensure_ascii=False, indent=1))
+    (folder / "multi_presets.json").write_text(json.dumps(MULTI_PRESETS, ensure_ascii=False, indent=1))
     (folder / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=1))
     return data

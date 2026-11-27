@@ -145,14 +145,18 @@ def build_messages(
     max_context_tokens: int = MAX_CONTEXT_TOKENS,
     kind: str = "mail",
     note: str | None = None,
+    devices: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Chat messages (system + user) for one grounded answer.
 
-    ``kind`` picks the prompt for the device's data (mail, photo, sport, car);
+    ``kind`` picks the prompt for the device's data (mail, photo, sport, car, or "multi":
+    several devices, ``devices`` = [{"id", "kind", "available", "note"}] in answer order);
     ``note`` (a relaxed search) is placed before the question.  Photo evidence
     that carries ``image`` bytes becomes an image part right after its text,
     so the user message is then a list of parts (see demo.llm for the wire forms).
     """
+    if kind == "multi":
+        return _build_multi_messages(question, evidence, devices, note)
     if kind != "mail":
         return _build_kind_messages(question, evidence, kind, note, max_context_tokens)
     question = _clean(question)
@@ -280,6 +284,55 @@ def _build_kind_messages(question, evidence, kind, note, max_context_tokens) -> 
             parts.append({"type": "image", "data": bytes(image), "mime": "image/jpeg"})
     parts.append({"type": "text", "text": "\n\n" + tail})
     return [{"role": "system", "content": system}, {"role": "user", "content": parts}]
+
+
+# ------------------------------------------------------------ several devices (多端协同)
+
+DEVICE_NAMES = {"pc": ("PC", "邮件"), "phone": ("手机", "照片"), "watch": ("手表", "运动健康"), "car": ("车机", "用车出行")}
+DEVICE_TOKENS = 1800  # evidence budget of one device's section (the same in both lanes)
+
+MULTI_PROMPT = """你是个人数据问答助手。用户的数据分别存在几台设备上：PC 的邮件、手机的照片、手表的运动健康记录、车机的用车记录。系统已检索出与问题相关的记录，按设备分组、按编号作为证据提供给你。
+
+回答规则：
+1. 只依据证据回答，不使用证据以外的知识，不猜测。
+2. 按设备分段回答，每段一行，以加粗的设备名开头，如“**PC 邮件**：…”“**手表**：…”。
+3. 某台设备标明“本次没有收到这台设备的数据”时，这一段只写“未收到{设备}的数据，这部分无法回答”，不要用其他设备的记录代替。
+4. 某台设备有数据但证据里没有相关内容时，写“{设备}记录中未找到”。
+5. 每个事实后紧跟来源编号，如“10月13日[3]”；依据多条证据时写[1][2]。只引用给出的编号。
+6. 日期、地点、金额、数字和单位照抄证据，不换算，不四舍五入。
+7. 开门见山，不寒暄，不复述问题，不写推理过程。
+8. 问题前的“今天是…”只用来换算“去年”“上个月”这类说法。
+全文一般不超过300字。"""
+
+
+def _build_multi_messages(question, evidence, devices, note) -> list[dict[str, Any]]:
+    """One section per device: its evidence, "no evidence", or "no data received" (HPIC 1.0)."""
+    question = _clean(question)
+    sections = []
+    for dev in devices or []:
+        did = dev.get("id")
+        label, kind_label = DEVICE_NAMES.get(did, (did, ""))
+        head = f"【{label} · {kind_label}】"
+        if not dev.get("available", True):
+            sections.append(f"{head}\n本次没有收到这台设备的数据。")
+            continue
+        lines = [head]
+        if _clean(dev.get("note")):
+            lines.append(_clean(dev.get("note")))
+        items = [e for e in evidence if e.get("device") == did]
+        kind = dev.get("kind") or (items[0].get("kind") if items else "mail")
+        if not items:
+            lines.append("证据：无（本次检索没有找到相关记录）。")
+        elif kind == "mail":
+            lines.append(format_evidence(items, DEVICE_TOKENS))
+        else:
+            per_item = min(_ITEM_TOKENS, DEVICE_TOKENS / len(items))
+            lines.extend(_kind_block(item, int(item.get("n", i)), kind, per_item) for i, item in enumerate(items, 1))
+        sections.append("\n".join(lines))
+    intro = f"证据（按设备分组，共{len(evidence)}条，按编号引用）：" if evidence else "证据：无。"
+    tail = "\n\n".join(part for part in (_clean(note) if note else "", f"问题：{question}") if part)
+    user = "\n\n".join(part for part in (intro, "\n\n".join(sections), tail) if part)
+    return [{"role": "system", "content": MULTI_PROMPT}, {"role": "user", "content": user}]
 
 
 def message_text(messages: Sequence[Mapping[str, Any]]) -> str:

@@ -1,16 +1,18 @@
 """Web server for the demo (面向个人敏感数据的智能问答): static UI + JSON/NDJSON API.
 
 Endpoints (PLAN-v3 §3; older fields are kept):
-  GET  /api/status                 phase, models (+vision), presets (+kind, device, scene), devices, build …
-  POST /api/run                    NDJSON events of one question (plan, notice, stage, …, finish, end)
+  GET  /api/status                 phase, models (+vision), presets (+kind, device, scene), devices, build,
+                                   multi {presets, hpic1_options} …
+  POST /api/run                    NDJSON events of one question (plan, notice, stage, …, finish, end);
+                                   {"mode": "multi", "hpic1": [device ids]} asks across the devices (多端协同)
   POST /api/stop                   stop the run in progress -> {"ok", "stopped"}
   GET  /api/mail/{id}              one email (plaintext, the PC's own copy)
   GET  /api/record/{kind}/{id}     one record of any kind (plaintext, the device's own copy)
   GET  /api/photo/{id}?size=       the phone's own JPEG (thumb | full)
   GET  /api/cipher/{id}?kind=      the same record inside HPIS (AID, ciphertext, tokens, vector)
-  GET  /api/cloudview?kind=plain   what the ordinary cloud reads (real name, all kinds)
+  GET  /api/cloudview?kind=plain   the devices' own records (real name, all kinds; what HPIC 1.0 receives)
   GET  /api/cloudview?kind=hpis    what HPIS stores (many anonymous AIDs)
-  GET  /api/spy?q=                 the same words in both clouds: a plaintext grep vs the encrypted search
+  GET  /api/spy?q=                 the same words: a grep of the devices' own data vs the encrypted search
   GET  /api/acceptance             the Linux acceptance results
 """
 
@@ -220,15 +222,22 @@ async def index(request):
 # ------------------------------------------------------------------ status
 
 EXPOSURE = {
-    "mail": "普通云可读取：全部 {n} 封邮件及附件的正文、收发人和时间",
-    "photo": "普通云可读取：全部 {n} 张照片及拍摄地点、时间",
-    "sport": "普通云可读取：全部 {n} 条运动与健康记录及时间",
-    "car": "普通云可读取：全部 {n} 条用车记录及行程起止地点、时间",
+    "mail": "HPIC 1.0 本次接收：全部 {n} 封邮件及附件",
+    "photo": "HPIC 1.0 本次接收：全部 {n} 张照片",
+    "sport": "HPIC 1.0 本次接收：全部 {n} 条运动健康记录",
+    "car": "HPIC 1.0 本次接收：全部 {n} 条用车记录",
 }
+
+# What HPIC 1.0 received in a multi-device run: only the phone talks to it (the first option is the default).
+HPIC1_OPTIONS = [
+    {"id": "watch", "label": "仅手表数据", "devices": ["watch"]},
+    {"id": "pc", "label": "仅 PC 数据", "devices": ["pc"]},
+    {"id": "phone_watch", "label": "手机 + 手表", "devices": ["phone", "watch"]},
+]
 
 
 def device_rows(state) -> list[dict]:
-    """The user's devices: one anonymous AID each, what they hold, what a plain cloud would read."""
+    """The user's devices: one anonymous AID each, what they hold, what HPIC 1.0 receives per question."""
     from hpis.provision import read_config
 
     catalog: Catalog | None = state.get("catalog")
@@ -263,6 +272,21 @@ def device_rows(state) -> list[dict]:
             }
         )
     return rows
+
+
+def multi_rows(state) -> dict:
+    """status.multi: the multi-device presets and what HPIC 1.0 may have received."""
+    catalog: Catalog | None = state.get("catalog")
+    presets = catalog.multi_presets() if catalog is not None else []
+    have = {d.id for d in catalog.devices} if catalog is not None else set()
+    return {
+        "presets": [
+            {k: p[k] for k in ("id", "chip", "question", "devices", "facts") if k in p}
+            | ({"scene": p["scene"]} if p.get("scene") else {})
+            for p in presets
+        ],
+        "hpic1_options": [o for o in HPIC1_OPTIONS if set(o["devices"]) <= have] or HPIC1_OPTIONS[:1],
+    }
 
 
 def preset_rows(state) -> list[dict]:
@@ -311,6 +335,7 @@ async def status(request):
         "running": bool(engine and engine.active and not engine.active.done.is_set()),
         "build": {k: v for k, v in build.items() if k not in ("signature",)},
         "devices": device_rows(state),
+        "multi": multi_rows(state),
     }
     if mailbox is not None:
         try:
@@ -337,11 +362,17 @@ async def run(request):
     allowed = ("plain", "v1", "v2") if "tee-v1" in engine.cluster.hpic_url else ("plain", "v2")
     lanes = tuple(lane for lane in payload.get("lanes", ["plain", "v2"]) if lane in allowed)
     net = config.Network.from_dict(payload.get("net"))
+    multi = None
+    if payload.get("mode") == "multi":
+        hpic1 = payload.get("hpic1")
+        if not isinstance(hpic1, list):
+            hpic1 = HPIC1_OPTIONS[0]["devices"]
+        multi = {"hpic1": [d for d in hpic1 if d in BY_ID]}
     response = web.StreamResponse(headers={"Content-Type": "application/x-ndjson", "Cache-Control": "no-store"})
     await response.prepare(request)
     try:
         # Closing the stream (page reloaded, connection lost) stops the run it started.
-        async with contextlib.aclosing(engine.run(question, model, lanes, net)) as events:
+        async with contextlib.aclosing(engine.run(question, model, lanes, net, multi=multi)) as events:
             async for event in events:
                 await response.write(ndjson(event))
     except (ConnectionResetError, asyncio.CancelledError):
@@ -488,7 +519,7 @@ def plain_rows(catalog: Catalog, limit: int, seed: int, sensitive: bool, kinds: 
 
 
 async def cloudview(request):
-    """What an operator of each cloud can read: plaintext uploads vs HPIS storage rows."""
+    """The 云端视角: the devices' own records (what HPIC 1.0 receives) vs what HPIS stores."""
     state = request.app[STATE]
     kind = request.query.get("kind", "hpis")
     try:
@@ -528,7 +559,7 @@ async def acceptance(request):
 
 
 def _plain_hits(catalog: Catalog, q: str) -> tuple[int, list[dict]]:
-    """Grep the plaintext the ordinary cloud receives (every device's data) for the word."""
+    """Grep the devices' own data (what HPIC 1.0 receives with the questions) for the word."""
     raw = q.encode()
     escaped = json.dumps(q)[1:-1].encode()
     hits, groups = 0, []

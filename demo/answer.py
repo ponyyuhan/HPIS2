@@ -26,11 +26,16 @@ from . import config
 REPLAY_DIR = config.RUNTIME / "answers"
 
 
-def _key(question: str, model: str, evidence: list[dict], *, kind: str = "mail", note: str | None = None) -> str:
+def _key(question: str, model: str, evidence: list[dict], *, kind: str = "mail", note: str | None = None,
+         devices: list[dict] | None = None) -> str:
     ids = ",".join(str(e["id"]) for e in evidence)
+    if kind == "multi":
+        ids = ",".join(f"{e.get('device')}:{e['id']}" for e in evidence)
     raw = f"{model}|{' '.join(question.split())}|{ids}"
     if kind != "mail":
         raw += f"|{kind}"
+    if devices:
+        raw += "|" + ",".join(f"{d.get('id')}{'+' if d.get('available', True) else '-'}" for d in devices)
     if note:
         raw += f"|{note}"
     if any(e.get("image") for e in evidence):
@@ -73,10 +78,11 @@ def _extractive(question: str, evidence: list[dict], *, kind: str = "mail", reas
         lines.append("本次检索没有找到相关记录。")
     for item in evidence:
         n = item.get("n", "")
-        if kind == "mail":
+        k = (item.get("kind") or "mail") if kind == "multi" else kind
+        if k == "mail":
             sender = str(item.get("from") or "").split("<")[0].strip()
             lines.append(f"- {item.get('subject', '')}（{str(item.get('date', ''))[:10]}，{sender}）[{n}]")
-        elif kind == "photo":
+        elif k == "photo":
             where = item.get("place") or item.get("title") or ""
             what = item.get("caption") or item.get("body") or ""
             lines.append(f"- {str(item.get('date', ''))[:16]} {where}：{what[:60]}[{n}]")
@@ -124,9 +130,12 @@ async def generate(
     note: str | None = None,
     first_token_s: float | None = None,
     answer_s: float | None = None,
+    devices: list[dict] | None = None,
 ):
-    """Yield {'type':'token'} events and finally one {'type':'done'} event."""
-    key = _key(question, model, evidence, kind=kind, note=note)
+    """Yield {'type':'token'} events and finally one {'type':'done'} event.
+
+    ``devices`` (kind "multi"): the devices the answer covers, see prompts.build_messages."""
+    key = _key(question, model, evidence, kind=kind, note=note, devices=devices)
     offline = os.environ.get("HPIS_DEMO_OFFLINE") == "1"
     record = _load(key)
     if offline and record:
@@ -145,7 +154,7 @@ async def generate(
         # The model must resolve "上个月 / 下周 / 最近" against the data's "today".
         weekday = "一二三四五六日"[config.AS_OF.weekday()]
         dated = f"（今天是{config.AS_OF:%Y年%m月%d日}，星期{weekday}。）{question}"
-        messages = build_messages(dated, evidence, kind=kind, note=note)
+        messages = build_messages(dated, evidence, kind=kind, note=note, devices=devices)
         stream = stream_answer(
             model,
             messages,

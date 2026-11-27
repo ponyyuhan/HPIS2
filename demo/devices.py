@@ -320,6 +320,32 @@ class Catalog:
         self._presets = (stamp, presets)
         return [dict(p) for p in presets]
 
+    def multi_presets(self) -> list[dict]:
+        """Multi-device presets (``multi_presets.json``): question, devices, per-device plans and facts.
+
+        Devices whose data is not provisioned are left out (with their plans and facts)."""
+        path = self.folder / "multi_presets.json"
+        try:
+            raw = json.loads(path.read_text("utf-8")) if path.exists() else []
+        except (OSError, ValueError):
+            raw = []
+        out = []
+        for p in raw if isinstance(raw, list) else []:
+            if not isinstance(p, dict) or not p.get("question") or not p.get("id"):
+                continue
+            devices = [d for d in p.get("devices") or [] if d in BY_ID and self.has(BY_ID[d].kind)]
+            if not devices:
+                continue
+            out.append(
+                {
+                    **p,
+                    "devices": devices,
+                    "plans": {d: dict((p.get("plans") or {}).get(d) or {}) for d in devices},
+                    "facts": [f for f in p.get("facts") or [] if f.get("device") in devices],
+                }
+            )
+        return out
+
     def _read_presets(self) -> list[dict]:
         out = []
         for p in self.mailbox.presets:

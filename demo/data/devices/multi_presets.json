@@ -1,0 +1,47 @@
+[
+ {
+  "id": "multi_shanghai",
+  "chip": "上海出差全记录",
+  "question": "整理我上个月去上海出差的记录：航班和酒店、拍的照片、每天走了多少步、机场停车花了多少钱",
+  "devices": ["pc", "phone", "watch", "car"],
+  "plans": {
+   "pc": {"categories": ["travel"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "上海出差 航班 酒店 出差事由"},
+   "phone": {"cities": ["上海"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "上海出差 拍的照片"},
+   "watch": {"activities": ["日常"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "在上海出差 每天步数"},
+   "car": {"events": ["行程"], "date_from": "2026-10-01", "date_to": "2026-10-31", "semantic": "开车去机场 机场停车 停车费 上海出差"}
+  },
+  "facts": [
+   {"device": "pc", "label": "去程航班 JW1501", "match": ["JW1501"]},
+   {"device": "pc", "label": "返程航班 JW1508", "match": ["JW1508"]},
+   {"device": "pc", "label": "悦庭酒店上海虹桥店", "match": ["虹桥店"]},
+   {"device": "phone", "label": "徐汇滨江", "match": ["徐汇滨江"]},
+   {"device": "phone", "label": "陆家嘴", "match": ["陆家嘴"]},
+   {"device": "watch", "label": "10月13日 10,685 步", "match": ["10,685", "10685"]},
+   {"device": "watch", "label": "10月16日 9,239 步", "match": ["9,239", "9239"]},
+   {"device": "car", "label": "大兴机场 P2 停车楼", "match": ["P2"]},
+   {"device": "car", "label": "停车费 ¥240", "match": ["¥240", "240元", "240 元"]}
+  ]
+ },
+ {
+  "id": "multi_week",
+  "chip": "上周回顾",
+  "question": "帮我回顾上周：开了哪些重要的会，拍了什么照片，运动和用车情况怎么样？",
+  "devices": ["pc", "phone", "watch", "car"],
+  "plans": {
+   "pc": {"categories": ["client", "work"], "date_from": "2026-11-09", "date_to": "2026-11-15", "semantic": "上周 会议纪要 重要会议 结论"},
+   "phone": {"date_from": "2026-11-09", "date_to": "2026-11-15", "semantic": "上周拍的照片"},
+   "watch": {"activities": ["周报"], "date_from": "2026-11-09", "date_to": "2026-11-16", "semantic": "上周 运动周报 跑步 游泳"},
+   "car": {"events": ["周报"], "date_from": "2026-11-09", "date_to": "2026-11-16", "semantic": "上周 用车周报 里程 充电 目的地"}
+  },
+  "facts": [
+   {"device": "pc", "label": "北辰能源月度沟通会", "match": ["北辰能源"]},
+   {"device": "pc", "label": "11月月度经营会", "match": ["经营会"]},
+   {"device": "phone", "label": "蓝莓", "match": ["蓝莓"]},
+   {"device": "phone", "label": "奥森的落叶", "match": ["落叶"]},
+   {"device": "watch", "label": "跑步 4 次 34.17 公里", "match": ["34.17"]},
+   {"device": "watch", "label": "游泳 2300 米", "match": ["2300"]},
+   {"device": "car", "label": "总里程 403.5 公里", "match": ["403.5"]},
+   {"device": "car", "label": "颐和园", "match": ["颐和园"]}
+  ]
+ }
+]

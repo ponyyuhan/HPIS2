@@ -1134,3 +1134,59 @@ body.scoreboard main { padding-bottom: 1rem; }
 :root[data-theme="dark"] .orb__lock stop:last-child { stop-color: #5aa9ff; }
 :root[data-theme="dark"] .orb__chip { color: var(--ink-soft); border-color: var(--line-2); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .8); }
 :root[data-theme="dark"] .promo { border-left-color: var(--line-2); }
+
+/* ============================================================ v4: HPIC 1.0 vs HPIC 2.0, 多端协同 */
+/* cover: the product name in the pill reads from the back of the room */
+.cover__kicker { font-size: clamp(1.25rem, 1.5vw, 1.7rem); font-weight: 800; letter-spacing: .06em; padding: .55rem 1.35rem; gap: .75rem; }
+.cover__kicker .dot { width: .65rem; height: .65rem; }
+/* mode switch: 单端问答 | 多端协同, left of the question */
+.modes { flex: none; display: flex; gap: .2rem; padding: .26rem; border-radius: 999px; background: var(--well-2); border: 1px solid var(--line); }
+.modes button { border: 0; background: transparent; color: var(--muted); padding: .55rem 1.05rem; border-radius: 999px; font-weight: 700; font-size: .98rem; white-space: nowrap; transition: color .2s, background .2s, box-shadow .2s; }
+.modes button:hover { color: var(--text); }
+.modes button.active { color: var(--on-accent); background: var(--grad); box-shadow: 0 6px 16px -8px rgba(47, 134, 201, .7); }
+.modes.locked button:not(.active) { opacity: .45; pointer-events: none; }
+/* 多端协同 presets, then the 「HPIC 1.0 收到的数据」 selector */
+.presets.multi { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1.2rem; width: 100%; }
+.hsel { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding-left: 1rem; border-left: 1px solid var(--line-2); }
+.hsel__label { display: inline-flex; align-items: center; gap: .3rem; font-size: .86rem; font-weight: 760; color: var(--plain); white-space: nowrap; }
+.hopt { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: .36rem .85rem .36rem .6rem; font-size: .88rem; font-weight: 600; white-space: nowrap; transition: all .2s; }
+.hopt .i { width: 1em; height: 1em; }
+.hopt:hover { color: var(--text); }
+.hopt.active { color: var(--plain); border-color: color-mix(in srgb, var(--plain) 45%, transparent); background: var(--plain-tint); }
+body[data-mode="multi"] .device .mailbox-meta { gap: .9rem; }
+.mailbox-meta .mdev b { margin-left: .1rem; }
+/* topology: small device nodes with their status on the right; devices without data greyed */
+.flow .nlabel--s { text-anchor: start; font-size: 12.5px; }
+.flow .nsub--s { text-anchor: start; font-size: 10.5px; }
+.flow .nsub.ok { fill: var(--ok); font-weight: 650; }
+.flow .nsub.miss { fill: var(--warn); font-weight: 650; }
+.flow .node.off { opacity: .4; }
+.flow .node.off .box { stroke-dasharray: 3 3; }
+.flow .link.off { stroke-dasharray: 3 6; }
+.lanes.two .lane--multi .flow { height: 9.4rem; }
+@media (min-height: 900px) {
+  body.results .lane--multi .flow { height: 9.4rem !important; opacity: 1; margin: .5rem -.3rem 0; }
+}
+/* 多端协同 metrics: upload, devices covered, key facts */
+.lane--multi .metrics { grid-template-columns: 1.2fr 1fr 1fr; }
+.metric.full output { color: var(--v2); }
+.metric.low output { color: var(--warn); }
+/* evidence tagged with its device */
+.evlist--multi { flex-wrap: wrap; max-height: clamp(2.2rem, 26cqh, 5.4rem); overflow-y: auto; }
+.ev--dev { border: 1px solid var(--line); }
+.ev--dev .i { width: 1em; height: 1em; color: var(--c); }
+.ev--dev span { max-width: 13em; }
+/* lane titles: the long HPIC 2.0 name stays on one line at 1366 px */
+.lanes.two .lane__title h3 { font-size: 1.3rem; }
+/* 云端视角: the left table is the owner's own devices, not a risk */
+.badge--local { color: var(--v2b); background: color-mix(in srgb, var(--v2b) 12%, transparent); }
+.vbar--plain .vbar__who { color: var(--ink-soft); background: var(--well-2); }
+.vbar--plain .vbar__tag { color: var(--v2b); }
+.prow .who span .i { color: var(--v2b); }
+.view--plain .row mark { background: color-mix(in srgb, var(--v2b) 22%, transparent); color: var(--text); }
+.view--plain .row.hit { background: color-mix(in srgb, var(--v2b) 8%, transparent); box-shadow: inset 3px 0 0 var(--v2b); animation: none; }
+.view--plain .scanline { --scan-glow: color-mix(in srgb, var(--v2b) 18%, transparent); --scan-line: var(--v2b); }
+.vres--plain { color: var(--ink-soft); background: color-mix(in srgb, var(--v2b) 11%, transparent); }
+.vres--plain b { color: var(--v2b); }
+.spy__local { color: var(--v2b); }
+.prov__cmp p { grid-template-columns: 9.6em auto 1fr; }
