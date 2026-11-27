@@ -1241,6 +1241,12 @@ body[data-mode="multi"] #device { display: none; }
 .fcount.low { color: var(--risk); }
 .facts__list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; margin-right: -.35rem; padding-right: .35rem; }
 .facts__none { margin: .6rem 0; font-size: .82rem; color: var(--dim); }
+/* a typed question: the rows are the records the HPIC 2.0 answer cites, added as it cites them */
+.facts__t { display: grid; gap: .05rem; min-width: 0; }
+.facts__t small { font-size: .72rem; font-weight: 650; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fact__k time { margin-right: .32em; font-family: var(--num); font-size: .8em; font-weight: 700; color: var(--dim); font-variant-numeric: tabular-nums; }
+.facts--cited .fact, .facts--cited .fgroup { animation: factin .35s ease-out both; }
+@keyframes factin { from { opacity: 0; transform: translateY(-3px); } }
 .fgroup { display: flex; align-items: center; gap: .3rem; margin-top: .32rem; font-size: .76rem; font-weight: 800; color: var(--muted); letter-spacing: .03em; }
 .fgroup .i { width: 1.05em; height: 1.05em; color: var(--v2b); }
 .fact { padding: .1rem 0; }

@@ -130,6 +130,46 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(p["relaxed"], ["time"])
         self.assertIsNone(p["date_from"])
         self.assertEqual(p["cities"], ["慕尼黑"])
+        p = self.plan("上个月在慕尼黑拍的照片")  # a named place outweighs the time: Munich photos, not last month's
+        self.assertEqual(p["relaxed"], ["time"])
+        self.assertEqual(p["cities"], ["慕尼黑"])
+        self.assertGreater(p["matched"], 0)
+
+    def test_free_multi_question_follows_the_trip(self):
+        """A typed multi-device question that names a place: every device searches that trip's days,
+        whether the asked time missed the trip (「上个月去慕尼黑」) or no time was asked (「那几天」)."""
+        from demo.engine import Engine
+
+        eng = Engine.__new__(Engine)
+        eng.catalog, eng.mailbox = self.catalog, self.catalog.mailbox
+        idx = self.catalog.index("photo")
+        munich = sorted({d for d in idx.days[idx.cols["city"] == "慕尼黑"].tolist() if d})
+        for question, missed in (("整理我上个月去慕尼黑的照片、运动和用车记录", True),
+                                 ("我去慕尼黑那几天的照片、运动和用车记录", False)):
+            mp = eng.plan_multi(question)
+            photo = mp["plans"]["phone"]
+            self.assertEqual(photo["cities"], ["慕尼黑"], question)
+            self.assertGreater(photo["matched"], 0, question)
+            note = photo["anchor_note"]
+            self.assertIn(munich[0], note)
+            self.assertEqual(note.startswith("问题所说的时间里没有「慕尼黑」"), missed, note)
+            self.assertEqual("回答开头" in self.planner.model_note(photo), missed, question)
+            for device, plan in mp["plans"].items():  # the trip's days stay even where they hold nothing
+                self.assertEqual(plan["anchor_note"], note, device)
+                self.assertNotIn("time", plan["relaxed"], device)
+                self.assertLessEqual(plan["date_from"][:10], munich[0], device)
+                self.assertGreaterEqual(plan["date_to"][:10], munich[-1], device)
+        same = eng.plan_multi("整理我最近一周的照片、运动和用车记录")  # no place named: nothing moves
+        self.assertFalse(any(p.get("anchor_note") for p in same["plans"].values()))
+
+    def test_relax_can_keep_a_filter(self):
+        plan = self.planner.finalize({"kind": "sport", "activities": ["跑步"], "date_from": "2025-09-13",
+                                      "date_to": "2025-09-16", "semantic": "跑步"})
+        out = self.planner.relax(plan, lambda p: 0 if p.get("date_from") else 5, keep=("time",))
+        self.assertEqual((out["matched"], out["relaxed"], out["activities"]), (0, [], ["跑步"]))
+        self.assertEqual(out["date_from"][:10], "2025-09-13")
+        out = self.planner.relax(plan, lambda p: 0 if p.get("activities") else 5, keep=("time",))
+        self.assertEqual((out["matched"], out["relaxed"]), (5, ["activities"]))
 
     def test_photo_presets_keep_their_plan(self):
         p = self.plan("给我2024年去韩国旅游的照片")  # spacing differs from the preset

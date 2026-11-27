@@ -30,6 +30,7 @@ start immediately.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import statistics
@@ -198,7 +199,7 @@ class Engine:
             devices = list(preset["devices"])
         else:  # a free question goes to every device that holds data
             devices = [d.id for d in self.catalog.devices]
-        plans = {}
+        plans, asked = {}, {}
         for device in devices:
             kind = BY_ID[device].kind
             if preset is not None:
@@ -207,15 +208,82 @@ class Engine:
                 plan["preset"] = preset["id"]
             else:
                 plan = planner.plan_question(question, [], self.mailbox.bible, catalog=self.catalog, kind=kind)
+            asked[device] = plan
             plan = planner.relax(plan, lambda p, k=kind: self.catalog.matching(k, p))
             plan["total"] = self.catalog.count(kind)
             plans[device] = plan
+        if preset is None:
+            self._anchor_trip(plans, asked)
         return {
             "preset": preset["id"] if preset else None,
             "devices": devices,
             "plans": plans,
             "facts": list(preset.get("facts") or []) if preset else [],
         }
+
+    TRIP_GAP = 2  # days apart at most for two records of one trip
+    TRIP_DAYS = 40  # a place seen on more days than this is home, not a trip
+    TRIP_PAD = {"mail": (14, 2)}  # days before / after the trip; bookings arrive before it, bills after
+
+    def _anchor_trip(self, plans: dict, asked: dict) -> None:
+        """Align every device of a free question on one trip to the place it names.
+
+        Only the photos (or the car) know where the user was; the watch and the PC do not, so on their
+        own they would search the asked window or their whole history. When a device finds the named
+        place, its days are split into trips and one is chosen: the one nearest the asked time when that
+        time had no such records (「上个月去法兰克福」, Frankfurt photos from 2025-09), else the latest
+        (「上次去上海出差」). Every device then searches that trip's days and the page and the model are
+        told why."""
+        for device in sorted(plans, key=lambda d: d != "phone"):
+            plan = plans[device]
+            place = plan.get("cities") or plan.get("countries")
+            if not place or not plan.get("matched"):
+                continue
+            idx = self.catalog.index(plan["kind"])
+            days = sorted({d for d in idx.days[idx.mask(plan)].tolist() if d})
+            if not days or len(days) > self.TRIP_DAYS:
+                continue
+            trips: list[list[dt.date]] = []
+            for day in map(dt.date.fromisoformat, days):
+                if trips and (day - trips[-1][1]).days <= self.TRIP_GAP:
+                    trips[-1][1] = day
+                else:
+                    trips.append([day, day])
+            missed = "time" in (plan.get("relaxed") or []) and bool(asked[device].get("date_from"))
+            if missed:
+                a = dt.date.fromisoformat(asked[device]["date_from"][:10])
+                b = dt.date.fromisoformat((asked[device].get("date_to") or asked[device]["date_from"])[:10])
+
+                def apart(trip):
+                    return (a - trip[1]).days if trip[1] < a else (trip[0] - b).days if trip[0] > b else 0
+
+                first, last = min(trips, key=lambda t: (apart(t), -t[0].toordinal()))
+            else:
+                first, last = trips[-1]
+            where = "、".join(place)
+            span = str(first) if first == last else f"{first} 至 {last}"
+            lead = f"问题所说的时间里没有「{where}」的记录；" if missed else ""
+            if len(trips) > 1:
+                pick = "离问题所说时间最近的一次" if missed else "最近的一次"
+                note = f"{lead}「{where}」有 {len(trips)} 次行程的记录，按{pick}（{span}）检索各设备。"
+            else:
+                note = f"{lead}「{where}」的记录在 {span}，各设备都按这次行程检索。"
+            for other, raw in asked.items():
+                kind = raw["kind"]
+                before, after = self.TRIP_PAD.get(kind, (1, 1))
+                again = {k: v for k, v in raw.items() if k not in ("date_cover", "relaxed", "dropped", "matched", "total")}
+                again.update(date_from=str(first - dt.timedelta(days=before)), date_to=str(last + dt.timedelta(days=after)))
+                fresh = planner.relax(planner.finalize(again), lambda p, k=kind: self.catalog.matching(k, p), keep=("time",))
+                fresh["total"] = self.catalog.count(kind)
+                fresh.update(anchor_note=note, anchor_tell=missed or len(trips) > 1, anchor_missed=missed)
+                away = [d for d in fresh.get("dropped") or [] if d[0] in ("cities", "countries", "trips")]
+                if away and len(away) == len(fresh["dropped"]) and fresh["matched"]:
+                    # the device was not at the place (the car stayed home): the trip's days are what it has
+                    label = planner.KIND_LABEL.get(kind, "记录")
+                    fresh["trip_note"] = f"{BY_ID[other].label}在这次行程期间没有「{where}」的{label}，下面是同一时间段的{label}。"
+                    fresh["dropped"] = []
+                plans[other] = fresh
+            return
 
     def embed(self, plan: dict) -> np.ndarray:
         vec = Embedder.get().encode_query(plan.get("semantic") or "")
@@ -944,6 +1012,10 @@ class Engine:
             if notice:
                 out({"type": "notice", "lane": None, "device": device, "text": notice,
                      "relaxed": plan.get("relaxed") or []})
+        anchor = next((p for p in mp["plans"].values() if p.get("anchor_note")), None)
+        if anchor:  # the devices were aligned on one trip to the place the question names
+            out({"type": "notice", "lane": None, "text": anchor["anchor_note"],
+                 "relaxed": ["time"] if anchor.get("anchor_missed") else []})
         lanes = tuple(lane for lane in lanes if lane in ("plain", "v2"))
 
         def make(lane):

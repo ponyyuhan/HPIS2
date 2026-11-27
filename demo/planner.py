@@ -137,7 +137,9 @@ SUMMARY_VALUES = ("周报", "月报")
 
 # Relaxation order when the filters leave nothing (PLAN-v3 §3).
 RELAX_ORDER = {
-    "photo": (("cities", "trips"), ("countries",), ("types",), ("time",)),
+    # A named place outweighs the time: 「上个月去法兰克福」 with no photos last month becomes the
+    # Frankfurt photos of whenever they were taken, not last month's photos of anywhere.
+    "photo": (("cities", "trips"), ("time",), ("countries",), ("types",)),
     "sport": (("activities",), ("time",)),
     "car": (("cities",), ("events",), ("time",)),
     "mail": (("people",), ("orgs",), ("categories",), ("time",)),
@@ -596,14 +598,16 @@ def _without(plan: dict, names: list[str]) -> dict:
     return finalize(plan)
 
 
-def relax(plan: dict, count) -> dict:
+def relax(plan: dict, count, keep: tuple = ()) -> dict:
     """Drop filters in a fixed order until ``count(plan)`` finds at least one record.
 
     Filters dropped on the way that were not the reason for the empty result are
     put back (the 2023 photos of Munich become Munich photos of any year, not
     every photo of 2023).  Returns the final plan with ``matched`` (records it
     selects on the device), ``relaxed`` (dropped filter names) and ``dropped``
-    ([name, label, values]).
+    ([name, label, values]).  Filters named in ``keep`` are never dropped (a
+    multi-device question aligned on one trip keeps the trip's days); when
+    nothing matches with them the plan comes back unrelaxed with ``matched`` 0.
     """
     kind = plan.get("kind") or "mail"
     original = plan
@@ -612,12 +616,14 @@ def relax(plan: dict, count) -> dict:
     for step in RELAX_ORDER.get(kind, ()):
         if n > 0:
             break
-        names = [k for k in step if (plan.get("date_from") if k == "time" else plan.get(k))]
+        names = [k for k in step if k not in keep and (plan.get("date_from") if k == "time" else plan.get(k))]
         if not names:
             continue
         plan = _without(plan, names)
         steps.append(names)
         n = count(plan)
+    if n == 0 and keep:
+        plan, steps = original, []
     if n > 0 and len(steps) > 1:
         keep = list(steps)
         for step in steps[:-1]:  # most specific first
@@ -657,6 +663,10 @@ def model_note(plan: dict) -> str | None:
     """
     kind = plan.get("kind") or "mail"
     notes = []
+    if plan.get("anchor_note"):  # a multi-device question aligned on one trip to the place it names
+        notes.append("检索说明：" + plan["anchor_note"] + ("回答开头先用一句话说明这一点。" if plan.get("anchor_tell") else ""))
+    if plan.get("trip_note"):  # ...and this device was not at that place
+        notes.append("检索说明：" + plan["trip_note"])
     if kind != "mail":
         parts = []
         if plan.get("date_from") and plan.get("date_to"):

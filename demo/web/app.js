@@ -1181,56 +1181,157 @@ function verdict() {
 // ------------------------------------------------------------------ 多端协同: the comparison column
 // Between the two lanes: the scoreboard of the chosen scenario (场景一 → upload and full-answer time, 场景二 →
 // devices covered and key facts) and the key-facts checklist, both filled in live as the events arrive.
-// A device counts as covered when the lane's evidence has a record from it; a key fact counts when its
+// A device counts as covered when the lane's evidence has a record from it. A preset's key fact counts when its
 // device is covered and one of its match strings is in the answer (spaces and thousands separators ignored).
+// A typed question has no preset facts: its rows are the records the HPIC 2.0 answer cites ([n] → that lane's
+// evidence item n), and HPIC 1.0 gets ✓ when its own answer cites the same record (kind + id).
 const BOARD = `<aside class="board card" id="board" aria-label="对比"></aside>`;
 const FACT_DEVICES = ["phone", "pc", "watch", "car"];
 const normFact = (x) => String(x).replace(/\s/g, "").replace(/[￥¥]/g, "").replace(/[,，]/g, "").replace(/：/g, ":");
 const devNames = (ds) => ds.map((d) => deviceOf(d).label).join("、");
-// what the board shows: the run on screen (running or finished), else the current choice
+// the evidence numbers an answer cites, in order: [1] [1][3] [1,3] [1-3] 【2】 (read as prompts.parse_citations does)
+function citeNums(text) {
+  const seen = [];
+  for (const m of String(text || "").matchAll(/[\[［【]\s*(\d+(?:\s*(?:[,，、;；]|[-–~～至])\s*\d+)*)\s*[\]］】]/g)) {
+    for (const piece of m[1].split(/\s*[,，、;；]\s*/)) {
+      let ns = piece.split(/\s*[-–~～至]\s*/).filter(Boolean).map(Number);
+      if (ns.length === 2 && ns[1] > ns[0] && ns[1] - ns[0] <= 20) ns = Array.from({ length: ns[1] - ns[0] + 1 }, (_, k) => ns[0] + k);
+      for (const n of ns) if (!seen.includes(n)) seen.push(n);
+    }
+  }
+  return seen;
+}
+const recKey = (e) => `${e.kind || "mail"}:${e.id}`;
+// the records a lane's answer cites (key → evidence item), in the order it first cites them
+// the words a record's card shows (title or subject, summary, place), for the key-fact check
+const recText = (e) => normFact([e.title, e.subject, e.snippet, e.summary, e.place_text].filter(Boolean).join(" "));
+function citedRecs(L) {
+  const out = new Map();
+  const numbered = L.evidence.some((x) => x.n != null);
+  for (const n of citeNums(L.text)) {
+    const e = numbered ? L.evidence.find((x) => x.n === n) : L.evidence[n - 1];
+    if (e && e.id != null && !out.has(recKey(e))) out.set(recKey(e), e);
+  }
+  return out;
+}
+// a short name for a cited record, with its date: the mail subject, the photo's place, the record's kind and
+// figure (or where a trip went)
+function recLabel(e) {
+  const kind = e.kind || "mail";
+  let text;
+  if (kind === "mail") text = e.subject; // as written ("Re: …" tells a reply from the mail it answers)
+  else if (kind === "photo") text = (e.place && typeof e.place === "object" && e.place.name) || placeText(e.place) || e.place_text || e.title;
+  else {
+    const p = String(e.title || "").split(/\s*·\s*/);
+    const to = p.length >= 3 ? p[1].split(/\s*→\s*/)[1] : "";
+    // "跑步 · 某公园 · 6.51 公里" → "跑步 6.51 公里", a trip → "去<终点>", "用车周报 · <日期>" → "用车周报" (dated anyway)
+    text = p.length >= 3 ? (to ? `去${to}` : `${p[0]} ${p[p.length - 1]}`)
+      : p.length === 2 && /报$/.test(p[0]) ? p[0] : p.length === 2 && /^前往/.test(p[1]) ? p[0] + p[1] : p.join(" · ");
+  }
+  const date = dateText(e.date);
+  return { text: text || e.title || `记录 ${e.n ?? ""}`, date: date.slice(5), title: [e.subject || e.title, date].filter(Boolean).join(" · ") };
+}
+// what the board shows: the run on screen (running or finished), else the current choice.
+// cited: no preset facts, so the checklist is built from the records the answers cite
 function boardCtx() {
   const shown = state.running || ["plain", "v2"].some((id) => { const L = lane(id); return L && (L.final || L.halted || L.evidence.length || L.text); });
+  let ctx;
   if (shown && state.run?.mode === "multi") {
-    return { live: true, scen: state.run.scen, route: state.run.route, hpic1: state.run.hpic1 || [], need: state.run.devices || DEVICE_ORDER, facts: state.run.facts || [] };
+    ctx = { live: true, scen: state.run.scen, route: state.run.route, hpic1: state.run.hpic1 || [], need: state.run.devices || DEVICE_ORDER, facts: state.run.facts || [] };
+  } else {
+    const h = hpic1Pick();
+    ctx = { live: false, scen: h.sc.id, route: h.route, hpic1: h.devices, need: state.mpreset?.devices || DEVICE_ORDER, facts: state.mpreset?.facts || [] };
   }
-  const h = hpic1Pick();
-  return { live: false, scen: h.sc.id, route: h.route, hpic1: h.devices, need: state.mpreset?.devices || DEVICE_ORDER, facts: state.mpreset?.facts || [] };
+  ctx.cited = !ctx.facts.length;
+  return ctx;
 }
-// per lane: each fact's cell (wait | ok | no | nodata), the devices covered and the facts answered
-function multiScore(id, ctx = boardCtx()) {
+// the checklist's rows: a preset's key facts, or (no preset) one per record the HPIC 2.0 answer cites,
+// grouped by device, in the order the answer first cites them
+function boardRows(ctx) {
+  if (!ctx.cited) return ctx.facts.map((f, i) => ({ key: `f${i}`, device: f.device, label: f.label, title: f.label, fact: f }));
+  if (!ctx.live || !lane("v2")) return [];
+  const recs = [...citedRecs(lane("v2")).values()];
+  return FACT_DEVICES.flatMap((d) => recs.filter((e) => evDevice(e) === d)).map((e) => {
+    const l = recLabel(e);
+    return { key: recKey(e), device: evDevice(e), label: l.text, date: l.date, title: `${deviceOf(evDevice(e)).label} · ${l.title}`, rec: e };
+  });
+}
+// per lane: each row's cell (wait | ok | no | nodata), the devices covered and the rows answered
+function multiScore(id, ctx = boardCtx(), rows = boardRows(ctx)) {
   const L = lane(id);
   const evDevs = new Set(L.evidence.map(evDevice));
   const seen = L.evidence.length > 0 || !!L.done;
   const gone = new Set(L.missing || []);
   const text = normFact(L.text);
-  const cells = ctx.facts.map((f) => {
+  const mine = ctx.cited && id === "plain" ? citedRecs(L) : null;
+  const refs = ctx.cited ? null : [...citedRecs(L).values()].map((e) => [evDevice(e), recText(e)]);
+  const cells = rows.map((r) => {
+    if (r.rec) {
+      // a cited record: HPIC 2.0 cited it; HPIC 1.0 has it when its answer cites the same record
+      if (id === "v2") return "ok";
+      if (gone.has(r.device) || !ctx.hpic1.includes(r.device)) return "nodata";
+      return mine.has(r.key) ? "ok" : L.done ? "no" : "wait";
+    }
+    const f = r.fact;
     if (f.device && (gone.has(f.device) || (seen && !evDevs.has(f.device)))) return "nodata";
-    const hit = (!f.device || evDevs.has(f.device)) && [f.value, ...(f.match || [])].some((m) => m && text.includes(normFact(m)));
+    // a key fact counts when the answer states it, or cites a record of that device that holds it
+    // (「机场停车4天，停车费¥240[16]」 cites 「北京大兴国际机场 P2停车楼 → 望京」)
+    const keys = [f.value, ...(f.match || [])].filter(Boolean).map(normFact);
+    const hit = (!f.device || evDevs.has(f.device)) && (keys.some((m) => text.includes(m))
+      || refs.some(([d, t]) => (!f.device || d === f.device) && keys.some((m) => t.includes(m))));
     return hit ? "ok" : L.done ? "no" : "wait";
   });
-  return { cells, seen, done: !!L.done, covered: ctx.need.filter((d) => evDevs.has(d)), need: ctx.need, hit: cells.filter((c) => c === "ok").length, n: ctx.facts.length };
+  return { cells, seen, done: !!L.done, covered: ctx.need.filter((d) => evDevs.has(d)), need: ctx.need, hit: cells.filter((c) => c === "ok").length, n: rows.length };
 }
 function buildBoard(ctx) {
   const host = $("#board");
   const perf = ctx.route !== "direct";
   const sc = scenarios().find((x) => x.id === ctx.scen) || scenario();
   const stats = perf ? [["up", "上传数据"], ["time", "完整回答"]] : [["cover", "覆盖设备"], ["facts", "关键信息"]];
-  const rows = FACT_DEVICES.filter((d) => ctx.facts.some((f) => f.device === d)).map((d) => {
-    const dev = deviceOf(d);
-    const facts = ctx.facts.map((f, i) => [f, i]).filter(([f]) => f.device === d);
-    return `<div class="fgroup">${ICON(dev.icon)}${esc(dev.label)} · ${esc(kindOf(DEVICES[d].kind).short)}</div>`
-      + facts.map(([f, i]) => `<div class="brow fact" data-f="${i}"><span class="fact__k" title="${esc(f.label)}">${esc(f.label)}</span><i class="cell" data-c="plain"></i><i class="cell" data-c="v2"></i></div>`).join("");
-  }).join("");
+  // preset facts are known up front; cited records are added as the answer cites them (syncCited)
+  const facts = ctx.cited ? [] : boardRows(ctx);
+  const rows = FACT_DEVICES.filter((d) => facts.some((r) => r.device === d))
+    .map((d) => factGroup(d) + facts.filter((r) => r.device === d).map(factRow).join("")).join("");
   host.className = `board card board--${perf ? "perf" : "acc"}`;
   host.innerHTML = `
     <header class="brow board__head"><span class="board__title">${ICON(perf ? "gauge" : "check-circle")}${perf ? "性能对比" : "准确性对比"}</span><span class="bcol c1"><b>HPIC 1.0</b><small>${esc((sc.label || "").split(" · ")[0])}</small></span><span class="bcol c2"><b>HPIC 2.0</b><small>场景三</small></span></header>
     <div class="board__stats">${stats.map(([k, l]) => `<div class="brow bstat" data-k="${k}"><span class="bstat__k">${l}<em data-x></em></span><b class="bval c1" data-v="plain">—</b><b class="bval c2" data-v="v2">—</b></div>`).join("")}</div>
     <p class="board__note" data-note></p>
-    <div class="facts">
-      <div class="brow facts__head"><span>关键信息核对</span>${perf ? `<span class="fcount" data-fc="plain"></span><span class="fcount" data-fc="v2"></span>` : ""}</div>
+    <div class="facts${ctx.cited ? " facts--cited" : ""}">
+      <div class="brow facts__head"><span class="facts__t">关键信息核对${ctx.cited ? `<small title="每行是 HPIC 2.0 回答引用的一条记录；HPIC 1.0 的回答也引用了同一条记录记 ✓">按回答引用的记录核对</small>` : `<small title="回答写出了这条信息，或回答引用的记录里有这条信息，记 ✓">按回答及引用的记录核对</small>`}</span>${perf ? `<span class="fcount" data-fc="plain"></span><span class="fcount" data-fc="v2"></span>` : ""}</div>
       ${perf ? `<div class="brow facts__cover"><span>覆盖设备</span><span class="fcount" data-cv="plain"></span><span class="fcount" data-cv="v2"></span></div>` : ""}
-      <div class="facts__list">${rows || `<p class="facts__none">这个问题没有预设的关键信息，换一个预设问题即可核对</p>`}</div>
+      <div class="facts__list">${ctx.cited ? `<p class="facts__none" data-none></p>` : rows || `<p class="facts__none">这个问题没有预设的关键信息</p>`}</div>
     </div>`;
+}
+const factGroup = (d) => { const dev = deviceOf(d); return `<div class="fgroup" data-g="${d}">${ICON(dev.icon)}${esc(dev.label)} · ${esc(kindOf(DEVICES[d].kind).short)}</div>`; };
+const factRow = (r) => `<div class="brow fact" data-r="${esc(r.key)}"><span class="fact__k" title="${esc(r.title)}">${r.date ? `<time>${esc(r.date)}</time>` : ""}${esc(r.label)}</span><i class="cell" data-c="plain"></i><i class="cell" data-c="v2"></i></div>`;
+const htmlNode = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+// the cited records' rows, added in place as the answer cites them (existing rows are never moved, so their
+// cells do not replay); a new run's first render clears the last run's rows
+function syncCited(host, rows, ctx) {
+  const list = $(".facts__list", host);
+  if (!list) return;
+  const want = new Set(rows.map((r) => r.key));
+  if ($$("[data-r]", list).some((el) => !want.has(el.dataset.r))) for (const el of $$("[data-r], [data-g]", list)) el.remove();
+  const none = $("[data-none]", list);
+  let prev = none;
+  for (const d of FACT_DEVICES) {
+    const rs = rows.filter((r) => r.device === d);
+    if (!rs.length) continue;
+    let g = $(`[data-g="${d}"]`, list);
+    if (!g) list.insertBefore((g = htmlNode(factGroup(d))), prev ? prev.nextSibling : list.firstChild);
+    prev = g;
+    for (const r of rs) {
+      let el = $(`[data-r="${r.key}"]`, list);
+      if (!el) list.insertBefore((el = htmlNode(factRow(r))), prev.nextSibling);
+      prev = el;
+    }
+  }
+  if (!none) return;
+  const V = lane("v2");
+  none.hidden = rows.length > 0;
+  put(none, !ctx.live ? "提问后，按 HPIC 2.0 回答引用的记录逐条核对"
+    : V?.done || V?.halted ? "HPIC 2.0 的回答没有引用记录" : "HPIC 2.0 的回答还没有引用记录");
 }
 // innerHTML only when it changed, so streaming tokens do not restart the cells' animations
 function put(el, html, cls) {
@@ -1244,10 +1345,12 @@ function renderBoard() {
   const host = $("#board");
   if (!host || !lane("plain")?.multi) return;
   const ctx = boardCtx();
-  const key = `${ctx.route}|${ctx.scen}|${ctx.facts.map((f) => f.label).join(",")}`;
+  const key = `${ctx.route}|${ctx.scen}|${ctx.cited ? "cited" : ctx.facts.map((f) => f.label).join(",")}`;
   if (host._key !== key) { buildBoard(ctx); host._key = key; }
   host.classList.toggle("idle", !ctx.live);
-  const sc = { plain: multiScore("plain", ctx), v2: multiScore("v2", ctx) };
+  const rows = boardRows(ctx);
+  if (ctx.cited) syncCited(host, rows, ctx);
+  const sc = { plain: multiScore("plain", ctx, rows), v2: multiScore("v2", ctx, rows) };
   const P = lane("plain"), V = lane("v2");
   const cellOf = (k, id) => $(`[data-k="${k}"] [data-v="${id}"]`, host);
   if (ctx.route !== "direct") {
@@ -1280,16 +1383,19 @@ function renderBoard() {
       put(cellOf("cover", id), ctx.live && s.seen ? frac(s.covered.length, s.need.length) : "—", `bval c${c}${ctx.live && s.seen ? (s.covered.length === s.need.length ? " full" : " low") : ""}`);
       put(cellOf("facts", id), ctx.live && s.n ? frac(s.hit, s.n) : "—", `bval c${c}${ctx.live && s.done && s.n ? (s.hit === s.n ? " full" : " low") : ""}`);
     }
-    const missed = ctx.facts.filter((f, i) => sc.plain.cells[i] === "no" || sc.plain.cells[i] === "nodata");
+    const missed = rows.filter((r, i) => sc.plain.cells[i] === "no" || sc.plain.cells[i] === "nodata");
+    // a typed question whose HPIC 2.0 answer cited nothing has nothing to check
+    const empty = ctx.cited && !rows.length && (V.done || V.halted);
     put($("[data-note]", host), !ctx.live
       ? `${ICON("info")}<span>比较两边用到了几台设备的数据、答出了几条关键信息</span>`
       : missed.length
-        ? `${ICON("x")}<span><b>HPIC 1.0 漏掉 ${missed.length} 条：</b>${missed.map((f) => esc(f.label)).join("、")}</span>`
-        : sc.plain.done ? `${ICON("check")}<span>HPIC 1.0 没有漏掉关键信息</span>` : `${ICON("clock")}<span>核对中…</span>`, `board__note${missed.length ? " miss" : ""}`);
+        ? `${ICON("x")}<span><b>HPIC 1.0 漏掉 ${missed.length} 条：</b>${missed.map((r) => esc(r.label)).join("、")}</span>`
+        : empty ? `${ICON("info")}<span>没有可核对的记录</span>`
+        : sc.plain.done && (V.done || !ctx.cited) ? `${ICON("check")}<span>HPIC 1.0 没有漏掉关键信息</span>` : `${ICON("clock")}<span>核对中…</span>`, `board__note${missed.length ? " miss" : ""}`);
   }
-  // the checklist: one row per fact, a cell per lane
-  ctx.facts.forEach((f, i) => {
-    const row = $(`[data-f="${i}"]`, host);
+  // the checklist: one row per fact (or cited record), a cell per lane
+  rows.forEach((r, i) => {
+    const row = $(`[data-r="${r.key}"]`, host);
     if (!row) return;
     for (const id of ["plain", "v2"]) {
       const st = ctx.live ? sc[id].cells[i] : "idle";
