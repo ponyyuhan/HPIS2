@@ -309,6 +309,12 @@ class Flow {
   }
   // a device whose data is not there for this lane: greyed, its link dashed
   off(id, on) { this.nodes[id]?.g.classList.toggle("off", on); }
+  // 多端协同, during a run: a device that sends nothing for the question is a shadow (device id, not node id);
+  // its status text stays fully readable
+  shade(d, on) {
+    this.nodes[nid(d)]?.g.classList.toggle("shade", on);
+    this.links[`s_${d}`]?.base.classList.toggle("shade", on);
+  }
   linkOff(id, on) { this.links[id]?.base.classList.toggle("off", on); }
   // the terminal node follows the device the question is about (plan.device)
   setTerminal({ icon, label }, sub) {
@@ -387,8 +393,8 @@ class Flow {
     this.quiet();
     for (const p of this.packets) { p.c.remove(); p.tail.forEach((x) => x.remove()); }
     this.packets = [];
-    for (const [id, n] of Object.entries(this.nodes)) this.node(id, null, n.sub, n.subcls);
-    for (const id of Object.keys(this.links)) this.linkValue(id, "");
+    for (const [id, n] of Object.entries(this.nodes)) { this.node(id, null, n.sub, n.subcls); n.g.classList.remove("shade"); }
+    for (const id of Object.keys(this.links)) { this.linkValue(id, ""); this.links[id].base.classList.remove("shade"); }
   }
   destroy() {
     this.quiet();
@@ -751,6 +757,7 @@ async function run() {
   $("#stop").disabled = false;
   $("#stop span").textContent = "停止";
   resetLanes();
+  if (multi) shadeDevices();
   const lanes = ["plain", "v2"];
   for (const id of lanes) {
     pill(id, "运行中", "run");
@@ -2134,6 +2141,18 @@ function syncShow(d) {
   V.flow.flash(nid(d), 1100);
   V.flow.glow(`s_${d}`, 1100);
   V.flow.burst(`s_${d}`, 4, { kind: "cipher", every: 150, dur: 620 });
+}
+// once a run starts, only the device that sends something for the question stays lit: the phone (its upload to
+// HPIC 1.0, its sealed request to HPIC 2.0), or in 场景二 on the left the one device that uploads. The others
+// become shadows until the next choice; their data still counts (synced to the phone, or stored in HPIS).
+function shadeDevices() {
+  const P = lane("plain"), V = lane("v2");
+  if (!P?.multi || !V) return;
+  const sender = state.run?.route === "direct" ? state.run.hpic1?.[0] : "phone";
+  for (const d of DEVICE_ORDER) {
+    P.flow.shade(d, d !== sender);
+    V.flow.shade(d, d !== "phone");
+  }
 }
 // a new scenario or device choice: redraw HPIC 1.0's topology and clear the last run
 function changeScen() {

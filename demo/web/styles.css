@@ -1295,3 +1295,9 @@ body[data-mode="multi"] #device { display: none; }
    once the run starts both stay still (the phone uploads; nothing moves from the devices) */
 .flow .link--sync, .flow .link--sync.hot { stroke: color-mix(in srgb, var(--c) 62%, var(--track)); }
 .flow .link--sync.off { stroke: var(--track); }
+/* 多端协同, during a run: a device that sends nothing for the question is a shadow (faint box and icon, softened
+   name, faded link); its status (✓ 命中 n 条, ✗ 未同步) stays fully readable, and an unsynced device stays dashed */
+.flow .node.shade .box { fill: transparent; stroke: color-mix(in srgb, var(--line-2) 70%, transparent); filter: none; }
+.flow .node.shade use { opacity: .32; }
+.flow .node.shade:not(.off) .nlabel { opacity: .55; }
+.flow .link.shade { opacity: .4; }
