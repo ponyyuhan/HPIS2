@@ -2254,7 +2254,8 @@ function init() {
   buildLanes();
   renderArch();
   initTheme();
-  $("#enter").addEventListener("click", () => hideCover("race"));
+  // 进入业务演示 from the cover always starts in 单端问答 (多端协同 is one click away)
+  $("#enter").addEventListener("click", () => { if (state.mode !== "single") setMode("single"); hideCover("race"); });
   $("#run").addEventListener("click", run);
   $("#stop").addEventListener("click", () => stopRun("stopped"));
   $("#question").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
